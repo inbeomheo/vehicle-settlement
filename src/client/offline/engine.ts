@@ -1,6 +1,9 @@
 import { ApiError, api, mutate, upload } from '../api';
 import type { UseDetail, User } from '../types';
 import { activeUser, listDrafts, putDraft, type Draft } from './store';
+import { fromUse, toInput } from '../../components/use-form/model';
+import { bindCreatedRows } from './create-recovery';
+import { reconcileServer, rememberServer } from './reconcile';
 
 export type Transport = {
   get: typeof api;
@@ -33,6 +36,32 @@ export async function sendDraft(
     const user = await io.get<User>('/api/me');
     if (user.id !== draft.userId)
       throw new ApiError(401, 'ACCOUNT_CHANGED', '다른 계정으로 로그인되어 재전송을 중단했습니다.');
+    if (!draft.serverId && draft.request && !draft.savedRequest) {
+      draft.pendingCreate ??= {
+        request: structuredClone(draft.request),
+        form: structuredClone(draft.form),
+      };
+      await save();
+      assertOwner();
+      const original = draft.pendingCreate;
+      const result = await io.mutate<UseDetail>(
+        '/api/uses',
+        original.request.payload,
+        original.request.key,
+        'POST',
+      );
+      draft.serverId = result.id;
+      rememberServer(draft, result);
+      if (draft.request.key !== original.request.key) {
+        draft.form = bindCreatedRows(draft.form, original.form, result);
+        draft.request = {
+          key: crypto.randomUUID(),
+          payload: { ...toInput(draft.form, draft.mode), version: result.version },
+        };
+      } else draft.savedRequest = true;
+      draft.pendingCreate = undefined;
+      await save();
+    }
     if (!draft.savedRequest && draft.request) {
       assertOwner();
       const result = await io.mutate<UseDetail>(
@@ -42,79 +71,88 @@ export async function sendDraft(
         draft.serverId ? 'PATCH' : 'POST',
       );
       draft.serverId = result.id;
-      draft.server = result;
-      draft.version = result.version;
+      rememberServer(draft, result);
       draft.savedRequest = true;
       await save();
     }
     if (!draft.serverId) throw new Error('전송할 사용 건이 없습니다. 입력 내용을 확인하세요.');
-    for (const file of draft.uploads) {
-      if (file.status === 'uploaded') continue;
-      try {
-        assertOwner();
-        file.status = 'uploading';
-        file.error = undefined;
-        file.progress = 0;
-        await save();
-        if (!file.serverId) {
-          const meta = {
-            client_upload_id: file.client_upload_id,
-            kind: file.kind,
-            ...(file.blob
-              ? { original_name: file.original_name, mime: file.blob.type, size: file.blob.size }
-              : { text_value: file.text_value }),
-          };
-          const path = file.replacesId
-            ? `/api/evidence/${file.replacesId}/replace`
-            : `/api/uses/${draft.serverId}/evidence`;
-          const body = file.replacesId ? { reason: file.reason, evidence: meta } : meta;
-          const result = await io.mutate<{ id: string }>(path, body, `evidence-${file.client_upload_id}`);
-          file.serverId = result.id;
-          await save();
-        }
-        if (file.blob) {
-          assertOwner();
-          await io.upload(`/api/evidence/${file.serverId}/content`, file.blob, (value) => {
-            // Progress is cosmetic; durable status changes are awaited below.
-            if (typeof window !== 'undefined')
-              window.dispatchEvent(
-                new CustomEvent('vehicle-upload-progress', {
-                  detail: { draftId: draft.id, uploadId: file.client_upload_id, value },
-                }),
-              );
-          });
-        }
-        file.status = 'uploaded';
-        file.progress = 100;
-        await save();
-      } catch (error) {
-        file.status = 'failed';
-        file.error = error instanceof Error ? error.message : '업로드 실패';
-        await save();
-        if (permanentClientError(error)) throw error;
-      }
-    }
-    assertOwner();
-    draft.server = await io.get<UseDetail>(`/api/uses/${draft.serverId}`);
-    draft.version = draft.server.version;
-    if (draft.uploads.some((f) => f.status !== 'uploaded')) {
-      draft.error = '사용 건은 서버에 저장되었습니다. 사진 업로드 실패: 사진만 다시 보냅니다.';
+    if (!draft.submitRequest) {
+      assertOwner();
+      reconcileServer(draft, await io.get<UseDetail>(`/api/uses/${draft.serverId}`));
       await save();
-      return draft;
-    }
-    if (draft.intent === 'submit' && !['SUBMITTED', 'APPROVED'].includes(draft.server.review_status)) {
-      if (!draft.submitRequest) {
-        draft.submitRequest = { key: crypto.randomUUID(), version: draft.version };
-        await save();
+      for (const file of draft.uploads) {
+        if (file.status === 'uploaded') continue;
+        try {
+          assertOwner();
+          file.status = 'uploading';
+          file.error = undefined;
+          file.progress = 0;
+          await save();
+          if (!file.serverId) {
+            const meta = {
+              client_upload_id: file.client_upload_id,
+              kind: file.kind,
+              ...(file.blob
+                ? { original_name: file.original_name, mime: file.blob.type, size: file.blob.size }
+                : { text_value: file.text_value }),
+            };
+            const path = file.replacesId
+              ? `/api/evidence/${file.replacesId}/replace`
+              : `/api/uses/${draft.serverId}/evidence`;
+            const body = file.replacesId ? { reason: file.reason, evidence: meta } : meta;
+            const result = await io.mutate<{ id: string }>(path, body, `evidence-${file.client_upload_id}`);
+            file.serverId = result.id;
+            await save();
+          }
+          if (file.blob) {
+            assertOwner();
+            await io.upload(`/api/evidence/${file.serverId}/content`, file.blob, (value) => {
+              // Progress is cosmetic; durable status changes are awaited below.
+              if (typeof window !== 'undefined')
+                window.dispatchEvent(
+                  new CustomEvent('vehicle-upload-progress', {
+                    detail: { draftId: draft.id, uploadId: file.client_upload_id, value },
+                  }),
+                );
+            });
+          }
+          file.status = 'uploaded';
+          file.progress = 100;
+          await save();
+        } catch (error) {
+          file.status = 'failed';
+          file.error = error instanceof Error ? error.message : '업로드 실패';
+          await save();
+          if (permanentClientError(error)) throw error;
+        }
       }
       assertOwner();
-      draft.server = await io.mutate<UseDetail>(
+      reconcileServer(draft, await io.get<UseDetail>(`/api/uses/${draft.serverId}`));
+      await save();
+      if (draft.uploads.some((f) => f.status !== 'uploaded')) {
+        draft.error = '사용 건은 서버에 저장되었습니다. 사진 업로드 실패: 사진만 다시 보냅니다.';
+        await save();
+        return draft;
+      }
+      if (draft.intent === 'submit' && !['SUBMITTED', 'APPROVED'].includes(draft.server!.review_status)) {
+        if (!draft.submitRequest) {
+          draft.submitRequest = { key: crypto.randomUUID(), version: draft.version! };
+          await save();
+        }
+      }
+    }
+    if (draft.submitRequest) {
+      assertOwner();
+      await io.mutate<UseDetail>(
         `/api/uses/${draft.serverId}/submit`,
         { version: draft.submitRequest.version },
         draft.submitRequest.key,
       );
-      draft.version = draft.server.version;
+      // A replay is a historical receipt, not the current review decision.
+      assertOwner();
+      rememberServer(draft, await io.get<UseDetail>(`/api/uses/${draft.serverId}`));
     }
+    draft.form = fromUse(draft.server!, draft.mode);
     draft.phase = 'saved';
     draft.error = undefined;
     draft.inputError = false;
@@ -125,6 +163,9 @@ export async function sendDraft(
   } catch (error) {
     draft.error = error instanceof Error ? error.message : '전송하지 못했습니다.';
     if (error instanceof ApiError) {
+      // A validation rejection proves this create did not commit. Only ambiguous
+      // outcomes need the original POST retained while the user corrects inputs.
+      if (!draft.serverId && error.code === 'VALIDATION_FAILED') draft.pendingCreate = undefined;
       if (error.code === 'SUBMIT_BLOCKED') {
         draft.phase = 'editing';
         draft.inputError = true;
@@ -139,7 +180,6 @@ export async function sendDraft(
         if (draft.serverId) {
           try {
             draft.server = await io.get<UseDetail>(`/api/uses/${draft.serverId}`);
-            draft.version = draft.server.version;
           } catch {
             /* Preserve local edits when the detail is unavailable. */
           }

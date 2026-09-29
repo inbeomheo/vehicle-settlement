@@ -26,10 +26,15 @@ export type Draft = {
   updatedAt: number;
   serverId?: string;
   server?: UseDetail;
+  // Separate from display detail, which may be refreshed while local edits remain.
+  lastSaved?: UseDetail;
+  removedEvidenceIds?: string[];
   version?: number;
   phase: 'editing' | 'queued' | 'saved' | 'blocked' | 'conflict';
   intent?: 'save' | 'submit';
   request?: { key: string; payload: CreateUseInput & { version?: number } };
+  // Persist before sending POST. Editing/canceling attachments must not discard it.
+  pendingCreate?: { request: NonNullable<Draft['request']>; form: FormValues };
   savedRequest?: boolean;
   submitRequest?: { key: string; version: number };
   error?: string;
