@@ -17,6 +17,7 @@
     "db:migrate": "tsx scripts/db-migrate.ts",
     "db:reset": "tsx scripts/db-reset.ts",
     "seed": "tsx scripts/seed.ts",
+    "seed:demo": "tsx scripts/seed-demo.ts",
     "db:generate": "drizzle-kit generate",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
