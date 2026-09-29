@@ -12,6 +12,7 @@ import {
   panelClass,
   secondaryClass,
   Totals,
+  DraftWarnings,
   useResource,
   type Candidate,
   type StatementDetail,
@@ -92,7 +93,14 @@ export function NewStatement({
       setBusy(false);
     }
   }
-  const included = rows?.filter((row) => choices[row.charge_line_id]?.inclusion === 'INCLUDED') ?? [];
+  const included =
+    rows?.filter(
+      (row) =>
+        row.eligible &&
+        row.snapshot.supply_amount !== null &&
+        row.snapshot.tax_amount !== null &&
+        choices[row.charge_line_id]?.inclusion === 'INCLUDED',
+    ) ?? [];
   const supply = included.reduce((sum, row) => sum + (row.snapshot.supply_amount ?? 0), 0);
   const tax = included.reduce((sum, row) => sum + (row.snapshot.tax_amount ?? 0), 0);
   function reset() {
@@ -280,6 +288,14 @@ export function NewStatement({
           )}
           {!!rows.length && (
             <>
+              <DraftWarnings
+                blocked_count={rows.filter((row) => !row.eligible).length}
+                unpriced_count={
+                  rows.filter(
+                    (row) => row.snapshot.supply_amount === null || row.snapshot.tax_amount === null,
+                  ).length
+                }
+              />
               <Totals supply_total={supply} tax_total={tax} grand_total={supply + tax} />
               <button className={buttonClass} disabled={busy}>
                 {busy ? '저장 중…' : '초안 만들기'}

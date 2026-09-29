@@ -8,7 +8,7 @@ export function Dashboard() {
     ['보완 대기', 'fix_pending', '/m/review?tab=NEEDS_FIX', false],
     ['증빙 누락', 'evidence_missing', '/m/review?tab=MISSING', false],
     ['미정산 승인액', 'unsettled_approved_amount', '/m/ledger?unsettled_approved=true', true],
-    ['미지급액', 'unpaid_amount', '/m/payments?status=UNPAID', true],
+    ['미지급액', 'unpaid_amount', '/m/payments?state=UNPAID', true],
   ] as const;
   return (
     <>
