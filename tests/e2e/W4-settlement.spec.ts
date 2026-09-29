@@ -56,6 +56,7 @@ test('정산 담당자: 새 정산 → 확정 → PDF·엑셀 200 → 지급 완
   await page.waitForURL(/\/m\/statements\/[0-9a-f-]+$/);
   await expect(page.getByRole('heading', { name: '작성 중 명세', exact: true })).toBeVisible();
   await page.getByRole('button', { name: '명세 확정', exact: true }).click();
+  await page.getByRole('button', { name: '확정', exact: true }).click();
   await expect(page.getByRole('heading', { name: /^PAY-202609-/ })).toBeVisible();
   for (const [label, extension] of [
     ['PDF 다운로드', 'pdf'],
