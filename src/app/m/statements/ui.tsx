@@ -57,8 +57,9 @@ export async function api<T>(url: string, body?: unknown, method = 'POST'): Prom
           )
           .join('\n')
       : '';
-    throw new Error(
-      [result.error?.message ?? '요청을 처리하지 못했습니다.', details].filter(Boolean).join('\n'),
+    throw Object.assign(
+      new Error([result.error?.message ?? '요청을 처리하지 못했습니다.', details].filter(Boolean).join('\n')),
+      { code: result.error?.code },
     );
   }
   return result.data as T;

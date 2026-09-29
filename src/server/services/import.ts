@@ -316,6 +316,31 @@ async function evaluate(ctx: Context, job: Job, raw: unknown) {
   if (!sheet || selection.header_row > sheet.rows.length) invalid('시트·헤더 행을 확인하세요.');
   if (new Set(Object.values(selection.mapping)).size !== Object.keys(selection.mapping).length)
     invalid('같은 열을 두 항목에 지정할 수 없습니다.');
+  // Previously committed files may carry the old contract-dependent hash. Match their
+  // original file/sheet/mapping/row identity as well, without changing settled records.
+  const priorRows = await ctx.db
+    .select({
+      use_ids: sql<string[]>`array_agg(${vehicleUses.id})`,
+      preview: sql<ImportRow[]>`${importJobs.rows}->'preview'`,
+    })
+    .from(importJobs)
+    .innerJoin(vehicleUses, eq(vehicleUses.import_job_id, importJobs.id))
+    .where(
+      and(
+        eq(importJobs.status, 'COMMITTED'),
+        sql`${importJobs.rows}->>'file_hash' = ${payload.file_hash}`,
+        sql`${importJobs.mapping}->>'sheet' = ${String(selection.sheet)}`,
+        sql`${importJobs.mapping}->>'header_row' = ${String(selection.header_row)}`,
+        sql`${importJobs.mapping}->'mapping' = ${JSON.stringify(selection.mapping)}::jsonb`,
+      ),
+    )
+    .groupBy(importJobs.id);
+  const importedRows = new Set(
+    priorRows.flatMap((prior) => {
+      const useIds = new Set(prior.use_ids);
+      return prior.preview.filter((row) => row.use_id && useIds.has(row.use_id)).map((row) => row.row);
+    }),
+  );
   const rows: ImportRow[] = [];
   const cache: LookupCache = new Map();
   const occurrences = new Map<string, number>();
@@ -357,7 +382,8 @@ async function evaluate(ctx: Context, job: Job, raw: unknown) {
             ...line,
             quantity: line.quantity == null ? null : new Decimal(line.quantity).toString(),
           })),
-          price: data.price,
+          // Identity follows the source row, never the current contract or option.
+          price: data.importedPrice,
         }),
       );
       const occurrence = (occurrences.get(contentHash) ?? 0) + 1;
@@ -369,7 +395,7 @@ async function evaluate(ctx: Context, job: Job, raw: unknown) {
         .select({ id: vehicleUses.id })
         .from(vehicleUses)
         .where(eq(vehicleUses.source_row_hash, row.source_row_hash));
-      if (duplicate) row.status = 'SKIPPED';
+      if (duplicate || importedRows.has(row.row)) row.status = 'SKIPPED';
       else if (
         existing.some(
           (u) =>

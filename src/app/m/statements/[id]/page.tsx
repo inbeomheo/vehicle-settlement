@@ -29,7 +29,7 @@ export default function StatementPage() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [canceling, setCanceling] = useState(false);
-  const [confirmingVersion, setConfirmingVersion] = useState<number | null>(null);
+  const [confirmingToken, setConfirmingToken] = useState<string | null>(null);
   const [replacing, setReplacing] = useState(false);
   const [notice, setNotice] = useState('');
   const statement = result.data;
@@ -43,6 +43,10 @@ export default function StatementPage() {
       return true;
     } catch (e) {
       setError((e as Error).message);
+      if ((e as { code?: string }).code === 'STATEMENT_CHANGED') {
+        setConfirmingToken(null);
+        result.reload();
+      }
       return false;
     } finally {
       setBusy(false);
@@ -152,7 +156,7 @@ export default function StatementPage() {
             <p className="mb-3 text-sm">
               저장된 포함 항목과 합계로 확정합니다. 확정 후 수정은 취소·재작성 또는 조정으로 처리합니다.
             </p>
-            {confirmingVersion === statement.version ? (
+            {confirmingToken !== null && confirmingToken === statement.confirmation_token ? (
               <div role="group" aria-label="명세 확정 확인" className="space-y-3">
                 <p className="font-bold">
                   포함 {included.length}건 · 총액 {money(statement.grand_total)}
@@ -163,17 +167,18 @@ export default function StatementPage() {
                     className={buttonClass}
                     disabled={busy}
                     onClick={async () => {
-                      if (await action(`/api/statements/${id}/confirm`, { version: statement.version }))
-                        setConfirmingVersion(null);
+                      if (
+                        await action(`/api/statements/${id}/confirm`, {
+                          version: statement.version,
+                          confirmation_token: confirmingToken,
+                        })
+                      )
+                        setConfirmingToken(null);
                     }}
                   >
                     {busy ? '처리 중…' : '확정'}
                   </button>
-                  <button
-                    className={secondaryClass}
-                    disabled={busy}
-                    onClick={() => setConfirmingVersion(null)}
-                  >
+                  <button className={secondaryClass} disabled={busy} onClick={() => setConfirmingToken(null)}>
                     돌아가기
                   </button>
                 </div>
@@ -182,7 +187,7 @@ export default function StatementPage() {
               <button
                 className={buttonClass}
                 disabled={busy}
-                onClick={() => setConfirmingVersion(statement.version)}
+                onClick={() => setConfirmingToken(statement.confirmation_token)}
               >
                 명세 확정
               </button>

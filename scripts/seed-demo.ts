@@ -221,7 +221,10 @@ export async function seedDemo(db: Db) {
         due_date: group === 'paid' ? '2026-09-25' : '2026-10-10',
         items: data.lines.map((charge_line_id) => ({ charge_line_id })),
       });
-      statement = await confirmStatement(ctx, statement.id, { version: statement.version });
+      statement = await confirmStatement(ctx, statement.id, {
+        confirmation_token: statement.confirmation_token!,
+        version: statement.version,
+      });
       if (group === 'paid') {
         await recordPayment(ctx, statement.id, {
           client_request_id: 'demo-202609-payment',

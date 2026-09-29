@@ -56,7 +56,10 @@ test('확정 상세는 읽기 전용, 승인 건은 확인 후 편집·재승인
     period_end: '2026-09-30',
     items: [{ charge_line_id: use.charge_lines[0].id }],
   });
-  await confirmStatement(s.adminCtx, statement.id, { version: statement.version });
+  await confirmStatement(s.adminCtx, statement.id, {
+    confirmation_token: statement.confirmation_token!,
+    version: statement.version,
+  });
   await page.getByLabel('운반 내용', { exact: true }).fill('확정 직후 수정 시도');
   await page.getByRole('button', { name: '서버 저장', exact: true }).click();
   await expect(page.locator('#form-errors')).toContainText('담당자에게 문의하세요');

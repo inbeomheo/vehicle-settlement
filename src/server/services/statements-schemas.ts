@@ -38,7 +38,9 @@ export const updateStatementSchema = versionInput
     due_date: dateString.nullable().optional(),
   })
   .strict();
-export const confirmStatementSchema = versionInput.strict();
+export const confirmStatementSchema = versionInput
+  .extend({ confirmation_token: z.string().regex(/^[a-f0-9]{64}$/) })
+  .strict();
 export const cancelStatementSchema = versionInput.extend({ reason }).strict();
 export const candidateSchema = z
   .object({

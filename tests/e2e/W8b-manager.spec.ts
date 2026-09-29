@@ -78,6 +78,28 @@ for (const [index, width] of [1440, 390, 360].entries()) {
     const result = width < 768 ? page.getByLabel('사용대장 카드 목록') : page.locator('table');
     await expect(result).toContainText('외 2회');
     await expect(result).toContainText('미정산');
+    if (width < 768) {
+      const card = result.locator('article').first();
+      for (const title of ['운송사/지급처', '기본비', '추가비', '증빙', '정산회차', '지급상태']) {
+        await expect(card.getByText(title, { exact: true })).toBeVisible();
+      }
+      await expect(card.getByText('공종', { exact: true })).toBeHidden();
+      await card.getByText('더 보기', { exact: true }).click();
+      for (const title of ['공종', '요청자', '작업내용', '계약단위', '실적']) {
+        await expect(card.getByText(title, { exact: true })).toBeVisible();
+      }
+      await page.getByText('표시 열 선택', { exact: true }).click();
+      const choices = page
+        .locator('details')
+        .filter({ has: page.getByText('표시 열 선택', { exact: true }) });
+      for (const title of ['운송사/지급처', '기본비', '증빙', '지급상태', '공종']) {
+        await choices.getByRole('checkbox', { name: title, exact: true }).uncheck();
+        await expect(card.getByText(title, { exact: true })).toHaveCount(0);
+        await choices.getByRole('checkbox', { name: title, exact: true }).check();
+        await expect(card.getByText(title, { exact: true })).toBeVisible();
+      }
+      await page.getByText('표시 열 선택', { exact: true }).click();
+    }
     await assertFits(page);
     if (width === 1440) {
       const lastHeader = page.getByRole('columnheader', { name: '지급상태', exact: true });

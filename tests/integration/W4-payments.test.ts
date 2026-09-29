@@ -35,7 +35,10 @@ describe('W4 지급·입금·조정', () => {
       use.charge_lines.map((l) => l.id),
     );
     await expect(recordPayment(s.adminCtx, initial.id, payment(300000))).rejects.toThrow('확정 명세');
-    const statement = await confirmStatement(s.adminCtx, initial.id, { version: 1 });
+    const statement = await confirmStatement(s.adminCtx, initial.id, {
+      confirmation_token: initial.confirmation_token!,
+      version: 1,
+    });
     await expect(recordPayment(s.adminCtx, statement.id, payment(100000))).rejects.toThrow('전액');
     await expect(
       recordPayment(s.adminCtx, statement.id, { ...payment(300000), kind: 'RECEIPT' }),
@@ -70,7 +73,7 @@ describe('W4 지급·입금·조정', () => {
       path: `/api/statements/${statement.id}/confirm`,
       params: { id: statement.id },
       token,
-      body: { version: 1 },
+      body: { version: 1, confirmation_token: statement.confirmation_token! },
       headers: { 'idempotency-key': randomUUID() },
     };
     const confirmations = await Promise.all([
@@ -140,7 +143,10 @@ describe('W4 지급·입금·조정', () => {
       use.charge_lines.map((l) => l.id),
       { due_date: '2020-01-01' },
     );
-    const statement = await confirmStatement(s.adminCtx, initial.id, { version: 1 });
+    const statement = await confirmStatement(s.adminCtx, initial.id, {
+      confirmation_token: initial.confirmation_token!,
+      version: 1,
+    });
     const overview = await paymentOverview(s.adminCtx, {
       direction: 'PAYABLE',
       counterpartyId: s.payee.id,
@@ -170,7 +176,10 @@ describe('W4 지급·입금·조정', () => {
       u2.charge_lines.filter((l) => l.direction === 'RECEIVABLE').map((l) => l.id),
       { direction: 'RECEIVABLE', counterparty_id: customer.id },
     );
-    const billed = await confirmStatement(s.adminCtx, bill.id, { version: 1 });
+    const billed = await confirmStatement(s.adminCtx, bill.id, {
+      confirmation_token: bill.confirmation_token!,
+      version: 1,
+    });
     expect(billed.collection_status).toBe('BILLED');
     await recordPayment(s.adminCtx, bill.id, { ...payment(400000), kind: 'RECEIPT' });
     expect((await getStatement(s.adminCtx, bill.id)).collection_status).toBe('RECEIVED');
@@ -243,7 +252,14 @@ describe('W4 지급·입금·조정', () => {
       period_start: '2026-10-01',
       period_end: '2026-10-31',
     });
-    expect((await confirmStatement(s.adminCtx, adjustmentDraft.id, { version: 1 })).grand_total).toBe(-30000);
+    expect(
+      (
+        await confirmStatement(s.adminCtx, adjustmentDraft.id, {
+          confirmation_token: adjustmentDraft.confirmation_token!,
+          version: 1,
+        })
+      ).grand_total,
+    ).toBe(-30000);
     expect(await getStatement(s.adminCtx, statement.id)).toMatchObject({
       grand_total: 300000,
       payment_status: 'PAID',

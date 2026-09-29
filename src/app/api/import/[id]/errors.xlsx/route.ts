@@ -8,4 +8,5 @@ export const GET = withRoute(
         'content-disposition': 'attachment; filename="import-errors.xlsx"',
       },
     }),
+  { roles: ['ADMIN', 'SITE_MANAGER', 'SETTLEMENT_MANAGER'] },
 );

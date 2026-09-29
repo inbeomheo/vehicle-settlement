@@ -141,7 +141,7 @@ describe('W4 스냅샷 출력과 권한', () => {
       mine.charge_lines.filter((l) => l.direction === 'RECEIVABLE').map((l) => l.id),
       { direction: 'RECEIVABLE', counterparty_id: customer.id },
     );
-    await confirmStatement(s.adminCtx, bill.id, { version: 1 });
+    await confirmStatement(s.adminCtx, bill.id, { confirmation_token: bill.confirmation_token!, version: 1 });
     await recordPayment(s.adminCtx, shared.id, {
       client_request_id: randomUUID(),
       kind: 'PAYMENT',

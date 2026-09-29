@@ -47,5 +47,8 @@ export async function draft(
 }
 export async function confirmed(s: Awaited<ReturnType<typeof scenario>>, ids: string[]) {
   const statement = await draft(s, ids);
-  return confirmStatement(s.adminCtx, statement.id, { version: statement.version });
+  return confirmStatement(s.adminCtx, statement.id, {
+    confirmation_token: statement.confirmation_token!,
+    version: statement.version,
+  });
 }

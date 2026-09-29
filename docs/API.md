@@ -124,3 +124,9 @@ W7: 캐시 결과가 없는 수식/오류 셀은 매핑된 열에서만 해당 �
 - `PUT /api/admin/form-fields`: ADMIN 전용, 멱등 키 지원. `{project_id:null|uuid,fields:[{field_key,driver_mode:null|mode,manager_mode:null|mode,version}]}`. 변경할 항목만 보내며 각 행의 두 역할 모드를 함께 보낸다. null은 상위 기본 따름. 저장 후 위 GET 형식 반환. 다중 항목은 원자적으로 저장·감사 기록하며 버전 충돌은 `409 VERSION_CONFLICT`, `details.current`에 최신 설정을 반환한다.
 - `field_key`: `end_date`, `work_type`, `requester`, `cargo_desc`, `operation_status`, `notes`, `via`, `cargo`, `quantity`, `quantity_unit`, `hours`, `depart_at`, `arrive_at`, `trip_status`, `is_empty_return`, `trip_notes`, `extra_charges`. 고정 필수 항목은 설정할 수 없다.
 - 사용 제출의 설정 필수 누락은 `422 SUBMIT_BLOCKED`, `details.fields:[{target,reason}]`. reason과 message에 한국어 항목 이름을 포함한다. DRAFT 저장·HIDDEN의 기존 값은 허용한다.
+
+## F1 명세 확정 재확인
+
+초안 상세·생성·수정 응답의 `confirmation_token`은 서버가 포함 항목 ID, 비용 라인 ID·version·승인 공급가·세액, 정산 가능 여부와 합계로 만든 SHA-256 해시다. 확정·취소 명세에서는 null이다.
+
+`POST /api/statements/:id/confirm`은 `{ version, confirmation_token }`을 필수로 받는다. 서버는 부모 사용 건과 비용 라인을 잠그고 확정 가능 여부를 재검사한 뒤 토큰을 비교한다. 변경된 초안은 `409 STATEMENT_CHANGED`와 `details.{supply_total,tax_total,grand_total,included_count,confirmation_token}`을 반환한다. 클라이언트는 최신 상세를 다시 조회·표시하고 사용자의 재확인을 받는다. 기존 명세 version 충돌은 `VERSION_CONFLICT`, 미승인·잠금·증빙 등 확정 불가 사유는 `CONFIRM_BLOCKED`를 유지한다.

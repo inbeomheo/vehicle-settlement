@@ -74,6 +74,45 @@ const defaultColumns: (keyof LedgerRow)[] = [
   'settlement_status',
   'payment_status',
 ];
+const mobileCoreColumns: (keyof LedgerRow)[] = [
+  ...defaultColumns,
+  'payee_name',
+  'base_amount',
+  'extra_amount',
+  'evidence_count',
+  'statement_numbers',
+];
+function LedgerCard({ row, visible }: { row: LedgerRow; visible: (keyof LedgerRow)[] }) {
+  const selected = columns.filter((column) => column.key !== 'use_no' && visible.includes(column.key));
+  const core = selected.filter((column) => mobileCoreColumns.includes(column.key));
+  const more = selected.filter((column) => !mobileCoreColumns.includes(column.key));
+  const fields = (items: typeof columns) => (
+    <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+      {items.map((column) => (
+        <div key={column.key} className={`min-w-0 ${column.key === 'route_summary' ? 'col-span-2' : ''}`}>
+          <dt className="text-xs text-slate-500">{column.title}</dt>
+          <dd className="mt-1 break-words font-medium">
+            {column.render ? column.render(row) : String(row[column.key] || '—')}
+          </dd>
+        </div>
+      ))}
+    </dl>
+  );
+  return (
+    <article className={panelClass}>
+      <UseLink id={row.id}>{row.use_no}</UseLink>
+      {fields(core)}
+      {more.length > 0 && (
+        <details className="mt-3 border-t border-slate-100 pt-2">
+          <summary className="flex min-h-11 cursor-pointer items-center text-sm font-semibold text-blue-700">
+            더 보기
+          </summary>
+          {fields(more)}
+        </details>
+      )}
+    </article>
+  );
+}
 export function Ledger({ initial = {} }: { initial?: Search }) {
   const [query, setQuery] = useState<Search>({ ...defaults, ...initial });
   const [draft, setDraft] = useState(query);
@@ -83,6 +122,8 @@ export function Ledger({ initial = {} }: { initial?: Search }) {
     ([key, value]) => value && !['page', 'pageSize', 'sort', 'order'].includes(key),
   ).length;
   useEffect(() => {
+    // Mobile cards expose all columns; desktop starts with its compact table selection.
+    if (window.matchMedia('(max-width: 767px)').matches) setVisible(columns.map((column) => column.key));
     const restore = () => {
       const next = { ...defaults, ...Object.fromEntries(new URLSearchParams(window.location.search)) };
       setQuery(next);
@@ -263,7 +304,7 @@ export function Ledger({ initial = {} }: { initial?: Search }) {
         기본비·추가비·합계는 지급 승인 공급가입니다. 승인액이 없는 항목은 미확정으로 표시하며 합계에서
         제외합니다. 엑셀에는 현재 필터의 전체 행·전체 열이 포함됩니다.
       </p>
-      <details className={`${panelClass} mb-3 hidden md:block`}>
+      <details className={`${panelClass} mb-3`}>
         <summary className="cursor-pointer text-sm font-semibold">표시 열 선택</summary>
         <div className="mt-3 flex flex-wrap gap-4">
           {columns.map((column) => (
@@ -322,29 +363,7 @@ export function Ledger({ initial = {} }: { initial?: Search }) {
         {(loading || !data?.rows.length) && <Empty loading={loading} />}
       </div>
       <div className="grid gap-3 md:hidden" aria-label="사용대장 카드 목록" aria-busy={loading}>
-        {!loading &&
-          data?.rows.map((row) => (
-            <article key={row.id} className={panelClass}>
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <UseLink id={row.id}>{row.use_no}</UseLink>
-                <Badge value={row.review_status} />
-              </div>
-              <p className="font-semibold">
-                {row.use_date} · {row.project_name}
-              </p>
-              <p className="mt-2 text-sm text-slate-600">
-                {row.driver_name} · {row.plate_no}
-              </p>
-              <p className="mt-2 break-words text-sm">{row.route_summary}</p>
-              <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3">
-                <strong>{money(row.total_amount)}</strong>
-                <div className="flex flex-wrap gap-2">
-                  <Badge value={row.settlement_status} />
-                  <Badge value={row.payment_status} />
-                </div>
-              </div>
-            </article>
-          ))}
+        {!loading && data?.rows.map((row) => <LedgerCard key={row.id} row={row} visible={visible} />)}
         {(loading || !data?.rows.length) && <Empty loading={loading} />}
       </div>
       <div className="mt-4 flex justify-end">
