@@ -49,7 +49,9 @@ async function inputUse(
   const created = page.waitForResponse(
     (r) => new URL(r.url()).pathname === '/api/uses' && r.request().method() === 'POST',
   );
-  await page.getByRole('button', { name: '담당자에게 제출', exact: true }).click();
+  await page
+    .getByRole('button', { name: options.manager ? '검수 대기로 제출' : '담당자에게 제출', exact: true })
+    .click();
   const response = await created;
   expect(response.status()).toBe(200);
   const use = (await response.json()).data as Use;

@@ -46,7 +46,9 @@ test('대리 입력 신규·수정 문맥, 실제 기사 변경 시 차량·단�
         .filter(
           (e) =>
             e.getBoundingClientRect().height > 0 &&
-            (parseFloat(getComputedStyle(e).fontSize) < 16 || e.getBoundingClientRect().height < 44),
+            (parseFloat(getComputedStyle(e).fontSize) < 16 ||
+              // 체크박스·라디오는 감싼 label 전체가 터치 영역이다.
+              (e.closest('label') ?? e).getBoundingClientRect().height < 44),
         )
         .map((e) => e.outerHTML),
     );
