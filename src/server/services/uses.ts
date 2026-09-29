@@ -400,15 +400,24 @@ async function saveCharges(
             vehicle_id: use.vehicle_id,
             use_date: use.use_date,
             direction: input.direction,
-            billing_unit: input.billing_unit,
+            billing_unit: reprice ? undefined : input.billing_unit,
           })
         : null;
-    const unit = input.billing_unit ?? existing?.billing_unit ?? rate?.billing_unit ?? 'PER_DAY';
+    const agreementChanged = !!existing && !preserve && existing.rate_agreement_id !== (rate?.id ?? null);
+    const unit =
+      (preserve ? existing.billing_unit : rate?.billing_unit) ??
+      input.billing_unit ??
+      existing?.billing_unit ??
+      'PER_DAY';
+    // Omission preserves a quantity only while the same agreement still applies.
+    const previousQuantity = agreementChanged ? null : existing?.quantity;
     const q = ['PER_DAY', 'HALF_DAY', 'MONTHLY', 'LUMP_SUM'].includes(unit)
-      ? (input.quantity ?? existing?.quantity ?? '1')
+      ? agreementChanged
+        ? '1'
+        : (input.quantity ?? previousQuantity ?? '1')
       : input.quantity !== undefined
         ? input.quantity
-        : (existing?.quantity ?? null);
+        : (previousQuantity ?? null);
     const price = preserve ? existing.unit_price : (rate?.unit_price ?? null);
     const snapshot = preserve
       ? existing.agreement_snapshot
@@ -588,8 +597,8 @@ export async function updateUse(ctx: Context, id: string, raw: UpdateUseInput) {
           id: c.id,
           direction: c.direction,
           charge_type: c.charge_type as ChargeInput['charge_type'],
-          billing_unit: c.charge_type === 'BASE' ? (input.billing_unit ?? c.billing_unit) : c.billing_unit,
-          quantity: c.charge_type === 'BASE' && input.quantity !== undefined ? input.quantity : c.quantity,
+          billing_unit: c.charge_type === 'BASE' ? input.billing_unit : c.billing_unit,
+          quantity: c.charge_type === 'BASE' ? input.quantity : c.quantity,
           requested_amount: c.requested_amount,
           reason: c.reason,
           included_in_base: c.included_in_base,
@@ -605,8 +614,8 @@ export async function updateUse(ctx: Context, id: string, raw: UpdateUseInput) {
           id: c.id,
           direction: c.direction,
           charge_type: c.charge_type as ChargeInput['charge_type'],
-          billing_unit: c.billing_unit,
-          quantity: c.quantity,
+          billing_unit: c.charge_type === 'BASE' ? undefined : c.billing_unit,
+          quantity: c.charge_type === 'BASE' ? undefined : c.quantity,
           requested_amount: c.requested_amount,
           reason: c.reason,
           included_in_base: c.included_in_base,
@@ -640,6 +649,16 @@ async function assertFormFieldsSatisfied(ctx: Context, use: Use, lines?: Charge[
   if (fields.length)
     throw new AppError('SUBMIT_BLOCKED', fields.map((field) => field.reason).join(' '), { fields });
 }
+export function missingChargeQuantity(line: Charge) {
+  return (
+    line.charge_type === 'BASE' &&
+    ['PER_TRIP', 'PER_HOUR', 'PER_TON', 'PER_M3'].includes(line.billing_unit) &&
+    line.quantity === null
+  );
+}
+export function chargeQuantityMessage(line: Charge) {
+  return line.direction === 'RECEIVABLE' ? '고객 청구 수량을 입력하세요' : '청구 수량을 입력하세요';
+}
 export async function submitUse(ctx: Context, id: string, raw: z.input<typeof versionInput>) {
   const input = versionInput.strict().parse(raw);
   return atomic(ctx, async (tx) => {
@@ -655,16 +674,13 @@ export async function submitUse(ctx: Context, id: string, raw: z.input<typeof ve
       .where(and(eq(chargeLines.vehicle_use_id, id), isNull(chargeLines.deleted_at)));
     await assertFormFieldsSatisfied(tx, before, lines);
     const missing = lines.filter(
-      (line) =>
-        line.charge_type === 'BASE' &&
-        ['PER_TRIP', 'PER_HOUR', 'PER_TON', 'PER_M3'].includes(line.billing_unit) &&
-        line.quantity === null,
+      (line) => (canSeeReceivable(tx) || line.direction === 'PAYABLE') && missingChargeQuantity(line),
     );
     if (missing.length)
       throw new AppError('SUBMIT_BLOCKED', '청구 수량을 입력하세요', {
         fields: missing.map((line) => ({
           target: `charge:${line.id}.quantity`,
-          reason: '청구 수량을 입력하세요',
+          reason: chargeQuantityMessage(line),
         })),
       });
     const [use] = await tx.db
@@ -687,6 +703,8 @@ async function applyDecision(ctx: Context, line: Charge, decision?: z.output<typ
   let supply: number | null = null;
   let tax: number | null = null;
   if (status === 'APPROVED') {
+    if (missingChargeQuantity(line))
+      invalid(chargeQuantityMessage(line), { charge_line_id: line.id, target: `charge:${line.id}.quantity` });
     if (line.price_status === 'PENDING' && decision?.approved_amount === undefined)
       invalid('단가 미확정 비용의 승인액을 지정하세요.', { charge_line_id: line.id });
     const amount = line.included_in_base ? 0 : (line.computed_amount ?? line.requested_amount);
@@ -754,6 +772,11 @@ export async function approveUse(ctx: Context, id: string, raw: z.input<typeof a
       invalid('검수 대상 비용을 확인하세요.');
     for (const line of lines) {
       const decision = input.lines?.find((l) => l.id === line.id);
+      if (!decision && line.line_review_status === 'APPROVED' && missingChargeQuantity(line))
+        invalid(chargeQuantityMessage(line), {
+          charge_line_id: line.id,
+          target: `charge:${line.id}.quantity`,
+        });
       if (decision || line.line_review_status === 'PENDING') await applyDecision(tx, line, decision);
     }
     const [r] = await tx.db

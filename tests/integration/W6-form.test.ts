@@ -11,7 +11,7 @@ import type { Lookups } from '../../src/client/types';
 beforeEach(() => vi.stubGlobal('React', React));
 afterEach(() => vi.unstubAllGlobals());
 
-it('W6-2 계약 조회 전 수량은 null 대신 생략하여 서버의 기본 수량 판정을 따른다', () => {
+it('계약 조회 전 빈 수량은 명시적 null로 보내고 고정형 기본 수량은 서버가 결정한다', () => {
   const form = initialValues({
     drivers: [],
     projects: [],
@@ -19,8 +19,8 @@ it('W6-2 계약 조회 전 수량은 null 대신 생략하여 서버의 기본 �
     affiliations: [],
   } as unknown as Lookups);
   const input = toInput(form, 'driver');
-  expect(input.charge_lines?.[0].quantity).toBeUndefined();
-  expect(JSON.parse(JSON.stringify(input)).charge_lines[0]).not.toHaveProperty('quantity');
+  expect(input.charge_lines?.[0].quantity).toBeNull();
+  expect(JSON.parse(JSON.stringify(input)).charge_lines[0]).toHaveProperty('quantity', null);
 });
 
 it.each(['PER_DAY', 'HALF_DAY', 'MONTHLY', 'LUMP_SUM'] as const)(

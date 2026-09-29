@@ -19,7 +19,14 @@ import {
 import { nextStatementNo } from '../db/numbers';
 import { sumMoney, won } from '../domain/money';
 import { AppError, invalid, notFound } from '../errors';
-import { assertEvidenceSatisfied, atomic, type Charge, type Use } from './uses';
+import {
+  assertEvidenceSatisfied,
+  atomic,
+  missingChargeQuantity,
+  chargeQuantityMessage,
+  type Charge,
+  type Use,
+} from './uses';
 import { uuid } from './schemas';
 import {
   cancelStatementSchema,
@@ -129,6 +136,7 @@ export async function eligibilityReasons(
   statement: Pick<Statement, 'direction' | 'counterparty_id' | 'period_end'>,
 ) {
   const reasons: string[] = [];
+  if (missingChargeQuantity(line)) reasons.push(chargeQuantityMessage(line));
   if (use.review_status !== 'APPROVED') reasons.push('사용 건 미승인');
   if (line.line_review_status !== 'APPROVED')
     reasons.push(line.line_review_status === 'HELD' ? '라인 보류' : '비용 라인 미승인');
