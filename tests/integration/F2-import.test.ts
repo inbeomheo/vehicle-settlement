@@ -7,6 +7,7 @@ import { uploadImport, previewImport, commitImport } from '../../src/server/serv
 import { approveUse, getUse, submitUse } from '../../src/server/services/uses';
 import { createStatement, confirmStatement, getStatement } from '../../src/server/services/statements';
 import { recordPayment } from '../../src/server/services/payments';
+import { recalculateImportHashes } from '../../src/server/services/import-rehash';
 
 const database = testDatabase();
 type Scenario = Awaited<ReturnType<typeof setupScenario>>;
@@ -70,6 +71,7 @@ async function legacyImport(s: Scenario, rows: string[][], excluded: number[] = 
   const payload = job.rows as { preview: typeof imported.preview };
   for (const [index, result] of payload.preview.entries()) {
     result.source_row_hash = old.preview[index].source_row_hash;
+    delete result.source_ids;
     if (result.use_id)
       await database()
         .db.update(vehicleUses)
@@ -81,7 +83,7 @@ async function legacyImport(s: Scenario, rows: string[][], excluded: number[] = 
 }
 
 it.each(['CRLF', '행 이동', '열 매핑 변경'] as const)(
-  '구버전 빈 단가 가져오기: %s 재저장과 계약 변경 후에도 등록·이중 지급을 막는다',
+  '구버전 해시 재계산: %s 재저장과 계약 변경 후에도 등록·이중 지급을 막는다',
   async (variant) => {
     const s = await setupScenario(database().db);
     const rows = [row(s, 'A현장'), row(s, 'B현장')];
@@ -116,6 +118,7 @@ it.each(['CRLF', '행 이동', '열 매핑 변경'] as const)(
     const before = await getStatement(s.adminCtx, statement.id);
     await database().db.update(rateAgreements).set({ active: false }).where(eq(rateAgreements.id, s.rate.id));
     await s.f.rate(s.payee.id, { project_id: s.project.id, unit_price: 400000 });
+    await recalculateImportHashes(database().db);
     const incoming = variant === '행 이동' ? [rows[1], [], rows[0]] : rows;
     const jobs = await Promise.all(
       [true, false].map((apply) => preview(s, incoming, '\r\n', variant === '열 매핑 변경', apply)),
@@ -130,11 +133,12 @@ it.each(['CRLF', '행 이동', '열 매핑 변경'] as const)(
   },
 );
 
-it('구버전 반복 행은 제외 행의 출현 순서를 보존하고 추가 반복·명시적 0원·단가 변경을 구분한다', async () => {
+it('구버전 반복 행 재계산은 제외 순서를 보존하고 추가 반복·명시적 0원·단가 변경을 구분한다', async () => {
   const s = await setupScenario(database().db);
   const repeated = row(s, '반복현장');
   const original = await legacyImport(s, [repeated, repeated], [2]);
   expect(original.summary?.success).toBe(1);
+  await recalculateImportHashes(database().db);
   const next = await preview(
     s,
     [[], repeated, repeated, repeated, row(s, '반복현장', '0'), row(s, '반복현장', '500000')],

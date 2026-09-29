@@ -47,8 +47,8 @@
 - PATCH의 `trips`·`charge_lines`는 **각 배열 전체 교체**다. 기존 행은 `id`를 넣어 유지한다. 운행은 `client_row_id`로도 재식별 가능하다. 비용은 누락되면 논리삭제하며, 기사 요청에서 보이지 않는 RECEIVABLE과 W4 조정 라인은 유지한다. 배열 자체를 생략하면 기존 행을 유지한다. 운행 삭제 시 해당 행의 비용·증빙 연결은 사용 건 수준으로 이동한다.
 - 운행 필드: `id?`, `seq`, `status?`(기본 COMPLETED), `origin`, `destination`, `via?`, `depart_at?`, `arrive_at?`, `cargo_desc?`, `quantity?`, `quantity_unit?`, `hours?`, `is_empty_return?`, `notes?`, `client_row_id?`.
 - 비용 필드: `id?`, `trip_id?`, `direction?`(기본 PAYABLE), `charge_type`, `billing_unit?`, `quantity?`, `requested_amount?`, `reason?`, `included_in_base?`. 추가비는 requested_amount와 reason 필수. 일반 저장에서 ADJUSTMENT 생성은 지원하지 않는다(W4 소유).
-- BASE 고정형 단위는 수량 기본 1. PER_TRIP 등의 수량 미입력은 null/PENDING이며 운행 수로 저장하지 않는다. 기본운임 포함 항목은 computed/approved 0원으로 처리한다.
-- 금액 근거는 계약 snapshot에 저장한다. 수량 변경에는 당시 단가를 사용한다. 사용일·차량·현장·거래처/단위를 변경하면 해당 근거를 새로 조회한다. 기사 변경에 따른 숨겨진 고객청구 재계산은 서버 소유 값으로 처리한다.
+- BASE 고정형 단위는 수량 기본 1. PER_TRIP 등의 수량 미입력은 null/PENDING이며 운행 수로 저장하지 않는다. 계약 변경 시 이번 요청의 숫자 수량을 우선한다(일대 3일·명시적 0 포함). 수량을 생략하면 이전 수량을 재사용하지 않고 고정형은 1, 실적형은 null(제출 차단)이다. 폼의 빈 수량 `null`도 새 계약에서는 같은 기본값을 적용한다. 동일 계약에서 수량을 생략하면 기존 값을 유지한다. 기본운임 포함 항목은 computed/approved 0원으로 처리한다.
+- 금액 근거는 계약 snapshot에 저장한다. 수량 변경에는 당시 단가를 사용한다. 사용일·차량·현장·거래처/단위를 변경하면 해당 근거를 새로 조회한다. 요청에 `billing_unit`이 있으면 반드시 그 단위로 조회하며, 생략한 경우에만 단위를 자동 선택한다. 기사 변경에 따른 숨겨진 고객청구 재계산은 서버 소유 값으로 처리한다.
 - 사용 건 snapshot은 생성·사용 내용 수정 시 현재 기준정보에서 채운다. 기준정보만 수정해도 기존 사용 건이 자동으로 바뀌지는 않는다. 제출 revision은 이전 snapshot을 보존한다.
 - `GET /api/uses/:id`: 사용 건 + `trips`, `charge_lines`, `evidence`(현재 증빙), `revisions`, `duplicate_hint`. 저장·검수 API도 사용 상세를 반환한다. 파일 storage_key는 반환하지 않는다.
 - `GET /api/uses`: `page=1`, `pageSize=20`(최대100), `project_id`, `driver_id`, `from`, `to`, `review_status`, `operation_status`, `search`(사용번호/운반내용), `sort=use_date|created_at|use_no`, `order=asc|desc`.
@@ -92,7 +92,7 @@
 
 정산 확정에서 `assertEvidenceSatisfied(ctx, use)`를 재사용하되 SUBMIT_BLOCKED를 명세의 CONFIRM_BLOCKED 사유 목록으로 변환한다. 필수 증빙 검사와 합계 계산은 서비스 트랜잭션 안에서 수행한다. `rawUse`, `rawDetail`은 내부 업무용 전체 필드이므로 기사 응답에는 반드시 `getUse` 또는 `redactForDriver`를 사용한다.
 
-## 가져오기 (W5·W7)
+## 가져오기 (F4 단일 식별자)
 
 담당자 역할만 사용한다. 작업·프리셋은 작성자에게만 보이며, 등록된 사용 건의 현장 권한은 다시 검사한다. 응답은 기존 `{ data }`/`{ error }` 형식이다.
 
@@ -101,7 +101,7 @@
 | `POST /api/import/upload` | multipart `file`: xlsx 또는 UTF-8 csv. 10MB/20시트/선택 시트 2,000행/100열, 셀 500자·작업 JSON 5MB. XLSX는 시트별 첫 20행 rows·추천 header_row·mapping 반환; preview에서 선택 시트 전체를 제한 내 스트리밍 |
 | `GET /api/import` | 본인의 최근 100개 작업(파일명·작성자명·일시·상태·summary) |
 | `GET /api/import/:id` | 원본 셀·선택 매핑·미리보기·집계 |
-| `POST /api/import/:id/preview` | `{ sheet: 0기반 인덱스, header_row: 1기반 행번호, mapping: { field: 0기반 열번호 }, excluded_rows?: [1기반 원본 행번호] }` |
+| `POST /api/import/:id/preview` | `{ sheet: 0기반 인덱스, header_row: 1기반 행번호, mapping: { field: 0기반 열번호 }, apply_contract_rate?: boolean(기본 false), excluded_rows?: [1기반 원본 행번호] }` |
 | `POST /api/import/:id/commit` | `{}`. 저장한 매핑을 서버에서 재검증하여 유효 행만 DRAFT/PROXY 생성. 완료 작업 재요청은 기존 결과 반환 |
 | `GET /api/import/:id/errors.xlsx` | 원본 행번호·각 원본 셀·오류 사유가 있는 Excel |
 | `GET /api/import/presets` | 본인 매핑 목록 |
@@ -110,11 +110,13 @@
 필드 키: `use_date`, `project`, `driver`, `vehicle`, `payee`, `origin`, `destination`, `cargo_desc`, `trips`, `billing_unit`, `quantity`, `unit_price`, `extra`, `reason`, `notes`.
 미지정 열은 mapping에서 생략한다. 동일 열 중복 매핑은 거부한다. 상세 규칙은 [ASSUMPTIONS](ASSUMPTIONS.md).
 
-행 결과는 `VALID | ERROR | SKIPPED`, `errors`, `warnings`, `source_row_hash`, 등록 후 `use_id`다. summary의 `valid/errors/skipped`는 현재 작업 행 분류, `success`는 이 작업에서 생성된 건수다. 같은 완료 작업 재요청의 success는 최초 성공 건수이며, **새 업로드 작업**으로 정규화된 내용이 동일한 파일을 재저장하여 가져와도 success=0이다.
+행 결과는 `VALID | ERROR | SKIPPED`, `errors`, `warnings`, `source_row_hash`, 검증 성공 시 `source_ids`(매칭된 현장·기사·차량·지급처 UUID), 등록 후 `use_id`다. 검증 실패 행은 `source_row_hash=""`이며 UUID 근거도 저장하지 않는다. summary의 `valid/errors/skipped`는 현재 작업 행 분류, `success`는 이 작업에서 생성된 건수다. 같은 완료 작업 재요청의 success는 최초 성공 건수이며, **새 업로드 작업**으로 정규화된 내용이 동일한 파일을 재저장하여 가져와도 success=0이다.
+
+중복 식별자는 하나다: **SHA-256(정규화된 매핑 값 + 매칭된 현장·기사·차량·지급처 UUID + 파일 내 동일 내용 발생 순번)**. 매핑 값은 사용일·출발·도착·운반내용·운행횟수·과금단위·청구수량·원본 단가 문자열·추가비·사유·비고다. 날짜·Decimal 수량·단위 별칭·금액 표기를 정규화하며 원본 단가의 빈 문자열과 명시적 0은 구분한다. 기준정보 표기는 매칭 UUID로 치환한다. 파일 바이트·파일명·시트/헤더/열 위치·행 번호·계약 적용 단가·세금 등 파생값은 제외한다. 따라서 줄바꿈·열 순서·계약·계약단가 옵션을 바꾸어도 동일 자료의 추가 등록은 0건이고, 동명이어도 UUID가 다른 현장은 별개다. 검증에 성공한 제외 행은 발생 순번에 포함하고, 검증 실패 행은 포함하지 않는다.
 
 commit은 generic 응답 캐시를 사용하지 않는다. job 행 잠금 + 가져오기 공통 advisory lock + source_row_hash unique로 멱등성을 제공하며 매 요청에서 현재 권한을 검사한다. 프리셋 저장은 공용 Idempotency-Key 래퍼를 쓴다. upload/preview는 새 파일 및 재검증 요청으로 취급한다. 예상하지 못한 commit 실패는 전체 rollback하여 PREVIEW에서 재시도할 수 있다.
 
-W7: 캐시 결과가 없는 수식/오류 셀은 매핑된 열에서만 해당 행 오류다. 동일 내용의 파일 내 발생 순번을 해시에 포함하여 실제 반복행을 보존하며, `excluded_rows`는 확정 때도 적용한다. UTF-8이 아닌 CSV는 422와 UTF-8 저장 안내를 반환한다. 기존 W5 작업의 바이트 기반 해시는 유지하고 유사 경로 경고로 확인한다.
+캐시 결과가 없는 수식/오류 셀은 매핑된 열에서만 해당 행 오류다. 파일 내 실제 반복행은 각각 보존하며 `excluded_rows`는 확정 때도 적용한다. UTF-8이 아닌 CSV는 422와 UTF-8 저장 안내를 반환한다. 온라인 가져오기는 `vehicle_uses.source_row_hash`만 비교하며 과거 작업의 해시 호환 조회·원본 행 재해석은 하지 않는다. 기존 개발 자료는 `npx tsx scripts/recalculate-import-hashes.ts`로 한 번 재계산한다. 실패 행·작업은 로그와 함께 건너뛰며 후속 가져오기를 막지 않는다. 실행 범위·보존 항목은 [ASSUMPTIONS](ASSUMPTIONS.md)의 재계산 규칙을 따른다.
 
 
 ## W9 입력 항목 설정

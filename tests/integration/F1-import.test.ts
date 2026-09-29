@@ -4,6 +4,7 @@ import { testDatabase } from '../helpers/database';
 import { setupScenario } from '../helpers/factories';
 import { importJobs, rateAgreements, vehicleUses } from '../../src/server/db/schema';
 import { uploadImport, previewImport, commitImport } from '../../src/server/services/import';
+import { recalculateImportHashes } from '../../src/server/services/import-rehash';
 
 const database = testDatabase();
 async function previewRow(s: Awaited<ReturnType<typeof setupScenario>>, apply = true, price = '') {
@@ -51,7 +52,7 @@ it.each([false, true])('계약 적용 옵션 %s에서 반대로 바꿔도 중복
   expect((await importRow(s, !apply, '0')).summary?.success).toBe(1);
 });
 
-it('수정 전 계약 적용 단가로 해시가 저장된 파일도 재등록하지 않는다', async () => {
+it('구버전 계약 적용 단가 해시는 1회 재계산 후 파일을 재등록하지 않는다', async () => {
   const s = await setupScenario(database().db);
   // The old blank-price hash was identical to the explicit applied-price hash.
   const oldHash = (await previewRow(s, true, '300000')).preview[0].source_row_hash;
@@ -61,11 +62,13 @@ it('수정 전 계약 적용 단가로 해시가 저장된 파일도 재등록�
     .set({ source_row_hash: oldHash })
     .where(eq(vehicleUses.id, first.preview[0].use_id!));
   const [job] = await database().db.select().from(importJobs).where(eq(importJobs.id, first.id));
-  const payload = job.rows as { preview: { source_row_hash: string }[] };
+  const payload = job.rows as { preview: { source_row_hash: string; source_ids?: unknown }[] };
   payload.preview[0].source_row_hash = oldHash;
+  delete payload.preview[0].source_ids;
   await database().db.update(importJobs).set({ rows: payload }).where(eq(importJobs.id, first.id));
   await database().db.update(rateAgreements).set({ active: false }).where(eq(rateAgreements.id, s.rate.id));
   await s.f.rate(s.payee.id, { project_id: s.project.id, unit_price: 400000 });
+  await recalculateImportHashes(database().db);
   expect((await importRow(s)).summary?.success).toBe(0);
   expect((await importRow(s, false)).summary?.success).toBe(0);
   expect(

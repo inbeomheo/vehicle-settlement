@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { ImportSourceIds } from './import-source';
 
 export const importFields = {
   use_date: ['사용일', '운행일', '일자', '날짜'],
@@ -50,6 +51,7 @@ export type ImportRow = {
   errors: string[];
   warnings: string[];
   source_row_hash: string;
+  source_ids?: ImportSourceIds;
   use_id?: string;
 };
 export type ImportSummary = { valid: number; errors: number; skipped: number; success: number };

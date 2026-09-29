@@ -1,12 +1,11 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, writeFile, rm } from 'node:fs/promises';
 import path from 'node:path';
-import Decimal from 'decimal.js';
 import { boundedPayload, readCsv, readXlsx } from './import-file';
 import ExcelJS from 'exceljs';
 import { and, desc, eq, lt, sql } from 'drizzle-orm';
 import { z } from 'zod';
-import { importJobs, importPresets, vehicleUses, chargeLines, billingUnitEnum, trips } from '../db/schema';
+import { importJobs, importPresets, vehicleUses, chargeLines, trips } from '../db/schema';
 import type { Context } from '../context';
 import { accessibleUseFilter, assertActive, assertProjectAccess } from '../authz';
 import { AppError, invalid, notFound } from '../errors';
@@ -15,7 +14,7 @@ import { computeAmount } from '../domain/money';
 import { createUse, atomic } from './uses';
 import { getLookups } from './lookups';
 import { findRate } from './rates';
-import { createUseSchema, quantity as quantitySchema, type CreateUseInput } from './schemas';
+import { importDate, parseImportSource, importSourceHash, importIdentityLock } from './import-source';
 import {
   importFields,
   previewSchema,
@@ -27,22 +26,8 @@ import {
 } from './import-fields';
 
 const normalize = (value: string) => value.toLowerCase().replace(/[\s_()·/.-]/g, '');
-const sha = (value: Buffer | string) => createHash('sha256').update(value).digest('hex');
-type Payload = { file_hash: string; sheets: SheetData[]; preview: ImportRow[]; source_file?: string };
+type Payload = { sheets: SheetData[]; preview: ImportRow[]; source_file?: string };
 type Job = typeof importJobs.$inferSelect;
-const units: Record<string, (typeof billingUnitEnum.enumValues)[number]> = {
-  회당: 'PER_TRIP',
-  건당: 'PER_TRIP',
-  일대: 'PER_DAY',
-  반일: 'HALF_DAY',
-  월대: 'MONTHLY',
-  시간: 'PER_HOUR',
-  톤: 'PER_TON',
-  루베: 'PER_M3',
-  '1식': 'LUMP_SUM',
-  식: 'LUMP_SUM',
-};
-
 async function manager(ctx: Context) {
   await assertActive(ctx);
   if (ctx.user.role === 'DRIVER') throw new AppError('FORBIDDEN', '담당자만 가져올 수 있습니다.');
@@ -123,7 +108,6 @@ export async function uploadImport(ctx: Context, fileName: string, bytes: Buffer
   }
   const id = randomUUID();
   const payload = boundedPayload({
-    file_hash: sha(bytes),
     sheets,
     preview: [],
     ...(xlsx ? { source_file: id } : {}),
@@ -145,19 +129,6 @@ export async function uploadImport(ctx: Context, fileName: string, bytes: Buffer
     if (xlsx) await rm(sourcePath(id), { force: true });
     throw error;
   }
-}
-function money(value: string, label: string): number | null {
-  if (!value) return null;
-  if (!/^(\d+|\d{1,3}(,\d{3})+)(원)?$/.test(value)) invalid(`${label}: 0 이상의 정수 원을 입력하세요.`);
-  const result = Number(value.replace(/[,원]/g, ''));
-  if (!Number.isSafeInteger(result) || result > 2147483647) invalid(`${label}: 금액 범위를 초과했습니다.`);
-  return result;
-}
-function date(value: string) {
-  const match = value.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/);
-  const result = match ? `${match[1]}-${match[2].padStart(2, '0')}-${match[3].padStart(2, '0')}` : value;
-  if (!z.iso.date().safeParse(result).success) invalid('사용일: YYYY-MM-DD 날짜를 입력하세요.');
-  return result;
 }
 function matchOne<T extends { id: string }>(rows: T[], value: string, keys: (keyof T)[], label: string): T {
   if (!value) invalid(`${label}: 필수 항목입니다.`);
@@ -186,7 +157,7 @@ async function resolveRow(
       return undefined;
     }
   };
-  const useDate = collect(() => date(get('use_date')));
+  const useDate = collect(() => importDate(get('use_date')));
   const cacheKey = useDate ?? 'invalid-date';
   if (!cache.has(cacheKey)) cache.set(cacheKey, await getLookups(ctx, useDate));
   const lookups = cache.get(cacheKey)!;
@@ -201,89 +172,25 @@ async function resolveRow(
       '지급처',
     ),
   );
-  const rawUnit = get('billing_unit');
-  const unit = units[rawUnit] ?? rawUnit;
-  if (!billingUnitEnum.enumValues.includes(unit as (typeof billingUnitEnum.enumValues)[number]))
-    errors.push('과금단위: 일대·회당·반일·월대·시간·톤·루베·1식을 지정하세요.');
-  const billingUnit = unit as (typeof billingUnitEnum.enumValues)[number];
-  const tripCount = Number(get('trips') || '1');
-  if (!Number.isInteger(tripCount) || tripCount < 1 || tripCount > 500)
-    errors.push('운행횟수: 1~500 정수를 입력하세요.');
-  const quantity =
-    get('quantity') || (['PER_DAY', 'HALF_DAY', 'MONTHLY', 'LUMP_SUM'].includes(unit) ? '1' : null);
-  if (quantity !== null && !quantitySchema.safeParse(quantity).success)
-    errors.push('청구수량: 0 이상, 소수 셋째 자리까지 입력하세요.');
-  const importedPrice = collect(() => money(get('unit_price'), '단가'));
-  const extra = collect(() => money(get('extra'), '추가비'));
-  if (!get('origin')) errors.push('출발지: 필수 항목입니다.');
-  if (!get('destination')) errors.push('도착지: 필수 항목입니다.');
-  if (get('extra') && !get('reason')) errors.push('추가비 사유: 필수 항목입니다.');
-  const parsed = createUseSchema.safeParse({
-    use_date: useDate,
-    project_id: project?.id,
-    driver_id: driver?.id,
-    vehicle_id: vehicle?.id,
-    payee_counterparty_id: payee?.id,
-    cargo_desc: get('cargo_desc'),
-    notes: get('notes'),
-    billing_unit: billingUnit,
-    quantity,
-    trips: Array.from(
-      { length: Number.isInteger(tripCount) && tripCount >= 1 && tripCount <= 500 ? tripCount : 1 },
-      (_, i) => ({
-        seq: i + 1,
-        origin: get('origin'),
-        destination: get('destination'),
-        cargo_desc: get('cargo_desc'),
-      }),
-    ),
-    charge_lines: [
-      { charge_type: 'BASE', billing_unit: billingUnit, quantity },
-      ...(extra !== null ? [{ charge_type: 'OTHER', requested_amount: extra, reason: get('reason') }] : []),
-    ],
-  });
-  if (!parsed.success) {
-    const labels: Record<string, string> = {
-      use_date: '사용일',
-      project_id: '현장',
-      driver_id: '기사',
-      vehicle_id: '차량번호',
-      payee_counterparty_id: '지급처',
-      cargo_desc: '운반내용',
-      notes: '비고',
-      billing_unit: '과금단위',
-      quantity: '청구수량',
-      origin: '출발지',
-      destination: '도착지',
-      reason: '추가비 사유',
-      charge_lines: '비용',
-      trips: '운행',
-    };
-    for (const issue of parsed.error.issues) {
-      const field = issue.path.filter((part) => typeof part === 'string').at(-1) ?? '';
-      const label = labels[String(field)] ?? '입력값';
-      if (!errors.some((message) => message.startsWith(`${label}:`)))
-        errors.push(`${label}: 입력 형식과 길이를 확인하세요.`);
-    }
-  }
-  if (errors.length || !parsed.success) invalid('행의 입력값을 확인하세요.', errors);
-  if (
-    !useDate ||
-    !project ||
-    !driver ||
-    !vehicle ||
-    !payee ||
-    importedPrice === undefined ||
-    extra === undefined
-  )
-    invalid('기준정보와 입력값을 확인하세요.');
-  const input: CreateUseInput = parsed.data;
+  const source = parseImportSource(
+    values,
+    mapping,
+    {
+      project_id: project?.id,
+      driver_id: driver?.id,
+      vehicle_id: vehicle?.id,
+      payee_counterparty_id: payee?.id,
+    },
+    errors,
+  );
+  const { input, importedPrice } = source;
+  const quantity = input.quantity ?? null;
   const rate = await findRate(ctx.db, {
-    project_id: project.id,
-    counterparty_id: payee.id,
-    vehicle_id: vehicle.id,
-    use_date: useDate,
-    billing_unit: billingUnit,
+    project_id: input.project_id,
+    counterparty_id: input.payee_counterparty_id!,
+    vehicle_id: input.vehicle_id,
+    use_date: input.use_date,
+    billing_unit: input.billing_unit,
     direction: 'PAYABLE',
   });
   const price = importedPrice ?? (applyContractRate ? (rate?.unit_price ?? null) : null);
@@ -299,43 +206,7 @@ async function resolveRow(
     price !== null && quantity !== null
       ? computeAmount(quantity, price, rate?.rounding, price === rate?.unit_price ? rate?.min_charge : null)
       : null;
-  return { input, price, importedPrice, appliedContract, rate, computed, warnings };
-}
-// Compare the persisted source fields as well as the current normalized-v1 hash.
-// Old hashes included the applied contract price. Source identity must not depend
-// on file bytes, row/column positions, today's contracts, or mutable use records.
-function sourceContentHash(values: string[], mapping: ImportMapping) {
-  const get = (field: keyof ImportMapping) =>
-    mapping[field] === undefined ? '' : (values[mapping[field]!] ?? '').trim();
-  const unit = units[get('billing_unit')] ?? get('billing_unit');
-  const quantity =
-    get('quantity') || (['PER_DAY', 'HALF_DAY', 'MONTHLY', 'LUMP_SUM'].includes(unit) ? '1' : null);
-  const extra = money(get('extra'), '추가비');
-  return sha(
-    JSON.stringify({
-      use_date: date(get('use_date')),
-      project: normalize(get('project')),
-      driver: normalize(get('driver')),
-      vehicle: normalize(get('vehicle')),
-      payee: normalize(get('payee')),
-      origin: get('origin'),
-      destination: get('destination'),
-      cargo_desc: get('cargo_desc'),
-      trips: Number(get('trips') || '1'),
-      billing_unit: unit,
-      quantity: quantity === null ? null : new Decimal(quantity).toString(),
-      unit_price: money(get('unit_price'), '단가'),
-      extra,
-      reason: extra === null ? '' : get('reason'),
-      notes: get('notes'),
-    }),
-  );
-}
-function sourceRowIdentity(values: string[], mapping: ImportMapping, occurrences: Map<string, number>) {
-  const hash = sourceContentHash(values, mapping);
-  const occurrence = (occurrences.get(hash) ?? 0) + 1;
-  occurrences.set(hash, occurrence);
-  return `${hash}:${occurrence}`;
+  return { ...source, price, appliedContract, rate, computed, warnings };
 }
 async function evaluate(ctx: Context, job: Job, raw: unknown) {
   const selection = previewSchema.parse(raw);
@@ -352,36 +223,9 @@ async function evaluate(ctx: Context, job: Job, raw: unknown) {
   if (!sheet || selection.header_row > sheet.rows.length) invalid('시트·헤더 행을 확인하세요.');
   if (new Set(Object.values(selection.mapping)).size !== Object.keys(selection.mapping).length)
     invalid('같은 열을 두 항목에 지정할 수 없습니다.');
-  const priorRows = await ctx.db
-    .select({
-      use_ids: sql<string[]>`array_agg(${vehicleUses.id})`,
-      preview: sql<ImportRow[]>`${importJobs.rows}->'preview'`,
-      mapping: importJobs.mapping,
-    })
-    .from(importJobs)
-    .innerJoin(vehicleUses, eq(vehicleUses.import_job_id, importJobs.id))
-    .where(eq(importJobs.status, 'COMMITTED'))
-    .groupBy(importJobs.id);
-  const importedRows = new Set(
-    priorRows.flatMap((prior) => {
-      const useIds = new Set(prior.use_ids);
-      const mapping = previewSchema.parse(prior.mapping).mapping;
-      const occurrences = new Map<string, number>();
-      const imported: string[] = [];
-      for (const row of [...prior.preview].sort((a, b) => a.row - b.row)) {
-        // Valid but excluded/skipped rows still occupy an occurrence, just as in
-        // normalized-v1. Never treat a preview without a persisted use as imported.
-        if (!row.source_row_hash) continue;
-        const identity = sourceRowIdentity(row.values, mapping, occurrences);
-        if (row.use_id && useIds.has(row.use_id)) imported.push(identity);
-      }
-      return imported;
-    }),
-  );
   const rows: ImportRow[] = [];
   const cache: LookupCache = new Map();
   const occurrences = new Map<string, number>();
-  const sourceOccurrences = new Map<string, number>();
   const excluded = new Set(selection.excluded_rows);
   const resolved = new Map<number, Awaited<ReturnType<typeof resolveRow>>>();
   const existing = await ctx.db
@@ -412,29 +256,15 @@ async function evaluate(ctx: Context, job: Job, raw: unknown) {
       }
       const data = await resolveRow(ctx, values, selection.mapping, cache, selection.apply_contract_rate);
       if (row.errors.length) invalid('셀 오류를 확인하세요.', row.errors);
-      const contentHash = sha(
-        JSON.stringify({
-          ...data.input,
-          quantity: data.input.quantity == null ? null : new Decimal(data.input.quantity).toString(),
-          charge_lines: data.input.charge_lines?.map((line) => ({
-            ...line,
-            quantity: line.quantity == null ? null : new Decimal(line.quantity).toString(),
-          })),
-          // Identity follows the source row, never the current contract or option.
-          price: data.importedPrice,
-        }),
-      );
-      const occurrence = (occurrences.get(contentHash) ?? 0) + 1;
-      occurrences.set(contentHash, occurrence);
-      row.source_row_hash = sha(`normalized-v1:${contentHash}:${occurrence}`);
-      const sourceIdentity = sourceRowIdentity(values, selection.mapping, sourceOccurrences);
+      row.source_row_hash = importSourceHash(data, occurrences);
+      row.source_ids = data.sourceIds;
       resolved.set(row.row, data);
       row.warnings = data.warnings;
       const [duplicate] = await ctx.db
         .select({ id: vehicleUses.id })
         .from(vehicleUses)
         .where(eq(vehicleUses.source_row_hash, row.source_row_hash));
-      if (duplicate || importedRows.has(sourceIdentity)) row.status = 'SKIPPED';
+      if (duplicate) row.status = 'SKIPPED';
       else if (
         existing.some(
           (u) =>
@@ -450,6 +280,8 @@ async function evaluate(ctx: Context, job: Job, raw: unknown) {
     } catch (error) {
       if (!(error instanceof AppError || error instanceof z.ZodError || error instanceof RangeError))
         throw error;
+      row.source_row_hash = '';
+      delete row.source_ids;
       row.status = 'ERROR';
       const errors =
         error instanceof AppError && Array.isArray(error.details)
@@ -496,7 +328,7 @@ export async function commitImport(ctx: Context, id: string) {
     const job = await jobFor(tx, id, true);
     if (job.status === 'COMMITTED') return getImport(tx, id);
     if (!job.mapping) invalid('먼저 매핑과 미리보기를 확인하세요.');
-    await tx.db.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${'import:normalized-v1'}, 0))`);
+    await tx.db.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${importIdentityLock}, 0))`);
     const result = await evaluate(tx, job, job.mapping);
     for (const row of result.rows) {
       if (row.status !== 'VALID') continue;
