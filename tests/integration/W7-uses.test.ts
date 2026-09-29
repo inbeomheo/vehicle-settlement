@@ -22,3 +22,22 @@ it('14. 기사 목록은 사용일 최신·동일 일자 입력순이며 PAYABLE
   expect(list.rows[0]).toMatchObject({ payable_base_amount: 300000 });
   expect(JSON.stringify(list)).not.toContain('RECEIVABLE');
 });
+
+it('14. 일괄 입력으로 생성 시각까지 같으면 채번 순서로 정렬한다', async () => {
+  const s = await setupScenario(database().db);
+  const { vehicleUses } = await import('../../src/server/db/schema');
+  const original = await createUse(s.adminCtx, s.input);
+  const { eq } = await import('drizzle-orm');
+  const [stored] = await database().db.select().from(vehicleUses).where(eq(vehicleUses.id, original.id));
+  const first = 'ffffffff-ffff-4fff-8fff-ffffffffffff';
+  const second = '00000000-0000-4000-8000-000000000001';
+  const common = { ...stored, use_date: '2026-09-30', created_at: new Date('2026-09-29T00:00:00Z') };
+  await database()
+    .db.insert(vehicleUses)
+    .values([
+      { ...common, id: first, use_no: 'U-2609-99999' },
+      { ...common, id: second, use_no: 'U-2609-100000' },
+    ]);
+  const list = await listUses(s.driverCtx, { from: '2026-09-30', to: '2026-09-30' });
+  expect(list.rows.map((row) => row.id)).toEqual([first, second]);
+});

@@ -895,7 +895,12 @@ export async function listUses(ctx: Context, raw: unknown = {}) {
     .select()
     .from(vehicleUses)
     .where(filter)
-    .orderBy(order(vehicleUses[q.sort]), asc(vehicleUses.created_at), asc(vehicleUses.id))
+    .orderBy(
+      order(vehicleUses[q.sort]),
+      asc(vehicleUses.created_at),
+      asc(sql`split_part(${vehicleUses.use_no}, '-', 3)::bigint`),
+      asc(vehicleUses.id),
+    )
     .limit(q.pageSize)
     .offset((q.page - 1) * q.pageSize);
   const baseAmounts = rows.length
