@@ -15,13 +15,20 @@ import { syncQueue } from './engine';
 export function useBootstrap(mode: Mode) {
   const [data, setData] = useState<Bootstrap>();
   const [error, setError] = useState('');
+  const [authRequired, setAuthRequired] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     let alive = true;
     async function start() {
+      setError('');
+      setAuthRequired(false);
       const previous = activeUser();
       if (localStorage.getItem(LOGGED_OUT)) {
         if (navigator.onLine) await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
-        if (alive) setError('로그아웃 상태입니다. 다시 로그인해 주세요.');
+        if (alive) {
+          setError('로그아웃 상태입니다. 다시 로그인해 주세요.');
+          setAuthRequired(true);
+        }
         return;
       }
       try {
@@ -42,7 +49,10 @@ export function useBootstrap(mode: Mode) {
       } catch (e) {
         if (e instanceof ApiError && [401, 403, 404].includes(e.status)) {
           isolateUser();
-          if (alive) setError(e.message);
+          if (alive) {
+            setError(e.message);
+            setAuthRequired(e.status === 401);
+          }
           return;
         }
         const cached = previous ? await cachedValue<Bootstrap>(previous, 'bootstrap') : undefined;
@@ -53,20 +63,21 @@ export function useBootstrap(mode: Mode) {
           !(e instanceof ApiError)
         ) {
           if (alive) setData(cached);
-        } else if (alive) setError(e instanceof Error ? e.message : '화면을 불러오지 못했습니다.');
+        } else if (alive) setError('잠시 후 다시 시도해 주세요.');
       }
     }
     void start();
     return () => {
       alive = false;
     };
-  }, [mode]);
+  }, [mode, attempt]);
   useEffect(() => {
     if (!data) return;
     const identityChange = () => {
       if (activeUser() !== data.user.id) {
         setData(undefined);
         setError('계정이 변경되었습니다. 다시 로그인해 주세요.');
+        setAuthRequired(true);
       }
     };
     window.addEventListener('storage', identityChange);
@@ -89,7 +100,7 @@ export function useBootstrap(mode: Mode) {
       clearInterval(interval);
     };
   }, [data]);
-  return { data, error };
+  return { data, error, authRequired, retry: () => setAttempt((value) => value + 1) };
 }
 export function PwaRegistration() {
   useEffect(() => {

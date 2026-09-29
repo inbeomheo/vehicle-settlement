@@ -3,6 +3,7 @@ importScripts('/sw-version.js');
 const CACHE = `vehicle-shell-w2-${self.VEHICLE_SHELL_VERSION}`;
 const ASSETS = [
   '/offline.html',
+  '/offline-login.html',
   '/w2-offline-app.js',
   '/w2-offline-app.css',
   '/manifest.webmanifest',
@@ -32,8 +33,14 @@ self.addEventListener('fetch', (event) => {
   if (request.method !== 'GET' || url.origin !== self.location.origin || url.pathname.startsWith('/api/'))
     return;
   if (request.mode === 'navigate') {
+    if (url.pathname === '/login') {
+      event.respondWith(
+        fetch(request).catch(async () => (await caches.match('/offline-login.html')) ?? Response.error()),
+      );
+      return;
+    }
     // Only W2 routes are supported by the offline form. Other owners' screens
-    // and login must never become an offline editor by accident.
+    // must never become an offline editor by accident.
     if (
       !/^\/d(?:\/new|\/uses\/[^/]+)?$/.test(url.pathname) &&
       !/^\/m\/uses\/(?:new|[^/]+\/edit)$/.test(url.pathname)

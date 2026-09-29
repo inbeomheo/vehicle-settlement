@@ -21,6 +21,7 @@ function Preview({ file }: { file: PendingEvidence }) {
 }
 export function EvidenceEditor({
   pending,
+  validationError,
   existing,
   policy,
   onChange,
@@ -33,6 +34,7 @@ export function EvidenceEditor({
   onProcessingChange,
 }: {
   pending: PendingEvidence[];
+  validationError?: string;
   existing: UseDetail['evidence'];
   policy?: string;
   onChange: (files: PendingEvidence[]) => void;
@@ -96,6 +98,14 @@ export function EvidenceEditor({
   );
   return (
     <Section title="증빙" target="evidence">
+      {validationError && (
+        <p
+          role="alert"
+          className="mb-4 rounded-xl border-2 border-red-500 bg-red-50 p-4 font-semibold text-red-800"
+        >
+          {validationError}
+        </p>
+      )}
       <p className="mb-4 text-sm text-slate-600">
         {policy === 'PHOTO_OR_ALTERNATIVE'
           ? '촬영 금지 현장은 사진 대신 전표번호를 입력할 수 있습니다.'
@@ -275,7 +285,7 @@ export function EvidenceEditor({
               교체할 새 증빙을 첨부하세요.{' '}
               <button
                 type="button"
-                className="underline"
+                className="min-h-11 px-3 underline"
                 onClick={() => {
                   setReplaceId('');
                   setReason('');
@@ -307,7 +317,7 @@ export function EvidenceEditor({
               type="file"
               accept="image/*"
               capture="environment"
-              className="sr-only"
+              className="sr-only text-base"
               disabled={processing}
               onChange={(e) => {
                 void addFiles(e.target.files);
@@ -322,7 +332,7 @@ export function EvidenceEditor({
               type="file"
               accept="image/*,application/pdf"
               multiple={!replaceId}
-              className="sr-only"
+              className="sr-only text-base"
               disabled={processing}
               onChange={(e) => {
                 void addFiles(e.target.files);

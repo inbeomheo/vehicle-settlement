@@ -19,7 +19,7 @@ function RateFields({
   userId: string;
   saved?: UseDetail;
 }) {
-  const [result, setResult] = useState<RateResult>();
+  const [resolved, setResolved] = useState<{ query: string; data: RateResult }>();
   const [error, setError] = useState('');
   const party =
     charge.direction === 'RECEIVABLE' ? form.customer_counterparty_id : form.payee_counterparty_id;
@@ -31,35 +31,37 @@ function RateFields({
     direction: charge.direction ?? 'PAYABLE',
     ...(charge.billing_unit ? { billing_unit: charge.billing_unit } : {}),
   }).toString();
+  const result = resolved?.query === query ? resolved.data : undefined;
   const previous = saved?.charge_lines.find((c) => c.id === charge.id);
   const preserved =
     previous?.rate_agreement_id &&
     saved?.use_date === form.use_date &&
     saved?.project_id === form.project_id &&
     saved?.vehicle_id === form.vehicle_id &&
+    saved?.driver_id === form.driver_id &&
     previous.counterparty_id === party &&
     previous.billing_unit === charge.billing_unit;
   useEffect(() => {
     let alive = true;
-    setResult(undefined);
+    setResolved(undefined);
     setError('');
     if (!party || !form.project_id || !form.vehicle_id || !form.use_date || preserved) return;
     void api<RateResult>(`/api/rates/lookup?${query}`)
       .then(async (data) => {
         await cacheValue(userId, `rate:${query}`, data);
-        if (alive) setResult(data);
+        if (alive) setResolved({ query, data });
       })
       .catch(async (error: unknown) => {
         if (error instanceof ApiError && [401, 403, 404].includes(error.status)) {
           if (alive) {
-            setResult(undefined);
+            setResolved(undefined);
             setError(error.message);
           }
           return;
         }
         const cached = await cachedValue<RateResult>(userId, `rate:${query}`);
         if (alive) {
-          setResult(cached);
+          setResolved(cached ? { query, data: cached } : undefined);
           setError(
             cached
               ? '오프라인: 마지막으로 확인한 계약입니다. 저장 시 다시 확인합니다.'
@@ -101,7 +103,13 @@ function RateFields({
             ? `${units[rate.billing_unit]} · 단가 ${money(rate.unit_price)}`
             : '계약 단가가 없거나 아직 조회되지 않았습니다.'}
         </p>
-        <p className="mt-3 text-xl font-bold text-blue-800">기본운임 {money(estimate)}</p>
+        <p className="mt-3 text-xl font-bold text-blue-800">
+          {rate &&
+          !charge.quantity &&
+          ['PER_TRIP', 'PER_HOUR', 'PER_TON', 'PER_M3'].includes(rate.billing_unit)
+            ? '청구 수량을 입력하세요'
+            : `기본운임 ${money(estimate)}`}
+        </p>
         <p className="mt-1 text-xs text-slate-500">
           {preserved ? '저장 당시 계약' : '예상 금액'} · 저장 시 서버 계산 결과 적용
         </p>
@@ -226,6 +234,7 @@ export function ChargeFields({
                     </Field>
                     <label className="flex items-center gap-3">
                       <input
+                        className="h-11 w-11 shrink-0 text-base"
                         type="checkbox"
                         checked={c.included_in_base}
                         onChange={(e) => patch(c.key, { included_in_base: e.target.checked })}

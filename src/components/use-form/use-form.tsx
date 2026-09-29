@@ -23,21 +23,39 @@ import {
   type Draft,
 } from '@/client/offline/store';
 import { syncQueue, withQueuePaused } from '@/client/offline/engine';
+import { copyToDevice } from '@/client/copy-draft';
+import { ReadOnlyUse } from './read-only';
+import { evidenceError } from './evidence-policy';
 import { EvidenceEditor } from '@/components/evidence/editor';
 import { button, control, primary, Field, Section, FixContext, StatusBadge } from './fields';
 import { ChargeFields } from './charges';
 import { TripFields } from './trips';
-import { defaultPayee, fromUse, initialValues, newCharge, toInput, validate, type FormValues } from './model';
+import {
+  defaultPayee,
+  fromUse,
+  initialValues,
+  newCharge,
+  resetBaseRates,
+  toInput,
+  validate,
+  type FormValues,
+} from './model';
 
 export function UseFormPage({ mode, useId }: { mode: Mode; useId?: string }) {
-  const { data, error } = useBootstrap(mode);
+  const { data, error, authRequired, retry } = useBootstrap(mode);
   if (error)
     return (
       <p role="alert">
         {error}{' '}
-        <a className="underline" href="/login">
-          로그인
-        </a>
+        {authRequired ? (
+          <a className={button} href="/login">
+            로그인
+          </a>
+        ) : (
+          <button className={button} onClick={retry}>
+            다시 시도
+          </button>
+        )}
       </p>
     );
   if (!data) return <p role="status">입력 화면을 불러오고 있습니다…</p>;
@@ -60,6 +78,10 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
   const [evidenceBusy, setEvidenceBusy] = useState(false);
   const [online, setOnline] = useState(true);
   const [discardConfirm, setDiscardConfirm] = useState(false);
+  const [editApproved, setEditApproved] = useState(false);
+  const [approvalConfirm, setApprovalConfirm] = useState(false);
+  const [cancelConfirm, setCancelConfirm] = useState(false);
+  const [evidenceValidation, setEvidenceValidation] = useState('');
   const persistence = useRef<Promise<void>>(Promise.resolve());
   current.current = draft;
   useEffect(() => {
@@ -100,6 +122,15 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
             serverId: server?.id,
             version: server?.version,
           };
+        }
+        // A local draft must not hide a newer approval or statement lock.
+        if (found.serverId && found.phase !== 'saved') {
+          try {
+            const server = await api<UseDetail>(`/api/uses/${found.serverId}`);
+            found = { ...found, server };
+          } catch (error) {
+            if (error instanceof ApiError) throw error;
+          }
         }
         if (alive) {
           setDraft(found);
@@ -150,11 +181,19 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
         persistence.current = persistence.current.then(() => putDraft(value));
       }
     };
+    const flushRequested = (event: Event) => {
+      flush();
+      (event as CustomEvent<{ waitUntil: (promise: Promise<void>) => void }>).detail.waitUntil(
+        persistence.current,
+      );
+    };
     const update = () => {
       const value = current.current;
       if (!value || value.phase !== 'queued') return;
       void getDraft(boot.user.id, value.id).then((next) => {
         if (next && current.current?.phase === 'queued') {
+          setLocalSaved(true);
+          if (next.phase === 'saved') setEditApproved(false);
           setDraft(
             next.phase === 'saved' && next.server ? { ...next, form: fromUse(next.server, mode) } : next,
           );
@@ -169,6 +208,7 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
     window.addEventListener('online', connectivity);
     window.addEventListener('offline', connectivity);
     window.addEventListener('pagehide', flush);
+    window.addEventListener('vehicle-flush-drafts', flushRequested);
     const periodicSave = window.setInterval(flush, 3000);
     const onHidden = () => {
       if (document.visibilityState === 'hidden') flush();
@@ -180,6 +220,7 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
       window.removeEventListener('online', connectivity);
       window.removeEventListener('offline', connectivity);
       window.removeEventListener('pagehide', flush);
+      window.removeEventListener('vehicle-flush-drafts', flushRequested);
       clearInterval(periodicSave);
       document.removeEventListener('visibilitychange', onHidden);
     };
@@ -219,17 +260,51 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
         savedRequest: false,
         submitRequest: undefined,
         error: undefined,
+        inputError: false,
       };
     });
     setValidation([]);
+    setEvidenceValidation('');
   }
 
   function change(patch: Partial<FormValues>) {
-    edit((value) => ({ form: { ...value.form, ...patch } }));
+    const rateContextChanged = [
+      'driver_id',
+      'vehicle_id',
+      'use_date',
+      'project_id',
+      'payee_counterparty_id',
+      'customer_counterparty_id',
+    ].some((key) => key in patch && patch[key as keyof FormValues] !== draft?.form[key as keyof FormValues]);
+    edit((value) => ({
+      form: {
+        ...value.form,
+        ...patch,
+        ...(rateContextChanged ? { charges: resetBaseRates(patch.charges ?? value.form.charges) } : {}),
+      },
+    }));
   }
   async function enqueue(intent: 'save' | 'submit') {
     if (!draft || evidenceBusy || activeUser() !== boot.user.id) return;
-    const errors = validate(draft.form);
+    if (
+      draft.server?.is_locked ||
+      (mode === 'driver' && draft.server?.review_status === 'APPROVED' && !editApproved)
+    )
+      return;
+    const errors = validate(draft.form, intent);
+    const missingEvidence =
+      intent === 'submit'
+        ? evidenceError(
+            lookups.projects.find((p) => p.id === draft.form.project_id)?.evidence_policy,
+            draft.server?.evidence ?? [],
+            draft.uploads,
+          )
+        : '';
+    setEvidenceValidation(missingEvidence);
+    if (missingEvidence) {
+      scrollTo('evidence');
+      return;
+    }
     setValidation(errors);
     if (errors.length) {
       document.getElementById('form-errors')?.scrollIntoView({ block: 'center' });
@@ -241,6 +316,7 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
       const queued: Draft = {
         ...draft,
         intent,
+        inputError: false,
         phase: 'queued',
         updatedAt: Date.now(),
         request: {
@@ -261,6 +337,8 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
       await syncQueue(boot.user.id);
       const result = await getDraft(boot.user.id, queued.id);
       if (result) {
+        setLocalSaved(true);
+        if (result.phase === 'saved') setEditApproved(false);
         setDraft(
           result.phase === 'saved' && result.server
             ? { ...result, form: fromUse(result.server, mode) }
@@ -354,7 +432,15 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
   }
   if (!draft) return <p role={error ? 'alert' : 'status'}>{error || '기기 초안을 확인하고 있습니다…'}</p>;
   const form = draft.form;
-  const locked = busy || ['queued', 'blocked', 'conflict'].includes(draft.phase);
+  const statementLocked =
+    !!draft.server?.is_locked || !!draft.server?.charge_lines.some((line) => line.locked_statement_id);
+  const readOnly =
+    mode === 'driver' &&
+    !!draft.server &&
+    (statementLocked ||
+      draft.server.operation_status === 'CANCELED' ||
+      (draft.server.review_status === 'APPROVED' && !editApproved));
+  const locked = readOnly || busy || ['queued', 'blocked', 'conflict'].includes(draft.phase);
   const fixes =
     draft.server?.review_status === 'NEEDS_FIX'
       ? (draft.server.revisions.find((r) => r.decision === 'NEEDS_FIX')?.fix_items ?? [])
@@ -362,18 +448,30 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
   const payee =
     mode === 'driver' && !draft.serverId
       ? defaultPayee(lookups, form.driver_id, form.use_date)
-      : form.payee_counterparty_id;
+      : form.payee_counterparty_id || defaultPayee(lookups, form.driver_id, form.use_date);
   const displayForm = { ...form, payee_counterparty_id: payee };
   const status =
-    draft.phase === 'saved' && draft.server
-      ? draft.server.review_status === 'SUBMITTED'
-        ? '담당자에게 제출 완료'
-        : reviewLabels[draft.server.review_status]
-      : draft.savedRequest
-        ? '서버 저장(작성중) · 전송 처리 중'
-        : localSaved
-          ? '휴대폰에 임시저장됨'
-          : '휴대폰에 저장 중…';
+    draft.phase === 'queued' && draft.intent === 'submit' && !online
+      ? '제출 대기 · 연결되면 자동 제출'
+      : draft.phase === 'blocked' || draft.phase === 'conflict'
+        ? '전송을 멈췄습니다. 안내를 확인하세요'
+        : draft.inputError
+          ? '입력 내용을 확인하세요'
+          : draft.phase === 'saved' && draft.server
+            ? draft.server.review_status === 'SUBMITTED'
+              ? mode === 'manager'
+                ? '검수 대기로 제출 완료'
+                : '담당자에게 제출 완료'
+              : reviewLabels[draft.server.review_status]
+            : draft.savedRequest
+              ? '서버 저장(작성중) · 전송 처리 중'
+              : localSaved
+                ? mode === 'manager'
+                  ? '이 기기에 임시저장됨'
+                  : '휴대폰에 임시저장됨'
+                : mode === 'manager'
+                  ? '이 기기에 저장 중…'
+                  : '휴대폰에 저장 중…';
   function scrollTo(target: string) {
     const normalized = target.replace(/^use\./, '');
     const candidates = Array.from(document.querySelectorAll<HTMLElement>('[data-fix-target]'));
@@ -381,10 +479,17 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
       candidates.find((e) => e.dataset.fixTarget === normalized) ??
       candidates.find((e) => normalized.startsWith(`${e.dataset.fixTarget}.`)) ??
       document.getElementById('form-errors');
-    const disclosure = element?.closest('details');
-    if (disclosure) disclosure.open = true;
-    element?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    element?.querySelector<HTMLElement>('input,select,textarea,button')?.focus({ preventScroll: true });
+    let disclosure = element?.closest('details');
+    while (disclosure) {
+      disclosure.open = true;
+      disclosure = disclosure.parentElement?.closest('details');
+    }
+    const trip = normalized.match(/^trip:(\d+)/);
+    if (trip) window.dispatchEvent(new CustomEvent('vehicle-expand-trip', { detail: Number(trip[1]) - 1 }));
+    requestAnimationFrame(() => {
+      element?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      element?.querySelector<HTMLElement>('input,select,textarea,button')?.focus({ preventScroll: true });
+    });
   }
   const options = (
     rows: { id: string; name?: string; plate_no?: string }[],
@@ -410,7 +515,9 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
           <p className="text-sm font-semibold text-blue-700">
             {mode === 'manager' ? '담당자 대리 입력' : '내 운행'}
           </p>
-          <h1 className="mt-1 text-2xl font-bold">{draft.server?.use_no ?? '운행 등록'}</h1>
+          <h1 className="mt-1 text-2xl font-bold">
+            {mode === 'manager' ? '대리 입력' : (draft.server?.use_no ?? '운행 등록')}
+          </h1>
           <p role="status" className="mt-3 rounded-xl bg-blue-50 p-3 font-semibold text-blue-900">
             {status}
             {!online && ' · 오프라인'}
@@ -430,7 +537,7 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
                 ? '기사가 내용을 확인했습니다.'
                 : '담당자가 대신 입력한 운행입니다. 운행 내역을 확인해 주세요.'}
             </p>
-            {!draft.server.driver_confirmed_at && (
+            {!readOnly && !draft.server.driver_confirmed_at && (
               <button
                 type="button"
                 className={button}
@@ -483,7 +590,7 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
             ))}
           </div>
         )}
-        {draft.phase === 'blocked' && (
+        {draft.phase === 'blocked' && !readOnly && (
           <p className="rounded-xl bg-amber-50 p-4">
             자동 재전송이 중단되었습니다.{' '}
             {draft.error?.includes('증빙')
@@ -590,236 +697,346 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
             중복 의심 경고: 같은 출발·도착 운행이 있습니다. 실제 반복 운행이면 그대로 제출할 수 있습니다.
           </p>
         )}
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            void enqueue('submit');
-          }}
-          className="space-y-5"
-        >
-          <fieldset disabled={locked} className="min-w-0 space-y-5">
-            <Section title="사용 정보" target="use">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="사용일" target="use_date">
-                  <input
-                    className={control}
-                    type="date"
-                    value={form.use_date}
-                    onChange={(e) =>
-                      change({
-                        use_date: e.target.value,
-                        payee_counterparty_id: defaultPayee(lookups, form.driver_id, e.target.value),
-                      })
-                    }
-                  />
-                </Field>
-                <Field label="종료일 (선택)" target="end_date">
-                  <input
-                    className={control}
-                    type="date"
-                    value={form.end_date}
-                    onChange={(e) => change({ end_date: e.target.value })}
-                  />
-                </Field>
-                <Field label="현장" target="project_id">
-                  <select
-                    className={control}
-                    value={form.project_id}
-                    onChange={(e) => change({ project_id: e.target.value })}
-                  >
-                    {options(
-                      [...lookups.projects].sort((a, b) => {
-                        const ids = boot.recent.rows.map((r) => r.project_id);
-                        return (
-                          (ids.includes(a.id) ? ids.indexOf(a.id) : 999) -
-                          (ids.includes(b.id) ? ids.indexOf(b.id) : 999)
-                        );
-                      }),
-                      form.project_id,
-                      draft.server?.snapshot.project_name,
-                    )}
-                  </select>
-                </Field>
-                {mode === 'manager' && (
-                  <Field label="실제 기사" target="driver_id">
-                    <select
-                      className={control}
-                      value={form.driver_id}
-                      onChange={(e) => {
-                        const driver = lookups.drivers.find((d) => d.id === e.target.value);
-                        change({
-                          driver_id: e.target.value,
-                          vehicle_id: driver?.default_vehicle_id ?? form.vehicle_id,
-                          payee_counterparty_id: defaultPayee(lookups, e.target.value, form.use_date),
-                        });
+        {mode === 'driver' && draft.server && (
+          <div className="space-y-3">
+            {statementLocked && (
+              <p className="rounded-xl bg-amber-50 p-4">
+                정산 확정된 운행입니다. 수정이 필요하면 담당자에게 문의하세요
+              </p>
+            )}
+            {readOnly &&
+              !statementLocked &&
+              draft.server.operation_status !== 'CANCELED' &&
+              (approvalConfirm ? (
+                <div
+                  role="alertdialog"
+                  aria-label="승인 운행 수정 확인"
+                  className="rounded-xl bg-amber-50 p-4"
+                >
+                  <p>수정하면 승인이 해제되고 다시 검수를 받아야 합니다</p>
+                  <div className="mt-3 flex gap-2">
+                    <button
+                      className={primary}
+                      onClick={() => {
+                        setEditApproved(true);
+                        setApprovalConfirm(false);
                       }}
                     >
-                      {options(lookups.drivers, form.driver_id, draft.server?.snapshot.driver_name)}
-                    </select>
-                  </Field>
-                )}
-                <Field label="차량" target="vehicle_id">
-                  <select
-                    className={control}
-                    value={form.vehicle_id}
-                    onChange={(e) => change({ vehicle_id: e.target.value })}
-                  >
-                    {options(lookups.vehicles, form.vehicle_id, draft.server?.snapshot.plate_no)}
-                  </select>
-                </Field>
-                <Field label="지급처" target="payee_counterparty_id">
-                  {mode === 'manager' ? (
-                    <select
-                      className={control}
-                      value={
-                        form.payee_counterparty_id || defaultPayee(lookups, form.driver_id, form.use_date)
-                      }
-                      onChange={(e) => change({ payee_counterparty_id: e.target.value })}
-                    >
-                      {options(
-                        lookups.counterparties.filter((c) => c.kind !== 'CUSTOMER'),
-                        form.payee_counterparty_id,
-                        draft.server?.snapshot.payee_name,
-                      )}
-                    </select>
-                  ) : (
-                    <span className="flex min-h-12 items-center rounded-xl bg-slate-50 px-3">
-                      {lookups.counterparties.find((c) => c.id === payee)?.name ??
-                        String(draft.server?.snapshot.payee_name ?? '사용일의 기사 소속으로 자동 지정')}
-                    </span>
-                  )}
-                </Field>
-                {mode === 'manager' && (
-                  <Field label="고객 (선택)" target="customer_counterparty_id">
-                    <select
-                      className={control}
-                      value={form.customer_counterparty_id}
-                      onChange={(e) =>
-                        change({
-                          customer_counterparty_id: e.target.value,
-                          charges: e.target.value
-                            ? form.charges.some((c) => c.direction === 'RECEIVABLE')
-                              ? form.charges
-                              : [...form.charges, newCharge('RECEIVABLE')]
-                            : form.charges.filter((c) => c.direction !== 'RECEIVABLE'),
-                        })
-                      }
-                    >
-                      {options(
-                        lookups.counterparties.filter((c) => c.kind === 'CUSTOMER'),
-                        form.customer_counterparty_id,
-                        draft.server?.snapshot.customer_name,
-                      )}
-                    </select>
-                  </Field>
-                )}
-                <Field label="공종 (선택)" target="work_type_id">
-                  <select
-                    className={control}
-                    value={form.work_type_id}
-                    onChange={(e) => change({ work_type_id: e.target.value })}
-                  >
-                    {options(lookups.work_types, form.work_type_id)}
-                  </select>
-                </Field>
-                <Field label="요청자" target="requester">
-                  <input
-                    className={control}
-                    value={form.requester}
-                    onChange={(e) => change({ requester: e.target.value })}
-                  />
-                </Field>
-                <Field label="운반 내용" target="cargo_desc">
-                  <input
-                    className={control}
-                    value={form.cargo_desc}
-                    onChange={(e) => change({ cargo_desc: e.target.value })}
-                  />
-                </Field>
-                <Field label="전체 운행 상태" target="operation_status">
-                  <select
-                    className={control}
-                    value={form.operation_status}
-                    onChange={(e) =>
-                      change({ operation_status: e.target.value as FormValues['operation_status'] })
-                    }
-                  >
-                    {Object.entries(operationLabels).map(([v, n]) => (
-                      <option key={v} value={v}>
-                        {n}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-              </div>
-            </Section>
-            <TripFields
-              trips={form.trips}
-              onChange={(trips) => change({ trips })}
-              recent={recent}
-              billingUnits={form.charges
-                .filter((charge) => charge.charge_type === 'BASE')
-                .map((charge) => charge.billing_unit)}
-            />
-            <ChargeFields
-              form={displayForm}
-              mode={mode}
-              onChange={(charges) => change({ charges })}
-              userId={boot.user.id}
-              saved={draft.server}
-            />
-            <Section title="특이사항">
-              <Field label="특이사항" target="notes">
-                <textarea
-                  className={control}
-                  rows={4}
-                  value={form.notes}
-                  onChange={(e) => change({ notes: e.target.value })}
-                />
-              </Field>
-            </Section>
-          </fieldset>
-          <EvidenceEditor
-            pending={draft.uploads}
-            existing={draft.server?.evidence ?? []}
-            policy={lookups.projects.find((p) => p.id === form.project_id)?.evidence_policy}
-            onChange={(uploads) => edit({ uploads })}
-            locked={locked}
-            canRemovePending={!busy}
-            canRetry={draft.phase === 'queued' && !busy}
-            onRemovePending={(id) => {
-              void removePending(id);
-            }}
-            onProcessingChange={setEvidenceBusy}
-            onRetry={() => {
-              void syncQueue(boot.user.id, true);
-            }}
-            onDelete={async (id, reason) => {
-              await mutate(`/api/evidence/${id}`, { reason }, crypto.randomUUID(), 'DELETE');
-              await refresh();
-            }}
-          />
-          <div className="grid grid-cols-2 gap-3">
+                      확인 후 수정
+                    </button>
+                    <button className={button} onClick={() => setApprovalConfirm(false)}>
+                      돌아가기
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button className={button} onClick={() => setApprovalConfirm(true)}>
+                  수정하기
+                </button>
+              ))}
             <button
-              type="button"
               className={button}
-              disabled={locked || evidenceBusy}
-              onClick={() => {
-                void enqueue('save');
+              disabled={busy}
+              onClick={async () => {
+                try {
+                  location.assign(await copyToDevice(boot.user.id, draft.serverId!));
+                } catch (e) {
+                  setError(e instanceof Error ? e.message : '복사하지 못했습니다.');
+                }
               }}
             >
-              서버 저장
+              이전 운행 복사
             </button>
-            <button type="submit" className={primary} disabled={locked || evidenceBusy}>
-              {draft.server?.review_status === 'NEEDS_FIX' ? '보완 후 재제출' : '담당자에게 제출'}
-            </button>
+            {draft.server.review_status === 'DRAFT' &&
+              !statementLocked &&
+              draft.server.operation_status !== 'CANCELED' &&
+              (cancelConfirm ? (
+                <div
+                  role="alertdialog"
+                  aria-label="작성중 운행 취소 확인"
+                  className="rounded-xl bg-amber-50 p-4"
+                >
+                  <p>서버에 저장된 작성중 운행을 취소할까요? 운행과 취소 이력은 보존됩니다.</p>
+                  <div className="mt-3 flex gap-2">
+                    <button
+                      className={button}
+                      disabled={busy}
+                      onClick={async () => {
+                        setBusy(true);
+                        try {
+                          await persistence.current;
+                          await withQueuePaused(boot.user.id, async () => {
+                            await mutate(`/api/uses/${draft.serverId}/cancel`, {
+                              version: draft.version,
+                              reason: '기사 작성중 운행 취소',
+                            });
+                            current.current = undefined;
+                            await removeDraft(boot.user.id, draft.id);
+                          });
+                          location.assign('/d');
+                        } catch (e) {
+                          setError(e instanceof Error ? e.message : '취소하지 못했습니다.');
+                          setBusy(false);
+                        }
+                      }}
+                    >
+                      운행 취소 확인
+                    </button>
+                    <button className={button} disabled={busy} onClick={() => setCancelConfirm(false)}>
+                      계속 작성
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  className={`${button} ml-2 text-red-700`}
+                  disabled={locked}
+                  onClick={() => setCancelConfirm(true)}
+                >
+                  작성중 운행 취소
+                </button>
+              ))}
           </div>
-          <p className="text-sm text-slate-500">
-            서버 저장은 작성 중 상태입니다. 제출 버튼을 눌러야 담당자에게 전달됩니다. 오프라인 전송 요청은
-            연결되면 자동으로 보냅니다.
-          </p>
-        </form>
-        {draft.phase !== 'saved' && (
+        )}
+        {readOnly ? (
+          <ReadOnlyUse use={draft.server!} />
+        ) : (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              void enqueue('submit');
+            }}
+            className="space-y-5"
+          >
+            <fieldset disabled={locked} className="min-w-0 space-y-5">
+              <Section title="사용 정보" target="use">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field label="사용일" target="use_date">
+                    <input
+                      className={control}
+                      type="date"
+                      value={form.use_date}
+                      onChange={(e) =>
+                        change({
+                          use_date: e.target.value,
+                          payee_counterparty_id: defaultPayee(lookups, form.driver_id, e.target.value),
+                        })
+                      }
+                    />
+                  </Field>
+                  <Field label="종료일 (선택)" target="end_date">
+                    <input
+                      className={control}
+                      type="date"
+                      value={form.end_date}
+                      onChange={(e) => change({ end_date: e.target.value })}
+                    />
+                  </Field>
+                  <Field label="현장" target="project_id">
+                    <select
+                      className={control}
+                      value={form.project_id}
+                      onChange={(e) => change({ project_id: e.target.value })}
+                    >
+                      {options(
+                        [...lookups.projects].sort((a, b) => {
+                          const ids = boot.recent.rows.map((r) => r.project_id);
+                          return (
+                            (ids.includes(a.id) ? ids.indexOf(a.id) : 999) -
+                            (ids.includes(b.id) ? ids.indexOf(b.id) : 999)
+                          );
+                        }),
+                        form.project_id,
+                        draft.server?.snapshot.project_name,
+                      )}
+                    </select>
+                  </Field>
+                  {mode === 'manager' && (
+                    <Field label="실제 기사" target="driver_id">
+                      <select
+                        className={control}
+                        value={form.driver_id}
+                        onChange={(e) => {
+                          const driver = lookups.drivers.find((d) => d.id === e.target.value);
+                          change({
+                            driver_id: e.target.value,
+                            vehicle_id: driver?.default_vehicle_id ?? form.vehicle_id,
+                            payee_counterparty_id: defaultPayee(lookups, e.target.value, form.use_date),
+                          });
+                        }}
+                      >
+                        {options(lookups.drivers, form.driver_id, draft.server?.snapshot.driver_name)}
+                      </select>
+                    </Field>
+                  )}
+                  <Field label="차량" target="vehicle_id">
+                    <select
+                      className={control}
+                      value={form.vehicle_id}
+                      onChange={(e) => change({ vehicle_id: e.target.value })}
+                    >
+                      {options(lookups.vehicles, form.vehicle_id, draft.server?.snapshot.plate_no)}
+                    </select>
+                  </Field>
+                  <Field label="지급처" target="payee_counterparty_id">
+                    {mode === 'manager' ? (
+                      <select
+                        className={control}
+                        value={
+                          form.payee_counterparty_id || defaultPayee(lookups, form.driver_id, form.use_date)
+                        }
+                        onChange={(e) => change({ payee_counterparty_id: e.target.value })}
+                      >
+                        {options(
+                          lookups.counterparties.filter((c) => c.kind !== 'CUSTOMER'),
+                          form.payee_counterparty_id,
+                          draft.server?.snapshot.payee_name,
+                        )}
+                      </select>
+                    ) : (
+                      <span className="flex min-h-12 items-center rounded-xl bg-slate-50 px-3">
+                        {lookups.counterparties.find((c) => c.id === payee)?.name ??
+                          String(draft.server?.snapshot.payee_name ?? '사용일의 기사 소속으로 자동 지정')}
+                      </span>
+                    )}
+                  </Field>
+                  {mode === 'manager' && (
+                    <Field label="고객 (선택)" target="customer_counterparty_id">
+                      <select
+                        className={control}
+                        value={form.customer_counterparty_id}
+                        onChange={(e) =>
+                          change({
+                            customer_counterparty_id: e.target.value,
+                            charges: e.target.value
+                              ? form.charges.some((c) => c.direction === 'RECEIVABLE')
+                                ? form.charges
+                                : [...form.charges, newCharge('RECEIVABLE')]
+                              : form.charges.filter((c) => c.direction !== 'RECEIVABLE'),
+                          })
+                        }
+                      >
+                        {options(
+                          lookups.counterparties.filter((c) => c.kind === 'CUSTOMER'),
+                          form.customer_counterparty_id,
+                          draft.server?.snapshot.customer_name,
+                        )}
+                      </select>
+                    </Field>
+                  )}
+                  <Field label="공종 (선택)" target="work_type_id">
+                    <select
+                      className={control}
+                      value={form.work_type_id}
+                      onChange={(e) => change({ work_type_id: e.target.value })}
+                    >
+                      {options(lookups.work_types, form.work_type_id)}
+                    </select>
+                  </Field>
+                  <Field label="요청자" target="requester">
+                    <input
+                      className={control}
+                      value={form.requester}
+                      onChange={(e) => change({ requester: e.target.value })}
+                    />
+                  </Field>
+                  <Field label="운반 내용" target="cargo_desc">
+                    <input
+                      className={control}
+                      value={form.cargo_desc}
+                      onChange={(e) => change({ cargo_desc: e.target.value })}
+                    />
+                  </Field>
+                  <Field label="전체 운행 상태" target="operation_status">
+                    <select
+                      className={control}
+                      value={form.operation_status}
+                      onChange={(e) =>
+                        change({ operation_status: e.target.value as FormValues['operation_status'] })
+                      }
+                    >
+                      {Object.entries(operationLabels).map(([v, n]) => (
+                        <option key={v} value={v}>
+                          {n}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                </div>
+              </Section>
+              <TripFields
+                trips={form.trips}
+                onChange={(trips) => change({ trips })}
+                recent={recent}
+                billingUnits={form.charges
+                  .filter((charge) => charge.charge_type === 'BASE')
+                  .map((charge) => charge.billing_unit)}
+              />
+              <ChargeFields
+                form={displayForm}
+                mode={mode}
+                onChange={(charges) => change({ charges })}
+                userId={boot.user.id}
+                saved={draft.server}
+              />
+              <Section title="특이사항">
+                <Field label="특이사항" target="notes">
+                  <textarea
+                    className={control}
+                    rows={4}
+                    value={form.notes}
+                    onChange={(e) => change({ notes: e.target.value })}
+                  />
+                </Field>
+              </Section>
+            </fieldset>
+            <EvidenceEditor
+              validationError={evidenceValidation}
+              pending={draft.uploads}
+              existing={draft.server?.evidence ?? []}
+              policy={lookups.projects.find((p) => p.id === form.project_id)?.evidence_policy}
+              onChange={(uploads) => edit({ uploads })}
+              locked={locked}
+              canRemovePending={!busy}
+              canRetry={draft.phase === 'queued' && !busy}
+              onRemovePending={(id) => {
+                void removePending(id);
+              }}
+              onProcessingChange={setEvidenceBusy}
+              onRetry={() => {
+                void syncQueue(boot.user.id, true);
+              }}
+              onDelete={async (id, reason) => {
+                await mutate(`/api/evidence/${id}`, { reason }, crypto.randomUUID(), 'DELETE');
+                await refresh();
+              }}
+            />
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                className={button}
+                disabled={locked || evidenceBusy}
+                onClick={() => {
+                  void enqueue('save');
+                }}
+              >
+                서버 저장
+              </button>
+              <button type="submit" className={primary} disabled={locked || evidenceBusy}>
+                {draft.server?.review_status === 'NEEDS_FIX'
+                  ? '보완 후 재제출'
+                  : mode === 'manager'
+                    ? '검수 대기로 제출'
+                    : '담당자에게 제출'}
+              </button>
+            </div>
+            <p className="text-sm text-slate-500">
+              서버 저장은 작성 중 상태입니다. 제출 버튼을 눌러야 담당자에게 전달됩니다. 오프라인 전송 요청은
+              연결되면 자동으로 보냅니다.
+            </p>
+          </form>
+        )}
+        {!readOnly && draft.phase !== 'saved' && (
           <section className="rounded-xl border border-slate-200 p-4">
             {discardConfirm ? (
               <div role="alertdialog" aria-label="기기 초안 폐기 확인">

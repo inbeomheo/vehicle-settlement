@@ -2,7 +2,9 @@ import { createRoot } from 'react-dom/client';
 import { useEffect, useState } from 'react';
 import { FormWorkspace } from '@/components/use-form/use-form';
 import { DriverDashboard } from '@/client/driver-dashboard';
-import { activeUser, cachedValue, markLoggedOut, type Bootstrap } from './store';
+import { activeUser, cachedValue, type Bootstrap } from './store';
+import { LogoutButton } from '@/components/logout-button';
+import { DriverNav } from '@/client/driver-nav';
 import { syncQueue } from './engine';
 function OfflineApp() {
   const [boot, setBoot] = useState<Bootstrap>();
@@ -55,16 +57,7 @@ function OfflineApp() {
         <a className="font-bold" href={mode === 'driver' ? '/d' : '/m/uses/new'}>
           차량 사용·정산
         </a>
-        <button
-          onClick={() => {
-            markLoggedOut();
-            setBoot(undefined);
-            setError('로그아웃되어 기기 데이터가 격리되었습니다. 온라인에서 다시 로그인해 주세요.');
-          }}
-          className="min-h-11 rounded-xl border px-3"
-        >
-          로그아웃
-        </button>
+        <LogoutButton />
       </header>
       <div className="bg-amber-50 px-4 py-2 text-sm text-amber-900">
         기기 저장 화면 · 연결 후 서버 권한과 최신 내용을 확인합니다.
@@ -72,22 +65,7 @@ function OfflineApp() {
       <main className="px-4 pt-6 pb-28">
         {path === '/d' ? <DriverDashboard /> : <FormWorkspace boot={boot} mode={mode} useId={id} />}
       </main>
-      {mode === 'driver' && (
-        <nav
-          aria-label="주 메뉴"
-          className="fixed inset-x-0 bottom-0 grid grid-cols-3 border-t bg-white p-2 text-center font-semibold"
-        >
-          <a className="py-3" href="/d">
-            내 운행
-          </a>
-          <a className="py-3" href="/d/new">
-            운행 등록
-          </a>
-          <a className="py-3" href="/d/settlements">
-            내 정산
-          </a>
-        </nav>
-      )}
+      {mode === 'driver' && <DriverNav />}
     </>
   );
 }
