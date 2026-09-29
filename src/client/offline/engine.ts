@@ -10,6 +10,11 @@ export type Transport = {
 };
 const transport: Transport = { get: api, mutate, upload, isActive: (id) => activeUser() === id };
 const stopStatuses = [401, 403, 404];
+const permanentClientError = (error: unknown): error is ApiError =>
+  error instanceof ApiError &&
+  error.status >= 400 &&
+  error.status < 500 &&
+  ![408, 429].includes(error.status);
 // Every successful step is persisted before starting the next. The request body/key
 // stays immutable across ambiguous failures, including PATCH and final submission.
 export async function sendDraft(
@@ -86,7 +91,7 @@ export async function sendDraft(
         file.status = 'failed';
         file.error = error instanceof Error ? error.message : '업로드 실패';
         await save();
-        if (error instanceof ApiError && stopStatuses.includes(error.status)) throw error;
+        if (permanentClientError(error)) throw error;
       }
     }
     assertOwner();
@@ -129,13 +134,19 @@ export async function sendDraft(
             /* Keep the local edits if latest detail is unavailable. */
           }
         }
-      } else if (error.status >= 400 && error.status < 500) draft.phase = 'blocked';
+      } else if (permanentClientError(error)) draft.phase = 'blocked';
     }
     await save();
   }
   return draft;
 }
 const running = new Map<string, Promise<void>>();
+// Serialize local cancellation/discard with the same lock used by transmission.
+// Otherwise an in-flight upload could resurrect a draft after it was removed.
+export async function withQueuePaused<T>(userId: string, action: () => Promise<T>): Promise<T> {
+  await running.get(userId);
+  return 'locks' in navigator ? navigator.locks.request(`vehicle-sync-${userId}`, action) : action();
+}
 export function syncQueue(userId: string, retryAfterCurrent = false): Promise<void> {
   const inFlight = running.get(userId);
   if (inFlight) return retryAfterCurrent ? inFlight.then(() => syncQueue(userId)) : inFlight;

@@ -26,7 +26,10 @@ export function EvidenceEditor({
   onChange,
   onDelete,
   onRetry,
+  onRemovePending,
   locked,
+  canRemovePending = !locked,
+  canRetry = true,
   onProcessingChange,
 }: {
   pending: PendingEvidence[];
@@ -35,6 +38,9 @@ export function EvidenceEditor({
   onChange: (files: PendingEvidence[]) => void;
   onDelete: (id: string, reason: string) => Promise<void>;
   onRetry: () => void;
+  onRemovePending?: (id: string) => void;
+  canRemovePending?: boolean;
+  canRetry?: boolean;
   locked: boolean;
   onProcessingChange: (value: boolean) => void;
 }) {
@@ -42,6 +48,7 @@ export function EvidenceEditor({
   const [slip, setSlip] = useState('');
   const [reason, setReason] = useState('');
   const [replaceId, setReplaceId] = useState('');
+  const [deleteId, setDeleteId] = useState('');
   const [error, setError] = useState('');
   const [processing, setProcessing] = useState(false);
   const [progress, setProgress] = useState<Record<string, number>>({});
@@ -128,7 +135,16 @@ export function EvidenceEditor({
                   : '사진 업로드 대기'}
             </p>
             <div className="mt-2 flex gap-2">
-              <button className={button} type="button" disabled={locked} onClick={() => setReplaceId(f.id)}>
+              <button
+                className={button}
+                type="button"
+                disabled={locked}
+                onClick={() => {
+                  setReplaceId(f.id);
+                  setDeleteId('');
+                  setReason('');
+                }}
+              >
                 교체
               </button>
               <button
@@ -136,11 +152,9 @@ export function EvidenceEditor({
                 type="button"
                 disabled={locked}
                 onClick={() => {
-                  if (!reason.trim()) {
-                    setError('삭제 사유를 먼저 입력하세요.');
-                    return;
-                  }
-                  void onDelete(f.id, reason).catch((e) => setError(e.message));
+                  setDeleteId(f.id);
+                  setReplaceId('');
+                  setReason('');
                 }}
               >
                 삭제
@@ -177,17 +191,19 @@ export function EvidenceEditor({
               )}
               {file.error && <p className="mt-1 text-sm text-red-700">{file.error}</p>}
               <div className="mt-2 flex flex-wrap gap-2">
-                {file.status === 'failed' && (
+                {file.status === 'failed' && canRetry && (
                   <button type="button" className={button} onClick={onRetry}>
                     사진 다시 보내기
                   </button>
                 )}
-                {!file.serverId && !locked && (
+                {file.status !== 'uploaded' && file.status !== 'uploading' && canRemovePending && (
                   <button
                     type="button"
                     className={button}
                     onClick={() =>
-                      onChange(pending.filter((p) => p.client_upload_id !== file.client_upload_id))
+                      onRemovePending
+                        ? onRemovePending(file.client_upload_id)
+                        : onChange(pending.filter((p) => p.client_upload_id !== file.client_upload_id))
                     }
                   >
                     첨부 취소
@@ -200,18 +216,71 @@ export function EvidenceEditor({
       </div>
       {!locked && (
         <div className="mt-5 grid gap-4">
-          <Field label="교체·삭제 사유">
-            <input
-              className={control}
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              placeholder="기존 증빙을 바꾸거나 삭제할 때 입력"
-            />
-          </Field>
+          {(replaceId || deleteId) && (
+            <Field label="교체·삭제 사유">
+              <input
+                className={control}
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                placeholder="기존 증빙을 바꾸거나 삭제할 때 입력"
+              />
+            </Field>
+          )}
+          {deleteId && (
+            <div className="rounded-xl bg-amber-50 p-3">
+              <p>삭제 사유를 입력한 뒤 확인하세요.</p>
+              <div className="mt-3 flex gap-2">
+                <button
+                  type="button"
+                  className={`${button} text-red-700`}
+                  disabled={processing}
+                  onClick={async () => {
+                    if (!reason.trim()) {
+                      setError('삭제 사유를 입력하세요.');
+                      return;
+                    }
+                    setProcessing(true);
+                    onProcessingChange(true);
+                    try {
+                      await onDelete(deleteId, reason);
+                      setDeleteId('');
+                      setReason('');
+                      setError('');
+                    } catch (e) {
+                      setError(e instanceof Error ? e.message : '삭제하지 못했습니다.');
+                    } finally {
+                      setProcessing(false);
+                      onProcessingChange(false);
+                    }
+                  }}
+                >
+                  증빙 삭제 확인
+                </button>
+                <button
+                  type="button"
+                  className={button}
+                  disabled={processing}
+                  onClick={() => {
+                    setDeleteId('');
+                    setReason('');
+                  }}
+                >
+                  삭제 취소
+                </button>
+              </div>
+            </div>
+          )}
           {replaceId && (
             <p className="rounded-xl bg-amber-50 p-3">
               교체할 새 증빙을 첨부하세요.{' '}
-              <button type="button" className="underline" onClick={() => setReplaceId('')}>
+              <button
+                type="button"
+                className="underline"
+                onClick={() => {
+                  setReplaceId('');
+                  setReason('');
+                }}
+              >
                 교체 취소
               </button>
             </p>
