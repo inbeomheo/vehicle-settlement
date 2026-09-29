@@ -3,7 +3,7 @@ import { mkdir, readFile, writeFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { boundedPayload, readCsv, readXlsx } from './import-file';
 import ExcelJS from 'exceljs';
-import { and, desc, eq, lt, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, lt, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { importJobs, importPresets, vehicleUses, chargeLines, trips } from '../db/schema';
 import type { Context } from '../context';
@@ -421,7 +421,11 @@ export async function listImports(ctx: Context) {
 function stalePreviewCutoff() {
   return new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 }
-export async function deleteStaleImportPreviews(ctx: Context) {
+export const deleteStaleImportSchema = z.object({
+  ids: z.array(z.string().uuid()).min(1).max(100).optional(),
+});
+export async function deleteStaleImportPreviews(ctx: Context, input: unknown = {}) {
+  const { ids } = deleteStaleImportSchema.parse(input);
   const deleted = await atomic(ctx, async (tx) => {
     await manager(tx);
     const jobs = await tx.db
@@ -432,6 +436,7 @@ export async function deleteStaleImportPreviews(ctx: Context) {
           eq(importJobs.created_by, tx.user.id),
           eq(importJobs.status, 'PREVIEW'),
           lt(importJobs.updated_at, stalePreviewCutoff()),
+          ids ? inArray(importJobs.id, ids) : undefined,
         ),
       )
       .for('update');
