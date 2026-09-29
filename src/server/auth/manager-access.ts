@@ -22,6 +22,6 @@ export function canAccessManagerPage(role: Role, pathname: string) {
   if (role === 'DRIVER') return false;
   const section = pathname.split('/')[2];
   if (['master', 'users'].includes(section)) return role === 'ADMIN';
-  if (['statements', 'payments', 'import'].includes(section)) return canSettle(role);
+  if (['statements', 'payments'].includes(section)) return canSettle(role);
   return true;
 }

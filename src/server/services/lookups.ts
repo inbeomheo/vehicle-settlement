@@ -19,32 +19,31 @@ export async function getLookups(ctx: Context, useDate?: string) {
       ),
     );
   const payees = affiliations.map((a) => a.counterparty_id);
-  const [projectRows, driverRows, vehicleRows, parties, works] = await Promise.all([
-    ctx.db
-      .select()
-      .from(projects)
-      .where(
-        and(
-          eq(projects.active, true),
-          ids === null ? undefined : ids.length ? inArray(projects.id, ids) : sql`false`,
-        ),
+  // A transaction uses one pg client: await each query before issuing the next.
+  const projectRows = await ctx.db
+    .select()
+    .from(projects)
+    .where(
+      and(
+        eq(projects.active, true),
+        ids === null ? undefined : ids.length ? inArray(projects.id, ids) : sql`false`,
       ),
-    ctx.db
-      .select()
-      .from(drivers)
-      .where(and(eq(drivers.active, true), driver ? eq(drivers.id, ctx.user.driver_id!) : undefined)),
-    ctx.db.select().from(vehicles).where(eq(vehicles.active, true)),
-    ctx.db
-      .select()
-      .from(counterparties)
-      .where(
-        and(
-          eq(counterparties.active, true),
-          driver ? (payees.length ? inArray(counterparties.id, payees) : sql`false`) : undefined,
-        ),
+    );
+  const driverRows = await ctx.db
+    .select()
+    .from(drivers)
+    .where(and(eq(drivers.active, true), driver ? eq(drivers.id, ctx.user.driver_id!) : undefined));
+  const vehicleRows = await ctx.db.select().from(vehicles).where(eq(vehicles.active, true));
+  const parties = await ctx.db
+    .select()
+    .from(counterparties)
+    .where(
+      and(
+        eq(counterparties.active, true),
+        driver ? (payees.length ? inArray(counterparties.id, payees) : sql`false`) : undefined,
       ),
-    ctx.db.select().from(workTypes).where(eq(workTypes.active, true)),
-  ]);
+    );
+  const works = await ctx.db.select().from(workTypes).where(eq(workTypes.active, true));
   return redactForDriver(ctx, {
     projects: projectRows,
     drivers: driverRows,

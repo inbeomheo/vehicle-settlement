@@ -29,6 +29,7 @@ export default function ImportPage() {
   const [presets, setPresets] = useState<Preset[]>([]);
   const [sheet, setSheet] = useState(0);
   const [header, setHeader] = useState(1);
+  const [excluded, setExcluded] = useState<number[]>([]);
   const [mapping, setMapping] = useState<ImportMapping>({});
   const [presetName, setPresetName] = useState('');
   const [busy, setBusy] = useState(false);
@@ -60,6 +61,7 @@ export default function ImportPage() {
   }
   function selectJob(value: ImportView) {
     setJob(value);
+    setExcluded(value.selection?.excluded_rows ?? []);
     setSheet(value.selection?.sheet ?? 0);
     setHeader(value.selection?.header_row ?? value.sheets[0].header_row);
     setMapping(value.selection?.mapping ?? value.sheets[0].mapping);
@@ -118,7 +120,7 @@ export default function ImportPage() {
           <h2 className="break-all text-xl font-bold">{job.file_name}</h2>
           <p className="text-sm text-slate-600">
             필수: 사용일, 현장, 기사, 차량번호, 지급처, 출발지, 도착지, 과금단위. 날짜는 YYYY-MM-DD, 금액은
-            정수 원입니다. 수식은 값으로 붙여넣어 주세요.
+            정수 원입니다. 수식은 저장된 결과값을 사용하며 결과가 없는 행은 오류로 표시합니다.
           </p>
           <p className="text-sm text-slate-600">
             운행횟수와 청구수량은 별개입니다. 일대·반일·월대·1식은 수량 기본값 1, 다른 단위의 빈 수량과 빈
@@ -135,6 +137,7 @@ export default function ImportPage() {
                 onChange={(e) => {
                   const index = Number(e.target.value);
                   setSheet(index);
+                  setExcluded([]);
                   setHeader(job.sheets[index].header_row);
                   setMapping(job.sheets[index].mapping);
                   setDirty(true);
@@ -245,6 +248,7 @@ export default function ImportPage() {
                       sheet,
                       header_row: header,
                       mapping,
+                      excluded_rows: excluded,
                     });
                     setJob(next);
                     setDirty(false);
@@ -287,7 +291,7 @@ export default function ImportPage() {
                 <table className="w-full min-w-[580px] text-left text-sm">
                   <thead>
                     <tr>
-                      {['원본 행', '결과', '자료', '오류·경고'].map((h) => (
+                      {['제외', '원본 행', '결과', '자료', '오류·경고'].map((h) => (
                         <th key={h} className="border-b p-2">
                           {h}
                         </th>
@@ -297,12 +301,28 @@ export default function ImportPage() {
                   <tbody>
                     {job.preview.map((r) => (
                       <tr key={r.row} className="border-b">
+                        <td className="p-2">
+                          <input
+                            type="checkbox"
+                            aria-label={`${r.row}행 제외`}
+                            checked={excluded.includes(r.row)}
+                            disabled={busy || committed}
+                            onChange={(e) => {
+                              setExcluded((current) =>
+                                e.target.checked ? [...current, r.row] : current.filter((n) => n !== r.row),
+                              );
+                              setDirty(true);
+                            }}
+                          />
+                        </td>
                         <td className="p-2">{r.row}</td>
                         <td className="p-2">
                           {r.status === 'ERROR'
                             ? '오류'
                             : r.status === 'SKIPPED'
-                              ? '건너뜀 (동일 파일)'
+                              ? excluded.includes(r.row)
+                                ? '사용자 제외'
+                                : '건너뜀 (동일 내용)'
                               : r.use_id
                                 ? '임시저장'
                                 : '유효'}

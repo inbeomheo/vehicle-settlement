@@ -1,5 +1,8 @@
-import { createHash } from 'node:crypto';
-import { Readable } from 'node:stream';
+import { createHash, randomUUID } from 'node:crypto';
+import { mkdir, readFile, writeFile, rm } from 'node:fs/promises';
+import path from 'node:path';
+import Decimal from 'decimal.js';
+import { boundedPayload, readCsv, readXlsx } from './import-file';
 import ExcelJS from 'exceljs';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
@@ -25,7 +28,7 @@ import {
 
 const normalize = (value: string) => value.toLowerCase().replace(/[\s_()·/.-]/g, '');
 const sha = (value: Buffer | string) => createHash('sha256').update(value).digest('hex');
-type Payload = { file_hash: string; sheets: SheetData[]; preview: ImportRow[] };
+type Payload = { file_hash: string; sheets: SheetData[]; preview: ImportRow[]; source_file?: string };
 type Job = typeof importJobs.$inferSelect;
 const units: Record<string, (typeof billingUnitEnum.enumValues)[number]> = {
   회당: 'PER_TRIP',
@@ -96,63 +99,52 @@ export function suggestMapping(headers: string[]): ImportMapping {
   }
   return result;
 }
-function cellText(value: ExcelJS.CellValue): string {
-  if (value == null) return '';
-  if (value instanceof Date) return value.toISOString().slice(0, 10);
-  if (typeof value === 'object') {
-    if ('formula' in value || 'sharedFormula' in value) invalid('수식 셀은 값으로 붙여넣은 후 업로드하세요.');
-    if ('richText' in value) return value.richText.map((v) => v.text).join('');
-    if ('text' in value) return value.text;
-    invalid('해석할 수 없는 셀 값입니다.');
-  }
-  return String(value).trim();
+function sourcePath(id: string) {
+  return path.join(process.env.STORAGE_DIR ?? 'storage', 'imports', `${z.string().uuid().parse(id)}.xlsx`);
 }
 export async function uploadImport(ctx: Context, fileName: string, bytes: Buffer) {
   await manager(ctx);
   if (!/\.(xlsx|csv)$/i.test(fileName) || fileName.length > 255)
     invalid('xlsx 또는 UTF-8 csv 파일을 선택하세요.');
-  if (!bytes.length || bytes.length > 10 * 1024 * 1024) invalid('파일은 10MB 이하로 업로드하세요.');
-  const workbook = new ExcelJS.Workbook();
-  try {
-    if (/\.csv$/i.test(fileName))
-      await workbook.csv.read(Readable.from([bytes]), {
-        map: (v: string) => v,
-        parserOptions: { ignoreEmpty: false },
-      });
-    else await workbook.xlsx.load(bytes as unknown as ExcelJS.Buffer);
-  } catch {
-    invalid('파일을 읽을 수 없습니다. 손상 여부와 CSV 인코딩을 확인하세요.');
-  }
-  if (!workbook.worksheets.length || workbook.worksheets.length > 20) invalid('시트는 1~20개여야 합니다.');
-  let totalRows = 0;
-  const sheets: SheetData[] = workbook.worksheets.map((sheet) => {
-    totalRows += sheet.rowCount;
-    if (totalRows > 2000 || sheet.columnCount > 100) invalid('한 파일은 2,000행·100열 이하로 나누어 주세요.');
-    const rows: string[][] = [];
-    for (let i = 1; i <= sheet.rowCount; i++) {
-      const row = sheet.getRow(i);
-      rows.push(Array.from({ length: sheet.columnCount }, (_, c) => cellText(row.getCell(c + 1).value)));
-    }
+  if (!bytes.length || bytes.length > 10 * 1024 * 1024)
+    invalid('파일이 너무 큽니다. 10MB 이하로 업로드하세요.');
+  const xlsx = /\.xlsx$/i.test(fileName);
+  const sheets = xlsx ? await readXlsx(bytes, -1, true) : readCsv(bytes);
+  for (const sheet of sheets) {
     let header = 0;
-    for (let i = 1; i < Math.min(rows.length, 20); i++)
+    for (let i = 1; i < Math.min(sheet.rows.length, 20); i++)
       if (
-        Object.keys(suggestMapping(rows[i])).length > Object.keys(suggestMapping(rows[header] ?? [])).length
+        Object.keys(suggestMapping(sheet.rows[i])).length >
+        Object.keys(suggestMapping(sheet.rows[header] ?? [])).length
       )
         header = i;
-    return { name: sheet.name, rows, header_row: header + 1, mapping: suggestMapping(rows[header] ?? []) };
+    sheet.header_row = header + 1;
+    sheet.mapping = suggestMapping(sheet.rows[header] ?? []);
+  }
+  const id = randomUUID();
+  const payload = boundedPayload({
+    file_hash: sha(bytes),
+    sheets,
+    preview: [],
+    ...(xlsx ? { source_file: id } : {}),
   });
-  return atomic(ctx, async (tx) => {
-    const [job] = await tx.db
-      .insert(importJobs)
-      .values({
-        file_name: fileName,
-        created_by: tx.user.id,
-        rows: { file_hash: sha(bytes), sheets, preview: [] },
-      })
-      .returning();
-    await audit(tx, 'IMPORT_UPLOAD', 'import_job', job.id, null, { file_name: fileName });
-    return view(job, tx.user.name);
-  });
+  if (xlsx) {
+    await mkdir(path.dirname(sourcePath(id)), { recursive: true, mode: 0o700 });
+    await writeFile(sourcePath(id), bytes, { mode: 0o600 });
+  }
+  try {
+    return await atomic(ctx, async (tx) => {
+      const [job] = await tx.db
+        .insert(importJobs)
+        .values({ id, file_name: fileName, created_by: tx.user.id, rows: payload })
+        .returning();
+      await audit(tx, 'IMPORT_UPLOAD', 'import_job', job.id, null, { file_name: fileName });
+      return view(job, tx.user.name);
+    });
+  } catch (error) {
+    if (xlsx) await rm(sourcePath(id), { force: true });
+    throw error;
+  }
 }
 function money(value: string, label: string): number | null {
   if (!value) return null;
@@ -174,11 +166,13 @@ function matchOne<T extends { id: string }>(rows: T[], value: string, keys: (key
     invalid(`${label}: 기준정보 매칭 실패${matches.length > 1 ? ' (동명이인·중복 이름은 ID로 지정)' : ''}`);
   return matches[0];
 }
-async function resolveRow(ctx: Context, values: string[], mapping: ImportMapping) {
+type LookupCache = Map<string, Awaited<ReturnType<typeof getLookups>>>;
+async function resolveRow(ctx: Context, values: string[], mapping: ImportMapping, cache: LookupCache) {
   const get = (field: keyof ImportMapping) =>
     mapping[field] === undefined ? '' : (values[mapping[field]!] ?? '').trim();
   const useDate = date(get('use_date'));
-  const lookups = await getLookups(ctx, useDate);
+  if (!cache.has(useDate)) cache.set(useDate, await getLookups(ctx, useDate));
+  const lookups = cache.get(useDate)!;
   const project = matchOne(lookups.projects, get('project'), ['id', 'name', 'code'], '현장');
   const driver = matchOne(lookups.drivers, get('driver'), ['id', 'name'], '기사');
   const vehicle = matchOne(lookups.vehicles, get('vehicle'), ['id', 'plate_no'], '차량번호');
@@ -249,11 +243,22 @@ async function resolveRow(ctx: Context, values: string[], mapping: ImportMapping
 async function evaluate(ctx: Context, job: Job, raw: unknown) {
   const selection = previewSchema.parse(raw);
   const payload = job.rows as Payload;
+  if (payload.source_file) {
+    const sheets = await readXlsx(await readFile(sourcePath(payload.source_file)), selection.sheet);
+    payload.sheets[selection.sheet] = {
+      ...sheets[selection.sheet],
+      mapping: selection.mapping,
+      header_row: selection.header_row,
+    };
+  }
   const sheet = payload.sheets[selection.sheet];
   if (!sheet || selection.header_row > sheet.rows.length) invalid('시트·헤더 행을 확인하세요.');
   if (new Set(Object.values(selection.mapping)).size !== Object.keys(selection.mapping).length)
     invalid('같은 열을 두 항목에 지정할 수 없습니다.');
   const rows: ImportRow[] = [];
+  const cache: LookupCache = new Map();
+  const occurrences = new Map<string, number>();
+  const excluded = new Set(selection.excluded_rows);
   const resolved = new Map<number, Awaited<ReturnType<typeof resolveRow>>>();
   const existing = await ctx.db
     .select({
@@ -267,17 +272,35 @@ async function evaluate(ctx: Context, job: Job, raw: unknown) {
     .where(await accessibleUseFilter(ctx));
   for (let i = selection.header_row; i < sheet.rows.length; i++) {
     const values = sheet.rows[i];
-    if (!values.some((v) => v.trim())) continue;
+    if (!values.some((v) => v.trim()) && !sheet.cell_errors?.[i + 1]) continue;
     const row: ImportRow = {
       row: i + 1,
       values,
       status: 'VALID',
       errors: [],
       warnings: [],
-      source_row_hash: sha(`${payload.file_hash}:${selection.sheet}:${i + 1}`),
+      source_row_hash: '',
     };
     try {
-      const data = await resolveRow(ctx, values, selection.mapping);
+      for (const column of Object.values(selection.mapping)) {
+        const error = sheet.cell_errors?.[row.row]?.[column];
+        if (error) invalid(`${column + 1}열: ${error}`);
+      }
+      const data = await resolveRow(ctx, values, selection.mapping, cache);
+      const contentHash = sha(
+        JSON.stringify({
+          ...data.input,
+          quantity: data.input.quantity == null ? null : new Decimal(data.input.quantity).toString(),
+          charge_lines: data.input.charge_lines?.map((line) => ({
+            ...line,
+            quantity: line.quantity == null ? null : new Decimal(line.quantity).toString(),
+          })),
+          price: data.price,
+        }),
+      );
+      const occurrence = (occurrences.get(contentHash) ?? 0) + 1;
+      occurrences.set(contentHash, occurrence);
+      row.source_row_hash = sha(`normalized-v1:${contentHash}:${occurrence}`);
       resolved.set(row.row, data);
       row.warnings = data.warnings;
       const [duplicate] = await ctx.db
@@ -303,6 +326,10 @@ async function evaluate(ctx: Context, job: Job, raw: unknown) {
       row.status = 'ERROR';
       row.errors = [error instanceof AppError ? error.message : '입력값 형식·금액 범위를 확인하세요.'];
     }
+    if (excluded.has(row.row)) {
+      row.status = 'SKIPPED';
+      row.warnings.push('사용자가 제외한 행');
+    }
     rows.push(row);
   }
   return { selection, rows, resolved };
@@ -324,7 +351,7 @@ export async function previewImport(ctx: Context, id: string, raw: unknown) {
       .update(importJobs)
       .set({
         mapping: result.selection,
-        rows: { ...(job.rows as Payload), preview: result.rows },
+        rows: boundedPayload({ ...(job.rows as Payload), preview: result.rows }),
         summary: summarize(result.rows),
         updated_at: new Date(),
       })
@@ -338,9 +365,7 @@ export async function commitImport(ctx: Context, id: string) {
     const job = await jobFor(tx, id, true);
     if (job.status === 'COMMITTED') return getImport(tx, id);
     if (!job.mapping) invalid('먼저 매핑과 미리보기를 확인하세요.');
-    await tx.db.execute(
-      sql`SELECT pg_advisory_xact_lock(hashtextextended(${`import:${(job.rows as Payload).file_hash}`}, 0))`,
-    );
+    await tx.db.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${'import:normalized-v1'}, 0))`);
     const result = await evaluate(tx, job, job.mapping);
     for (const row of result.rows) {
       if (row.status !== 'VALID') continue;
@@ -392,7 +417,7 @@ export async function commitImport(ctx: Context, id: string) {
       .set({
         status: 'COMMITTED',
         committed_at: new Date(),
-        rows: { ...(job.rows as Payload), preview: result.rows },
+        rows: boundedPayload({ ...(job.rows as Payload), preview: result.rows }),
         summary,
         updated_at: new Date(),
       })

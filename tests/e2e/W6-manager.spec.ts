@@ -11,20 +11,13 @@ async function login(page: Page, login_id: string) {
 test('11: 역할별 메뉴 및 직접 URL의 서버 권한 가드', async ({ page }) => {
   await login(page, 'site');
   const menu = page.getByRole('navigation', { name: '주 메뉴' });
-  for (const label of ['대시보드', '검수함', '차량 사용대장', '대리 입력', '변경 이력']) {
+  for (const label of ['대시보드', '검수함', '차량 사용대장', '대리 입력', '엑셀 가져오기', '변경 이력']) {
     await expect(menu.getByRole('link', { name: label, exact: true })).toBeVisible();
   }
-  for (const label of ['월 정산', '지급 관리', '엑셀 가져오기', '기준정보', '사용자 관리']) {
+  for (const label of ['월 정산', '지급 관리', '기준정보', '사용자 관리']) {
     await expect(menu.getByRole('link', { name: label, exact: true })).toHaveCount(0);
   }
-  for (const route of [
-    '/m/statements',
-    '/m/payments',
-    '/m/import',
-    '/m/master',
-    '/m/master/projects',
-    '/m/users',
-  ]) {
+  for (const route of ['/m/statements', '/m/payments', '/m/master', '/m/master/projects', '/m/users']) {
     await page.goto(route);
     await expect(page).toHaveURL('/m');
   }

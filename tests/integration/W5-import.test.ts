@@ -209,16 +209,15 @@ it('미리보기 이후 현장 권한 회수·비활성화는 확정/재요청 �
     (await database().db.select().from(importJobs).where(eq(importJobs.id, uploaded.id)))[0].status,
   ).toBe('COMMITTED');
 });
-it('잘못된 파일·수식·중복 매핑·금액 범위는 거부하고 확정 직전 기준정보를 다시 검증한다', async () => {
+it('잘못된 파일·중복 매핑·금액 범위는 거부하고 수식 결과는 사용하며 확정 직전 기준정보를 다시 검증한다', async () => {
   const s = await setupScenario(database().db);
   await expect(uploadImport(s.adminCtx, 'bad.xlsx', Buffer.from('broken'))).rejects.toMatchObject({
     code: 'VALIDATION_FAILED',
   });
   const book = new ExcelJS.Workbook();
   book.addWorksheet('수식').getCell('A1').value = { formula: '1+1', result: 2 };
-  await expect(
-    uploadImport(s.adminCtx, 'formula.xlsx', Buffer.from(await book.xlsx.writeBuffer())),
-  ).rejects.toMatchObject({ code: 'VALIDATION_FAILED' });
+  const formula = await uploadImport(s.adminCtx, 'formula.xlsx', Buffer.from(await book.xlsx.writeBuffer()));
+  expect(formula.sheets[0].rows[0][0]).toBe('2');
   const job = await preview(s, await file([row(s, { 10: '999999999', 11: '2147483647' })]));
   expect(job.summary?.errors).toBe(1);
   await expect(

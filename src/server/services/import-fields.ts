@@ -24,12 +24,23 @@ export const mappingSchema = z.partialRecord(
   z.number().int().min(0).max(99),
 );
 export const previewSchema = z
-  .object({ sheet: z.number().int().min(0), header_row: z.number().int().min(1), mapping: mappingSchema })
+  .object({
+    sheet: z.number().int().min(0),
+    header_row: z.number().int().min(1),
+    mapping: mappingSchema,
+    excluded_rows: z.array(z.number().int().min(1).max(2000)).max(2000).default([]),
+  })
   .strict();
 export const presetSchema = z
   .object({ name: z.string().trim().min(1).max(100), mapping: mappingSchema })
   .strict();
-export type SheetData = { name: string; rows: string[][]; header_row: number; mapping: ImportMapping };
+export type SheetData = {
+  name: string;
+  rows: string[][];
+  header_row: number;
+  mapping: ImportMapping;
+  cell_errors?: Record<number, Record<number, string>>;
+};
 export type ImportRow = {
   row: number;
   values: string[];
