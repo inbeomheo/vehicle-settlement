@@ -148,3 +148,9 @@ commit은 generic 응답 캐시를 사용하지 않는다. job 행 잠금 + 가�
 - `GET /api/ledger` 및 대장 Excel의 합계는 CANCELED 사용을 제외한다. 취소 행과 당시 금액은 조회에 남으며 `operation_status`로 취소 뱃지를 표시한다.
 - `GET /api/audit`: `include_sessions="true"|"false"`(기본 false)로 로그인·로그아웃 세션 이력을 포함한다. 기존 역할/현장 접근 범위는 유지한다. 설정 이력의 `entity_label`은 `요청자(서울 현장)`처럼 항목·현장을 제공한다. 신규 설정 감사에는 당시 `project_name`을 보존하며 기존 감사는 현장 기준정보로 보완한다. 조회 응답의 `before/after.approved_revision_id`는 해당 제출본 차수(`제출본 #3`)로 해석한다. 저장된 감사 원문은 변경하지 않는다.
 - 담당자 `/m/uses/new?project=`와 `/m/master/form-fields?project=`는 UUID 형식·현장 존재·접근 범위를 검증하고 잘못된 값을 제거한 URL로 이동한다. 대리 입력은 활성 현장만 허용하고, 설정 화면은 사용 중지 현장도 관리 가능하다. 폼 설정의 현장 선택은 URL에 반영되어 새로고침·뒤로가기 때 복원된다. 직접 API의 잘못된 현장값은 기존대로 `422 VALIDATION_FAILED`와 `details[].path=["project_id"]`를 반환한다.
+
+## F8A — 가져오기 미리보기 삭제 대상
+
+`DELETE /api/import`는 선택적인 JSON 본문 `{ ids: string[] }`를 받는다. `ids`는 UUID 1~100개이며 빈 배열·잘못된 ID·100개 초과는 422다. 전달한 ID 중 요청자 소유이고, 여전히 PREVIEW이며, 마지막 수정 후 7일이 지난 작업만 잠금 후 삭제한다. `{ data: { deleted } }`는 실제 삭제 건수다. 본문/ids 생략 시 기존 전체 오래된 미리보기 정리 동작은 유지한다.
+
+담당자 화면은 최근 100건 중 확인창에 표시한 파일 ID만 보낸다. 목록 밖 자료나 확인 후 새로 오래된 상태가 된 자료는 이 요청으로 삭제하지 않는다. 확인 이후 다시 검증하거나 완료된 자료도 서버 조건에 따라 보존한다.

@@ -1,6 +1,9 @@
 'use client';
+import { useBusy } from '@/components/ui/use-busy';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { Modal } from '@/components/ui/modal';
+import { networkErrorMessage } from '@/components/ui/request';
 import type { getUse } from '@/server/services/uses';
 import type { LedgerResult } from '@/server/services/ledger';
 import { sumMoney } from '@/server/domain/money';
@@ -40,7 +43,7 @@ export function UseDetail({ id, canSettle = false }: { id: string; canSettle?: b
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [conflict, setConflict] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const { busy, begin, end } = useBusy();
   const [preview, setPreview] = useState<{ id: string; mime: string; name: string } | null>(null);
   const use = detail.data;
   useEffect(() => {
@@ -124,7 +127,7 @@ export function UseDetail({ id, canSettle = false }: { id: string; canSettle?: b
     };
   };
   const run = async (action: () => Promise<unknown>, message: string) => {
-    setBusy(true);
+    if (!begin()) return false;
     setError('');
     setSuccess('');
     try {
@@ -136,7 +139,7 @@ export function UseDetail({ id, canSettle = false }: { id: string; canSettle?: b
       setError(reason instanceof Error ? reason.message : '처리하지 못했습니다.');
       if (reason instanceof ApiError && reason.status === 409) setConflict(true);
     } finally {
-      setBusy(false);
+      end();
     }
   };
   const updateDecision = (lineId: string, patch: Partial<Decision>) =>
@@ -156,12 +159,23 @@ export function UseDetail({ id, canSettle = false }: { id: string; canSettle?: b
       <div className="mb-5 flex flex-wrap items-center gap-3">
         <Badge value={use.review_status} />
         <Badge value={use.operation_status} />
-        <span className="text-xs text-slate-500">
+        <span className="text-xs text-slate-600">
           제출 {use.current_revision_no}차 · 버전 {use.version}
         </span>
         {locked && <span className="text-sm font-semibold text-amber-800">확정 명세에 연결되어 잠김</span>}
       </div>
-      <Notice error={error || detail.error || metadata.error} success={success} />
+      <Notice
+        error={error || detail.error || metadata.error}
+        success={success}
+        onRetry={
+          detail.error || metadata.error
+            ? () => {
+                detail.refresh();
+                metadata.refresh();
+              }
+            : undefined
+        }
+      />
       {conflict && (
         <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-4">
           <p className="mb-3 text-sm">
@@ -180,7 +194,7 @@ export function UseDetail({ id, canSettle = false }: { id: string; canSettle?: b
           </button>
         </div>
       )}
-      <div role="tablist" aria-label="사용 상세 탭" className="mb-5 flex flex-wrap gap-2">
+      <div role="group" aria-label="사용 상세 탭" className="mb-5 flex flex-wrap gap-2">
         {[
           ['detail', '사용 정보·검수'],
           ['history', '제출·검수 이력'],
@@ -188,8 +202,8 @@ export function UseDetail({ id, canSettle = false }: { id: string; canSettle?: b
         ].map(([value, title]) => (
           <button
             key={value}
-            role="tab"
-            aria-selected={tab === value}
+            type="button"
+            aria-pressed={tab === value}
             className={tab === value ? buttonClass : secondaryClass}
             onClick={() => setTab(value)}
           >
@@ -262,12 +276,12 @@ export function UseDetail({ id, canSettle = false }: { id: string; canSettle?: b
                 ['비고', use.notes ?? '—'],
               ].map(([title, value]) => (
                 <div key={title}>
-                  <dt className="text-xs text-slate-500">{title}</dt>
+                  <dt className="text-xs text-slate-600">{title}</dt>
                   <dd className="mt-1 break-words font-medium">{value}</dd>
                 </div>
               ))}
             </dl>
-            <p className="mt-4 text-xs text-slate-500">
+            <p className="mt-4 text-xs text-slate-600">
               현장·기사·차량·거래처 정보는 사용 당시 저장된 내용을 표시합니다.
             </p>
           </section>
@@ -305,7 +319,7 @@ export function UseDetail({ id, canSettle = false }: { id: string; canSettle?: b
                     </p>
                   )}
                   {(trip.depart_at || trip.arrive_at) && (
-                    <p className="mt-1 text-xs text-slate-500">
+                    <p className="mt-1 text-xs text-slate-600">
                       {[
                         trip.depart_at ? `출발 ${dateTime(trip.depart_at)}` : null,
                         trip.arrive_at ? `도착 ${dateTime(trip.arrive_at)}` : null,
@@ -329,7 +343,7 @@ export function UseDetail({ id, canSettle = false }: { id: string; canSettle?: b
                 {use.evidence.map((file) => (
                   <article className="min-w-0 rounded-lg border border-slate-200 p-3" key={file.id}>
                     <strong className="text-sm">{label(file.kind)}</strong>
-                    <p className="mt-1 break-all text-xs text-slate-500">
+                    <p className="mt-1 break-all text-xs text-slate-600">
                       {file.original_name ?? file.text_value}
                     </p>
                     <Badge value={file.upload_status} />
@@ -377,7 +391,7 @@ export function UseDetail({ id, canSettle = false }: { id: string; canSettle?: b
           </div>
           <section className={panelClass}>
             <h2 className="text-lg font-bold">비용 검수</h2>
-            <p className="mt-1 text-xs text-slate-500">
+            <p className="mt-1 text-xs text-slate-600">
               승인 공급가는 부가세를 제외한 금액입니다. 기존 승인액은 유지하며, 처음 승인할 때 비워두면 계약
               조건으로 계산합니다. 공급가를 변경하면 부가세 10%를 다시 계산합니다. 보류·반려 선택은 전체 승인
               시 유지됩니다.
@@ -415,7 +429,7 @@ export function UseDetail({ id, canSettle = false }: { id: string; canSettle?: b
                     >
                       <td data-label="비용 종류" className="min-w-32 px-3 py-4">
                         <strong>{chargeTypeLabel(line.charge_type)}</strong>
-                        <p className="text-xs text-slate-500">
+                        <p className="text-xs text-slate-600">
                           {label(line.direction)} · {label(line.tax_mode)}
                         </p>
                         {line.reason && <p className="mt-1 text-xs">{line.reason}</p>}
@@ -455,7 +469,7 @@ export function UseDetail({ id, canSettle = false }: { id: string; canSettle?: b
                           money(line.approved_amount)
                         )}
                         {line.tax_mode === 'VAT_INCLUDED' && (
-                          <p className="mt-1 whitespace-nowrap text-xs text-slate-500">
+                          <p className="mt-1 whitespace-nowrap text-xs text-slate-600">
                             {line.approved_amount !== null && line.tax_amount !== null
                               ? `현재 합계 ${money(sumMoney([line.approved_amount, line.tax_amount]))}`
                               : `계산 합계 ${money(line.computed_amount ?? line.requested_amount)}`}
@@ -673,7 +687,7 @@ export function UseDetail({ id, canSettle = false }: { id: string; canSettle?: b
                 · {label(statement.direction)} · {statement.period_start} ~ {statement.period_end}
               </p>
             ))}
-            {!locked && <p className="text-sm text-slate-500">잠긴 정산명세가 없습니다.</p>}
+            {!locked && <p className="text-sm text-slate-600">잠긴 정산명세가 없습니다.</p>}
           </section>
         </div>
       )}
@@ -689,8 +703,11 @@ function EvidencePreview({
   onClose: () => void;
 }) {
   const [url, setUrl] = useState('');
+  const [attempt, setAttempt] = useState(0);
   const [error, setError] = useState('');
   useEffect(() => {
+    setError('');
+    setUrl('');
     let objectUrl = '';
     let canceled = false;
     fetch(`/api/evidence/${file.id}/file`, { cache: 'no-store' })
@@ -704,23 +721,15 @@ function EvidencePreview({
         setUrl(objectUrl);
       })
       .catch((reason: Error) => {
-        if (!canceled) setError(reason.message);
+        if (!canceled) setError(reason instanceof TypeError ? networkErrorMessage : reason.message);
       });
     return () => {
       canceled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [file.id]);
+  }, [file.id, attempt]);
   return (
-    <div
-      className="fixed inset-0 z-50 overflow-auto bg-slate-950/70 p-3 sm:p-8"
-      role="dialog"
-      aria-modal="true"
-      aria-label="증빙 원본"
-      onKeyDown={(e) => {
-        if (e.key === 'Escape') onClose();
-      }}
-    >
+    <Modal title={`증빙 원본 · ${file.name}`} onClose={onClose}>
       <div className="mx-auto max-w-5xl rounded-xl bg-white p-4">
         <div className="mb-4 flex items-center justify-between gap-3">
           <h2 className="break-all font-bold">{file.name}</h2>
@@ -728,7 +737,7 @@ function EvidencePreview({
             닫기
           </button>
         </div>
-        <Notice error={error} />
+        <Notice error={error} onRetry={() => setAttempt((value) => value + 1)} />
         {url ? (
           file.mime.startsWith('image/') ? (
             /* eslint-disable-next-line @next/next/no-img-element */
@@ -740,6 +749,6 @@ function EvidencePreview({
           !error && <Empty loading />
         )}
       </div>
-    </div>
+    </Modal>
   );
 }

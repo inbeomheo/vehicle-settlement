@@ -99,14 +99,51 @@ test('담당자 로그인 → 검수함 → 추가비 한 줄 보류 → 나머�
   await expect(page.getByRole('img', { name: '사진 썸네일' })).toBeVisible();
   await page.getByRole('button', { name: '원본 보기', exact: true }).click();
   await expect(page.getByRole('dialog').getByRole('img', { name: '현장사진.png' })).toBeVisible();
-  await page.getByRole('button', { name: '닫기', exact: true }).click();
+  const preview = page.getByRole('dialog');
+  await expect(preview).toHaveJSProperty('tagName', 'DIALOG');
+  await expect(preview).toHaveJSProperty('open', true);
+  const close = preview.getByRole('button', { name: '닫기', exact: true });
+  await expect(close).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await expect(close).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(close).toBeFocused();
+  await page
+    .getByRole('link', { name: '검수함', exact: true })
+    .first()
+    .evaluate((element: HTMLElement) => element.focus());
+  await expect(close).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(preview).not.toBeVisible();
+  await expect(page.getByRole('button', { name: '원본 보기', exact: true })).toBeFocused();
+  await page.getByRole('button', { name: '원본 보기', exact: true }).click();
+  await close.click();
+  await expect(page.getByRole('button', { name: '원본 보기', exact: true })).toBeFocused();
   await page.screenshot({ path: testInfo.outputPath('review-desktop.png'), fullPage: true });
   const toll = page.getByTestId('charge-TOLL');
   await toll.getByLabel('통행료 검수 결정').selectOption('HELD');
   await toll.getByLabel('통행료 검수 사유').fill('영수증 추가 확인');
   await toll.getByRole('button', { name: '적용', exact: true }).click();
   await expect(toll.locator('span').filter({ hasText: /^보류$/ })).toBeVisible();
-  await page.getByRole('button', { name: '전체 승인 (보류·반려 제외)', exact: true }).click();
+  let approvalRequests = 0;
+  let releaseApproval!: () => void;
+  const pendingApproval = new Promise<void>((resolve) => {
+    releaseApproval = resolve;
+  });
+  await page.route(`**/api/uses/${uses[0].id}/approve`, async (route) => {
+    approvalRequests++;
+    await pendingApproval;
+    await route.continue();
+  });
+  const approve = page.getByRole('button', { name: '전체 승인 (보류·반려 제외)', exact: true });
+  await approve.evaluate((element: HTMLButtonElement) => {
+    element.click();
+    element.click();
+  });
+  await expect(approve).toBeDisabled();
+  await expect(page.getByRole('button', { name: '보완 요청 보내기' })).toBeDisabled();
+  await expect.poll(() => approvalRequests).toBe(1);
+  releaseApproval();
   await expect(page.getByRole('status').filter({ hasText: '검수가 완료되었습니다' })).toBeVisible();
   await expect(
     page
@@ -121,7 +158,7 @@ test('담당자 로그인 → 검수함 → 추가비 한 줄 보류 → 나머�
   expect(
     data.charge_lines.find((line: { charge_type: string }) => line.charge_type === 'TOLL').line_review_status,
   ).toBe('HELD');
-  await page.getByRole('tab', { name: '제출·검수 이력' }).click();
+  await page.getByRole('button', { name: '제출·검수 이력' }).click();
   await expect(page.getByRole('heading', { name: '제출 1차' })).toBeVisible();
 });
 test('보완 항목·메시지 생성과 360px 화면의 사용대장', async ({ page }, testInfo) => {
@@ -139,7 +176,7 @@ test('보완 항목·메시지 생성과 360px 화면의 사용대장', async ({
   await expect(page.getByText('제출 2차 · 버전 3')).toBeVisible();
   await page.getByRole('button', { name: '보완 요청 보내기' }).click();
   await expect(page.getByRole('status').filter({ hasText: '보완 요청을 전달했습니다' })).toBeVisible();
-  await page.getByRole('tab', { name: '제출·검수 이력' }).click();
+  await page.getByRole('button', { name: '제출·검수 이력' }).click();
   await expect(page.getByText('1회 도착(하차지): 하차 장소를 정확하게 입력해 주세요.')).toBeVisible();
   await page.setViewportSize({ width: 360, height: 800 });
   await page.getByRole('button', { name: '메뉴', exact: true }).click();

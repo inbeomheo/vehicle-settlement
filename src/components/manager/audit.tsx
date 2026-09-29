@@ -346,7 +346,7 @@ function ChangeTable({ changes, entityType }: { changes: Change[]; entityType?: 
           <tr key={change.key} className="border-b border-slate-100">
             <th className="py-3 pr-3 align-top font-medium break-words">{change.title}</th>
             <td className="py-3 break-words">
-              <span className="text-slate-500">{auditValue(change.before, change.key, entityType)}</span>
+              <span className="text-slate-600">{auditValue(change.before, change.key, entityType)}</span>
               <span className="mx-2" aria-label="에서">
                 →
               </span>
@@ -368,7 +368,7 @@ export function AuditChanges({
   entityType?: string;
 }) {
   const changes = auditChanges(before, after);
-  if (!changes.length) return <p className="mt-3 text-sm text-slate-500">변경된 세부 항목이 없습니다.</p>;
+  if (!changes.length) return <p className="mt-3 text-sm text-slate-600">변경된 세부 항목이 없습니다.</p>;
   return (
     <div className="mt-3">
       <ChangeTable changes={changes.slice(0, 6)} entityType={entityType} />
@@ -387,7 +387,7 @@ export function AuditPanel({ useId }: { useId?: string }) {
   const [query, setQuery] = useState<Search>({ page: '1', ...(useId ? { use_id: useId } : {}) });
   const [draft, setDraft] = useState<Search>({});
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const { data, error, loading } = useRemote<Result>(`/api/audit?${queryString(query)}`);
+  const { data, error, loading, refresh } = useRemote<Result>(`/api/audit?${queryString(query)}`);
   const change = (key: string, value: string) => setDraft((previous) => ({ ...previous, [key]: value }));
   return (
     <>
@@ -523,14 +523,14 @@ export function AuditPanel({ useId }: { useId?: string }) {
           </div>
         </details>
       </form>
-      <Notice error={error} />
+      <Notice error={error} onRetry={refresh} />
       <div className="grid gap-3">
         {!loading &&
           data?.rows.map((row) => (
             <article className={panelClass} key={row.id}>
               <div>
                 <span className="font-semibold">{auditLabel(row.action)}</span>
-                <span className="ml-3 text-sm text-slate-500">
+                <span className="ml-3 text-sm text-slate-600">
                   {dateTime(row.at)} · {row.user_name ?? '시스템'} · {auditLabel(row.entity_type)}
                 </span>
               </div>
@@ -538,7 +538,7 @@ export function AuditPanel({ useId }: { useId?: string }) {
               {row.entity_no && <p className="mt-2 text-sm font-semibold">{row.entity_no}</p>}
               {row.reason && <p className="mt-2 text-sm">사유: {row.reason}</p>}
               <AuditChanges before={row.before} after={row.after} entityType={row.entity_type} />
-              <details className="mt-3 text-xs text-slate-500">
+              <details className="mt-3 text-xs text-slate-600">
                 <summary className="min-h-11 cursor-pointer py-3">식별번호 보기</summary>
                 <p className="break-all">
                   대상 {row.entity_id ?? '없음'} · 사용자 {row.user_id ?? '없음'}
@@ -547,7 +547,7 @@ export function AuditPanel({ useId }: { useId?: string }) {
             </article>
           ))}
       </div>
-      {(loading || !data?.rows.length) && <Empty loading={loading}>변경 이력이 없습니다.</Empty>}
+      {(loading || (data && !data.rows.length)) && <Empty loading={loading}>변경 이력이 없습니다.</Empty>}
       {data && (
         <Pager
           page={data.page}

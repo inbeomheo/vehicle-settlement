@@ -156,7 +156,7 @@ test('4·8. 취소 대장 뱃지·핵심 7개 필드·더 보기', async ({ page
 test('11. 보완요청 대상에 사용일·차량·출발/도착과 운반 내용을 표시한다', async ({ page }) => {
   await login(page, true);
   await page.goto(`/m/uses/${fixture.review}`);
-  await page.getByRole('tab', { name: '사용 정보·검수' }).click();
+  await page.getByRole('button', { name: '사용 정보·검수' }).click();
   const target = page.getByRole('combobox', { name: '보완 항목 1' });
   await expect(target.locator('option[value="use_date"]')).toHaveText('사용일');
   await expect(target.locator('option[value="vehicle_id"]')).toHaveText('차량');

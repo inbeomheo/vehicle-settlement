@@ -53,7 +53,7 @@ function PaymentsContent({ requestedState }: { requestedState: string | null }) 
           </select>
         </label>
       </div>
-      <ErrorMessage error={result.error} />
+      <ErrorMessage error={result.error} onRetry={result.reload} />
       {result.loading && <p role="status">{word} 내역을 불러오는 중…</p>}
       {result.data && (
         <>
@@ -64,7 +64,7 @@ function PaymentsContent({ requestedState }: { requestedState: string | null }) 
               {money(result.data.totals.filteredSum)}
             </p>
             {!result.data.groups.length && (
-              <p className="text-sm text-slate-500">해당 조건의 {summaryLabel}이 없습니다.</p>
+              <p className="text-sm text-slate-600">해당 조건의 {summaryLabel}이 없습니다.</p>
             )}
             {result.data.groups.map((g) => (
               <div
@@ -86,7 +86,7 @@ function PaymentsContent({ requestedState }: { requestedState: string | null }) 
             ))}
           </section>
           {!result.data.rows.length && (
-            <p className="py-5 text-center text-slate-500">해당 조건의 {summaryLabel}이 없습니다.</p>
+            <p className="py-5 text-center text-slate-600">해당 조건의 {summaryLabel}이 없습니다.</p>
           )}
           {result.data.rows.map((statement) => (
             <section key={statement.id} className={`${panelClass} space-y-5`}>

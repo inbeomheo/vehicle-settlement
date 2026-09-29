@@ -1,5 +1,6 @@
 'use client';
 import { cloneElement, useCallback, useEffect, useId, useState, type ReactElement } from 'react';
+import { requestJson } from '@/components/ui/request';
 import type { getStatement, listStatements, statementCandidates } from '@/server/services/statements';
 export type StatementDetail = Awaited<ReturnType<typeof getStatement>>;
 export type StatementList = Awaited<ReturnType<typeof listStatements>>;
@@ -46,7 +47,7 @@ export async function api<T>(url: string, body?: unknown, method = 'POST'): Prom
   const signature = `${method}:${url}:${JSON.stringify(body)}`;
   const key = retryKeys.get(signature) ?? crypto.randomUUID();
   if (body !== undefined) retryKeys.set(signature, key);
-  const response = await fetch(
+  const { response, body: result } = await requestJson(
     url,
     body === undefined
       ? { cache: 'no-store' }
@@ -56,7 +57,6 @@ export async function api<T>(url: string, body?: unknown, method = 'POST'): Prom
           body: JSON.stringify(body),
         },
   );
-  const result = await response.json();
   retryKeys.delete(signature);
   if (!response.ok) {
     const details = Array.isArray(result.error?.details)
@@ -100,13 +100,18 @@ export function useResource<T>(url: string) {
   }, [url, revision]);
   return { data, error, loading, reload };
 }
-export function ErrorMessage({ error }: { error: string }) {
+export function ErrorMessage({ error, onRetry }: { error: string; onRetry?: () => void }) {
   return error ? (
     <p
       role="alert"
       className="whitespace-pre-line rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800"
     >
       {error}
+      {onRetry && (
+        <button type="button" className={`${secondaryClass} ml-3`} onClick={onRetry}>
+          다시 시도
+        </button>
+      )}
     </p>
   ) : null;
 }
@@ -167,13 +172,12 @@ export function DirectionTabs({
   onChange: (v: 'PAYABLE' | 'RECEIVABLE') => void;
 }) {
   return (
-    <div role="tablist" aria-label="명세 방향" className="inline-flex rounded-xl bg-slate-200 p-1">
+    <div role="group" aria-label="명세 방향" className="inline-flex rounded-xl bg-slate-200 p-1">
       {(['PAYABLE', 'RECEIVABLE'] as const).map((direction) => (
         <button
           key={direction}
           type="button"
-          role="tab"
-          aria-selected={value === direction}
+          aria-pressed={value === direction}
           className={`min-h-11 rounded-lg px-5 font-semibold ${value === direction ? 'bg-white text-blue-800 shadow-sm' : 'text-slate-600'}`}
           onClick={() => onChange(direction)}
         >

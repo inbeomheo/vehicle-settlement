@@ -1,5 +1,7 @@
 'use client';
+import { useBusy } from '@/components/ui/use-busy';
 import Link from 'next/link';
+import { ConfirmDialog } from '@/components/ui/modal';
 import { chargeTypeLabel } from '@/components/manager/charge-display';
 import { useParams, useRouter } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
@@ -29,14 +31,14 @@ export default function StatementPage() {
   const router = useRouter();
   const result = useResource<StatementDetail>(`/api/statements/${id}`);
   const [error, setError] = useState('');
-  const [busy, setBusy] = useState(false);
+  const { busy, begin, end } = useBusy();
   const [canceling, setCanceling] = useState(false);
   const [confirmingToken, setConfirmingToken] = useState<string | null>(null);
   const [replacing, setReplacing] = useState(false);
   const [notice, setNotice] = useState('');
   const statement = result.data;
   async function action(path: string, data: unknown, method = 'POST') {
-    setBusy(true);
+    if (!begin()) return false;
     setError('');
     setNotice('');
     try {
@@ -51,7 +53,7 @@ export default function StatementPage() {
       }
       return false;
     } finally {
-      setBusy(false);
+      end();
     }
   }
   async function cancel(event: FormEvent<HTMLFormElement>) {
@@ -85,7 +87,7 @@ export default function StatementPage() {
         <Link href="/m/statements" className="inline-flex min-h-11 items-center text-blue-700 underline">
           월 정산
         </Link>
-        <ErrorMessage error={result.error} />
+        <ErrorMessage error={result.error} onRetry={result.reload} />
         {result.loading && <p role="status">명세를 불러오는 중…</p>}
       </div>
     );
@@ -101,7 +103,7 @@ export default function StatementPage() {
       </Link>
       <header className="flex flex-wrap justify-between gap-4">
         <div>
-          <p className="mb-1 text-sm text-slate-500">
+          <p className="mb-1 text-sm text-slate-600">
             <StatementBadge status={statement.status} /> ·{' '}
             {statement.direction === 'PAYABLE' ? '운송사 지급명세' : '원청 청구명세'}
           </p>
@@ -120,7 +122,10 @@ export default function StatementPage() {
           </a>
         </div>
       </header>
-      <ErrorMessage error={error || result.error} />
+      <ErrorMessage
+        error={confirmingToken ? result.error : error || result.error}
+        onRetry={result.error ? result.reload : undefined}
+      />
       {notice && (
         <p role="status" className="rounded-lg bg-emerald-50 p-4 text-emerald-900">
           {notice}
@@ -134,7 +139,7 @@ export default function StatementPage() {
         {!included.length && <p>포함 항목이 없습니다.</p>}
         <h3 className="pt-3 font-semibold">보류 내역 · {held.length}건</h3>
         {!held.length ? (
-          <p className="text-sm text-slate-500">보류 항목이 없습니다.</p>
+          <p className="text-sm text-slate-600">보류 항목이 없습니다.</p>
         ) : (
           <ul className="space-y-2">
             {held.map((item) => (
@@ -158,43 +163,42 @@ export default function StatementPage() {
             <p className="mb-3 text-sm">
               저장된 포함 항목과 합계로 확정합니다. 확정 후 수정은 취소·재작성 또는 조정으로 처리합니다.
             </p>
-            {confirmingToken !== null && confirmingToken === statement.confirmation_token ? (
-              <div role="group" aria-label="명세 확정 확인" className="space-y-3">
+            <button
+              className={buttonClass}
+              disabled={busy}
+              onClick={() => {
+                setError('');
+                setConfirmingToken(statement.confirmation_token);
+              }}
+            >
+              명세 확정
+            </button>
+            {confirmingToken !== null && confirmingToken === statement.confirmation_token && (
+              <ConfirmDialog
+                title="명세 확정 확인"
+                confirmLabel="확정"
+                busy={busy}
+                error={error}
+                onClose={() => setConfirmingToken(null)}
+                onConfirm={() =>
+                  void action(`/api/statements/${id}/confirm`, {
+                    version: statement.version,
+                    confirmation_token: confirmingToken,
+                  }).then((ok) => {
+                    if (ok) {
+                      setConfirmingToken(null);
+                      setNotice('명세를 확정했습니다.');
+                    }
+                  })
+                }
+              >
                 <p className="font-bold">
                   포함 {included.length}건 · 총액 {money(statement.grand_total)}
                 </p>
-                <p className="text-sm">이 내용으로 명세를 확정하시겠습니까?</p>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    className={buttonClass}
-                    disabled={busy}
-                    onClick={async () => {
-                      if (
-                        await action(`/api/statements/${id}/confirm`, {
-                          version: statement.version,
-                          confirmation_token: confirmingToken,
-                        })
-                      ) {
-                        setConfirmingToken(null);
-                        setNotice('명세를 확정했습니다.');
-                      }
-                    }}
-                  >
-                    {busy ? '처리 중…' : '확정'}
-                  </button>
-                  <button className={secondaryClass} disabled={busy} onClick={() => setConfirmingToken(null)}>
-                    돌아가기
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <button
-                className={buttonClass}
-                disabled={busy}
-                onClick={() => setConfirmingToken(statement.confirmation_token)}
-              >
-                명세 확정
-              </button>
+                <p>
+                  이 내용으로 명세를 확정하시겠습니까? 확정 후 수정은 취소·재작성 또는 조정으로 처리합니다.
+                </p>
+              </ConfirmDialog>
             )}
           </div>
         </section>
@@ -240,13 +244,13 @@ export default function StatementPage() {
           <>
             <button
               className={secondaryClass}
-              disabled={statement.payment_status === 'PAID'}
+              disabled={busy || statement.payment_status === 'PAID'}
               onClick={() => setCanceling(!canceling)}
             >
               명세 취소
             </button>
             {statement.payment_status === 'PAID' && (
-              <p className="text-sm text-slate-500">
+              <p className="text-sm text-slate-600">
                 유효 지급·입금 기록을 먼저 취소해야 명세를 취소할 수 있습니다.
               </p>
             )}

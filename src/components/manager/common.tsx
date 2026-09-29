@@ -1,6 +1,7 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { requestJson } from '@/components/ui/request';
 export const inputClass =
   'w-full min-h-11 min-w-0 rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-base disabled:bg-slate-100';
 export const buttonClass =
@@ -139,12 +140,14 @@ export class ApiError extends Error {
   }
 }
 export async function api<T>(url: string, options: RequestInit = {}): Promise<T> {
-  const response = await fetch(url, {
+  const { response, body } = await requestJson(url, {
     cache: 'no-store',
     ...options,
-    headers: { ...(options.body ? { 'content-type': 'application/json' } : {}), ...options.headers },
+    headers: {
+      ...(options.body && !(options.body instanceof FormData) ? { 'content-type': 'application/json' } : {}),
+      ...options.headers,
+    },
   });
-  const body = await response.json();
   if (!response.ok) {
     const details = Array.isArray(body.error?.details)
       ? body.error.details
@@ -179,9 +182,12 @@ export function useRemote<T>(url: string | null) {
     }
     const controller = new AbortController();
     setLoading(true);
+    setData(undefined);
     setError('');
     api<T>(url, { signal: controller.signal })
-      .then(setData)
+      .then((value) => {
+        if (!controller.signal.aborted) setData(value);
+      })
       .catch((reason: Error) => {
         if (!controller.signal.aborted) {
           setError(reason.message);
@@ -195,7 +201,15 @@ export function useRemote<T>(url: string | null) {
   }, [url, revision]);
   return { data, error, loading, refresh };
 }
-export function Notice({ error, success }: { error?: string; success?: string }) {
+export function Notice({
+  error,
+  success,
+  onRetry,
+}: {
+  error?: string;
+  success?: string;
+  onRetry?: () => void;
+}) {
   return (
     <>
       {error && (
@@ -204,6 +218,11 @@ export function Notice({ error, success }: { error?: string; success?: string })
           className="my-4 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800"
         >
           {error}
+          {onRetry && (
+            <button type="button" className={`${secondaryClass} ml-3`} onClick={onRetry}>
+              다시 시도
+            </button>
+          )}
         </div>
       )}
       {success && (
@@ -226,8 +245,8 @@ export function Heading({
   return (
     <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
       <div>
-        <p className="mb-1 text-xs font-semibold tracking-widest text-slate-500">차량 운영</p>
-        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{title}</h1>
+        <p className="mb-1 text-xs font-semibold tracking-widest text-slate-600">차량 운영</p>
+        <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">{title}</h1>
         {description && <p className="mt-2 text-sm text-slate-600">{description}</p>}
       </div>
       {children}
@@ -250,7 +269,7 @@ export function Empty({
   children?: React.ReactNode;
 }) {
   return (
-    <p role="status" className="p-8 text-center text-sm text-slate-500">
+    <p role="status" className="p-8 text-center text-sm text-slate-600">
       {loading ? '불러오는 중…' : children}
     </p>
   );
