@@ -21,10 +21,11 @@ type DemoUse = {
   group?: 'paid' | 'unpaid';
   customer?: boolean;
   held?: boolean;
+  notes?: string;
 };
 const samples: DemoUse[] = [
   { date: '2026-09-01', driver: 0, status: 'APPROVED', cargo: '거푸집·안전 펜스', count: 5, group: 'paid' },
-  { date: '2026-09-02', driver: 1, status: 'SUBMITTED', cargo: '쇄석 15톤', count: 3, quantity: '3' },
+  { date: '2026-09-02', driver: 1, status: 'SUBMITTED', cargo: '쇄석(회당 5톤)', count: 3, quantity: '3' },
   { date: '2026-09-03', driver: 0, status: 'APPROVED', cargo: '전기 배관 자재', count: 2, group: 'paid' },
   {
     date: '2026-09-04',
@@ -37,7 +38,15 @@ const samples: DemoUse[] = [
   },
   { date: '2026-09-07', driver: 0, status: 'NEEDS_FIX', cargo: '단열재·방수 시트', count: 2 },
   { date: '2026-09-08', driver: 1, status: 'APPROVED', cargo: '배수로 흄관', count: 4, quantity: '4' },
-  { date: '2026-09-09', driver: 0, status: 'APPROVED', cargo: '도장 자재·작업 발판', count: 3, held: true },
+  {
+    date: '2026-09-09',
+    driver: 0,
+    status: 'APPROVED',
+    cargo: '도장 자재·작업 발판',
+    count: 3,
+    held: true,
+    notes: '하차 장비 고장으로 대기',
+  },
   {
     date: '2026-09-10',
     driver: 1,
@@ -61,7 +70,14 @@ const samples: DemoUse[] = [
   { date: '2026-09-21', driver: 0, status: 'APPROVED', cargo: '소방 배관·밸브', count: 2 },
   { date: '2026-09-23', driver: 1, status: 'DRAFT', cargo: '골재 추가 반입', count: 2, quantity: '2' },
   { date: '2026-09-25', driver: 0, status: 'DRAFT', cargo: '준공 청소 장비', count: 1 },
-  { date: '2026-08-28', driver: 0, status: 'APPROVED', cargo: '8월분 이월 자재 운반', count: 3 },
+  {
+    date: '2026-08-28',
+    driver: 0,
+    status: 'APPROVED',
+    cargo: '8월 말 추가 반입 자재',
+    count: 3,
+    notes: '8월 마감 후 확인되어 9월 정산',
+  },
 ];
 const requestId = (index: number) => `demo-202609-use-${String(index + 1).padStart(2, '0')}`;
 
@@ -149,13 +165,13 @@ export async function seedDemo(db: Db) {
         customer_counterparty_id: sample.customer ? customer.id : undefined,
         cargo_desc: sample.cargo,
         requester: '서울 현장 자재팀',
-        notes: '2026년 9월 시연 자료',
+        notes: sample.notes,
         operation_status: sample.status === 'DRAFT' ? 'IN_PROGRESS' : 'COMPLETED',
         quantity: sample.quantity,
         trips: Array.from({ length: sample.count ?? 1 }, (_, trip) => ({
           seq: trip + 1,
           origin: sample.driver === 0 ? '김포 자재 물류센터' : '인천 북항 야적장',
-          destination: trip % 2 ? '서울 현장 동측 하차장' : '서울 현장 1문',
+          destination: trip % 2 ? '서울 현장 B동 동측 하차장' : '서울 현장 1문',
           cargo_desc: sample.cargo,
           status: 'COMPLETED',
         })),
@@ -176,7 +192,7 @@ export async function seedDemo(db: Db) {
       const file = await createEvidence(author, use.id, {
         client_upload_id: `demo-202609-photo-${index + 1}`,
         kind: 'PHOTO',
-        original_name: `시연용-현장증빙-${sample.date}.png`,
+        original_name: `인수증_${sample.date.slice(5).replace('-', '')}.png`,
         mime: 'image/png',
         size: image.length,
       });
@@ -189,7 +205,7 @@ export async function seedDemo(db: Db) {
           fix_items: [
             { target: 'trip:1.destination', message: '현장 내 하차 위치를 구체적으로 입력해 주세요.' },
           ],
-          comment: '실적 확인을 위해 하차장 보완 요청',
+          comment: '하차 위치가 1문으로만 되어 있어 확인이 어렵습니다.',
         });
       } else if (sample.status === 'APPROVED') {
         const detail = await getUse(ctx, use.id);
@@ -232,8 +248,8 @@ export async function seedDemo(db: Db) {
           amount: statement.grand_total,
           paid_on: '2026-09-25',
           method: '계좌이체',
-          reference: 'DEMO-20260925-001',
-          memo: '9월분 전액 지급 시연',
+          reference: '국민 0925-0001',
+          memo: '9월 1차 지급',
         });
       }
     }

@@ -1,0 +1,49 @@
+import { open, shot, top, login, BASE, RECEIPT } from './lib.mjs';
+import { IMG } from './lib.mjs';
+const { browser, page } = await open();
+try {
+  await page.goto(BASE + '/login');
+  await page.getByRole('button', { name: '로그인', exact: true }).waitFor();
+  await shot(page, '01-login');
+  await login(page, 'driver1', 'demo1234', { show: '02-login-filled' });
+  await page.getByRole('heading', { name: '내 운행' }).waitFor();
+  await shot(page, '03-driver-home', { wait: 1500 });
+  await page.getByRole('link', { name: '운행 등록' }).first().click();
+  await page.waitForURL(/\/d\/new/);
+  await page.getByRole('button', { name: '담당자에게 보내기', exact: true }).waitFor();
+  await shot(page, '04-new-top', { wait: 1500 });
+  await page.getByLabel('운반 내용', { exact: true }).fill('PVC 배관 자재 20묶음');
+  await top(page, page.getByRole('heading', { name: '현장·날짜' }));
+  await shot(page, '05-step1-2');
+  const recent = page.getByRole('group', { name: '1회차 최근 경로' });
+  if (await recent.count()) await recent.getByRole('button').first().click();
+  else {
+    await page.getByLabel('1회차 출발', { exact: true }).fill('서울 자재창고');
+    await page.getByLabel('1회차 도착', { exact: true }).fill('서울 현장 A동');
+  }
+  await top(page, page.getByRole('heading', { name: '출발 → 도착' }));
+  await shot(page, '06-step3-route');
+  await page.locator("input[aria-label='사진·파일 선택']").first().setInputFiles(RECEIPT);
+  await page.waitForFunction(() => [...document.querySelectorAll('img')].some((i) => i.naturalWidth > 0 && i.closest('form, section')), undefined, { timeout: 30000 });
+  await top(page, page.getByRole('heading', { name: '사진·증빙' }));
+  await shot(page, '07-step4-photo', { wait: 2500 });
+  await top(page, page.getByRole('heading', { name: '요금 확인' }));
+  await shot(page, '08-step5-fee');
+  await page.getByRole('button', { name: '담당자에게 보내기', exact: true }).click();
+  const sheet = page.getByRole('dialog', { name: '이대로 보낼까요?' });
+  await sheet.waitFor();
+  await shot(page, '09-confirm-sheet');
+  await sheet.getByRole('button', { name: '보내기', exact: true }).click();
+  await page.waitForURL(/submitted=1/, { timeout: 60000 });
+  await page.getByRole('heading', { name: '보냈습니다' }).waitFor();
+  await shot(page, '10-sent', { wait: 1200 });
+  await page.getByRole('link', { name: '내 운행으로' }).click();
+  await page.getByRole('heading', { name: '내 운행' }).waitFor();
+  await shot(page, '11-home-after-send', { wait: 1500 });
+} catch (e) {
+  await page.screenshot({ path: IMG + 'error.png' });
+  console.error('FAIL', e.message.split('\n').slice(0, 6).join('\n'));
+  process.exitCode = 1;
+} finally {
+  await browser.close();
+}

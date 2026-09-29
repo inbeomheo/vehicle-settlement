@@ -43,7 +43,7 @@ async function main() {
         .values([
           { name: '한길 운송', kind: 'CARRIER' },
           { name: '동서 운송', kind: 'CARRIER' },
-          { name: '김기사 운수', kind: 'DRIVER_BUSINESS' },
+          { name: '성호 운수', kind: 'DRIVER_BUSINESS' },
           { name: '한빛 원청', kind: 'CUSTOMER' },
         ])
         .returning();
@@ -58,8 +58,8 @@ async function main() {
       const ds = await tx
         .insert(drivers)
         .values([
-          { name: '김기사', phone: '010-0000-0001', default_vehicle_id: vs[0].id },
-          { name: '이기사', phone: '010-0000-0002', default_vehicle_id: vs[1].id },
+          { name: '김성호', phone: '010-0000-0001', default_vehicle_id: vs[0].id },
+          { name: '이정민', phone: '010-0000-0002', default_vehicle_id: vs[1].id },
         ])
         .returning();
       await tx
@@ -107,16 +107,16 @@ async function main() {
             role: 'ADMIN',
             all_projects: true,
           },
-          { login_id: 'site', password_hash: hash, name: '현장 담당자', role: 'SITE_MANAGER' },
+          { login_id: 'site', password_hash: hash, name: '박준호', role: 'SITE_MANAGER' },
           {
             login_id: 'settlement',
             password_hash: hash,
-            name: '정산 담당자',
+            name: '최은정',
             role: 'SETTLEMENT_MANAGER',
             all_projects: true,
           },
-          { login_id: 'driver1', password_hash: hash, name: '김기사', role: 'DRIVER', driver_id: ds[0].id },
-          { login_id: 'driver2', password_hash: hash, name: '이기사', role: 'DRIVER', driver_id: ds[1].id },
+          { login_id: 'driver1', password_hash: hash, name: '김성호', role: 'DRIVER', driver_id: ds[0].id },
+          { login_id: 'driver2', password_hash: hash, name: '이정민', role: 'DRIVER', driver_id: ds[1].id },
         ])
         .returning();
       await tx

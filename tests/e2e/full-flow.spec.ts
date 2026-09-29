@@ -27,7 +27,7 @@ async function inputUse(
 ) {
   await page.goto(options.manager ? '/m/uses/new' : '/d/new');
   await expect(page.getByLabel('1회차 출발', { exact: true })).toBeVisible();
-  if (options.manager) await page.getByLabel('실제 기사', { exact: true }).selectOption({ label: '김기사' });
+  if (options.manager) await page.getByLabel('실제 기사', { exact: true }).selectOption({ label: '김성호' });
   await page.getByLabel('사용일', { exact: true }).fill(options.date);
   // 기사 화면은 현장이 적으면 한 번 누르는 선택 칩, 대리 입력은 드롭다운이다.
   if (options.manager) await page.getByLabel('현장', { exact: true }).selectOption({ label: '서울 현장' });
@@ -202,7 +202,7 @@ test('360px 가져오기: 자동 매핑·프리셋·오류 다운로드·임시�
   await page.goto('/m/import');
   const tag = crypto.randomUUID();
   const buffer = Buffer.from(
-    `사용일,현장,기사,차량번호,운송사,출발지,도착지,과금단위,운행횟수,단가,비고\n2026-09-15,서울 현장,김기사,서울80가1001,한길 운송,창고,현장,일대,5,300000,${tag}\n잘못된날짜,서울 현장,김기사,서울80가1001,한길 운송,창고,현장,일대,1,300000,오류\n`,
+    `사용일,현장,기사,차량번호,운송사,출발지,도착지,과금단위,운행횟수,단가,비고\n2026-09-15,서울 현장,김성호,서울80가1001,한길 운송,창고,현장,일대,5,300000,${tag}\n잘못된날짜,서울 현장,김성호,서울80가1001,한길 운송,창고,현장,일대,1,300000,오류\n`,
   );
   const file = { name: 'W5-브라우저.csv', mimeType: 'text/csv', buffer };
   await page.getByLabel('가져올 파일').setInputFiles(file);
