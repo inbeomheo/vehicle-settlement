@@ -29,6 +29,8 @@ export async function restore(options: { directory: string; url?: string; storag
   await cp(path.join(dir, 'storage'), staged, { recursive: true });
   const { pool, client } = await connect(url);
   let moved = false;
+  let nativeStarted = false;
+  let databaseCommitted = false;
   try {
     for (const table of await tableList(client)) {
       if (table.schemaname === 'drizzle') continue;
@@ -40,6 +42,7 @@ export async function restore(options: { directory: string; url?: string; storag
     if (manifest.format === 'pg-custom') {
       const binary = await postgresBinary('pg_restore');
       if (!binary) throw new Error('이 백업에는 pg_restore가 필요합니다. PG_BIN을 지정하세요.');
+      nativeStarted = true;
       await runPostgres(
         binary,
         [
@@ -100,12 +103,30 @@ export async function restore(options: { directory: string; url?: string; storag
     await rename(staged, storage);
     moved = true;
     if (manifest.format === 'app-logical-v1') await client.query('COMMIT');
+    databaseCommitted = true;
     const result = await verifyDatabase(client, storage);
     console.log(JSON.stringify({ restore: dir, result: '통과', ...result }));
     return result;
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {});
-    if (moved && manifest.format === 'app-logical-v1') await rm(storage, { recursive: true, force: true });
+    // Native restore commits in its own process. After any later verification or
+    // file move failure, compensate to an empty app DB (target was checked empty).
+    if (nativeStarted || databaseCommitted) {
+      try {
+        await client.query('BEGIN');
+        await client.query(
+          'DROP SCHEMA IF EXISTS public CASCADE; DROP SCHEMA IF EXISTS drizzle CASCADE; CREATE SCHEMA public',
+        );
+        await client.query('COMMIT');
+      } catch (cleanupError) {
+        await client.query('ROLLBACK').catch(() => {});
+        throw new AggregateError(
+          [error, cleanupError],
+          '복구 실패 후 빈 DB 초기화에도 실패했습니다. 앱을 중지하고 DB를 점검하세요.',
+        );
+      }
+    }
+    if (moved) await rm(storage, { recursive: true, force: true });
     throw error;
   } finally {
     await rm(staged, { recursive: true, force: true });

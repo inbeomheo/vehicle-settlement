@@ -2,21 +2,28 @@ import { execFileSync } from 'node:child_process';
 import { mkdir, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { Client } from 'pg';
-import { migrate } from 'drizzle-orm/node-postgres/migrator';
+import { migrateDatabase } from '../../src/server/db/migrate';
 import { createDatabase } from '../../src/server/db/client';
 
-async function developmentCounts() {
-  const client = new Client({ connectionString: process.env.E2E_DEVELOPMENT_DATABASE_URL });
+export async function developmentCounts(url = process.env.E2E_DEVELOPMENT_DATABASE_URL) {
+  const client = new Client({ connectionString: url });
   await client.connect();
   try {
-    const tables = await client.query(
-      "SELECT to_regclass('public.vehicle_uses') AS uses, to_regclass('public.statements') AS statements",
-    );
-    if (!tables.rows[0].uses || !tables.rows[0].statements) return { uses: 0, statements: 0 };
-    const result = await client.query<{ uses: number; statements: number }>(
-      'SELECT (SELECT count(*)::int FROM vehicle_uses) AS uses, (SELECT count(*)::int FROM statements) AS statements',
-    );
-    return result.rows[0];
+    const counts: Record<string, number> = {};
+    for (const table of [
+      'vehicle_uses',
+      'statements',
+      'payment_records',
+      'evidence',
+      'audit_logs',
+      'import_jobs',
+    ]) {
+      const exists = await client.query('SELECT to_regclass($1) AS name', [`public.${table}`]);
+      counts[table] = exists.rows[0].name
+        ? (await client.query(`SELECT count(*)::int AS count FROM "${table}"`)).rows[0].count
+        : 0;
+    }
+    return counts;
   } finally {
     await client.end();
   }
@@ -38,7 +45,7 @@ export default async function setup() {
   }
   const database = createDatabase(process.env.DATABASE_URL!);
   try {
-    await migrate(database.db, { migrationsFolder: 'drizzle' });
+    await migrateDatabase(database.db);
   } finally {
     await database.pool.end();
   }
@@ -47,10 +54,10 @@ export default async function setup() {
   await rm(storage, { force: true, recursive: true });
   await mkdir(storage, { recursive: true });
   execFileSync(process.execPath, ['--import', 'tsx', 'scripts/seed.ts'], { stdio: 'inherit' });
-  console.log(`E2E 전용 DB 준비 완료. 개발 DB 전: 명세 ${before.statements}건, 사용 ${before.uses}건`);
+  console.log(`E2E 전용 DB 준비 완료. 개발 DB 전: ${JSON.stringify(before)}`);
   return async () => {
     const after = await developmentCounts();
-    console.log(`개발 DB 후: 명세 ${after.statements}건, 사용 ${after.uses}건`);
+    console.log(`개발 DB 후: ${JSON.stringify(after)}`);
     if (JSON.stringify(before) !== JSON.stringify(after)) {
       throw new Error(`E2E가 개발 DB를 변경했습니다: ${JSON.stringify({ before, after })}`);
     }

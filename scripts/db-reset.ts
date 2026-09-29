@@ -1,5 +1,5 @@
 import { createDatabase, defaultDatabaseUrl } from '../src/server/db/client';
-import { migrate } from 'drizzle-orm/node-postgres/migrator';
+import { migrateDatabase } from '../src/server/db/migrate';
 async function main() {
   const url = new URL(defaultDatabaseUrl());
   if (
@@ -13,7 +13,7 @@ async function main() {
     await pool.query(
       'DROP SCHEMA public CASCADE; DROP SCHEMA IF EXISTS drizzle CASCADE; CREATE SCHEMA public',
     );
-    await migrate(db, { migrationsFolder: 'drizzle' });
+    await migrateDatabase(db);
     console.log('로컬 DB 초기화 완료. seed를 실행하세요.');
   } finally {
     await pool.end();

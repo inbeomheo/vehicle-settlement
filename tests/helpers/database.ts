@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll } from 'vitest';
 import { Client } from 'pg';
-import { migrate } from 'drizzle-orm/node-postgres/migrator';
+import { migrateDatabase } from '../../src/server/db/migrate';
 import { createDatabase, defaultDatabaseUrl } from '../../src/server/db/client';
 export async function createTestDatabase() {
   const url = new URL(process.env.TEST_DATABASE_URL ?? defaultDatabaseUrl());
@@ -13,7 +13,7 @@ export async function createTestDatabase() {
   url.pathname = `/${name}`;
   const { db, pool } = createDatabase(url.toString());
   try {
-    await migrate(db, { migrationsFolder: 'drizzle' });
+    await migrateDatabase(db);
   } catch (e) {
     await pool.end();
     await admin.query(`DROP DATABASE "${name}" WITH (FORCE)`);
