@@ -1,0 +1,15 @@
+{
+  "id": "/d",
+  "name": "차량 사용·정산",
+  "short_name": "차량 정산",
+  "lang": "ko",
+  "start_url": "/d",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f5f7fa",
+  "theme_color": "#1e40af",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

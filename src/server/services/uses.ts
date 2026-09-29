@@ -12,6 +12,7 @@ import {
   vehicleUses,
   vehicles,
   workTypes,
+  users,
 } from '../db/schema';
 import type { Context } from '../context';
 import { todaySeoul } from '../context';
@@ -62,6 +63,10 @@ export async function rawUse(ctx: Context, id: string, lock = false) {
   return use;
 }
 export async function rawDetail(ctx: Context, use: Use) {
+  const [creator] = await ctx.db
+    .select({ name: users.name })
+    .from(users)
+    .where(eq(users.id, use.created_by_user_id));
   const tripRows = await ctx.db
     .select()
     .from(trips)
@@ -88,6 +93,7 @@ export async function rawDetail(ctx: Context, use: Use) {
   );
   return {
     ...use,
+    created_by_name: creator?.name ?? '알 수 없음',
     trips: tripRows,
     charge_lines: lines,
     evidence: files.map(({ storage_key: _key, ...file }) => {

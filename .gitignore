@@ -17,3 +17,6 @@ next-env.d.ts
 # Local workspace task metadata
 graft/
 .ignore
+
+public/w2-offline-app.js
+public/w2-offline-app.css

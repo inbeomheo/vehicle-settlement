@@ -1,7 +1,10 @@
 'use client';
-import { useState, type FormEvent } from 'react';
+import { acceptLogin } from '@/client/offline/store';
+import { useEffect, useState, type FormEvent } from 'react';
 export function AuthForm({ token }: { token?: string }) {
   const [busy, setBusy] = useState(false);
+  const [ready, setReady] = useState(false);
+  useEffect(() => setReady(true), []);
   const [error, setError] = useState('');
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -22,6 +25,7 @@ export function AuthForm({ token }: { token?: string }) {
         setError(result.error?.message ?? '요청을 처리하지 못했습니다.');
         return;
       }
+      acceptLogin(result.data.id);
       window.location.assign(result.data.role === 'DRIVER' ? '/d' : '/m');
     } catch {
       setError('연결 상태를 확인한 후 다시 시도하세요.');
@@ -37,7 +41,7 @@ export function AuthForm({ token }: { token?: string }) {
         <p className="mb-8 text-sm text-slate-600">
           {token ? '사용할 아이디와 비밀번호를 등록하세요.' : '배정된 현장의 사용 내역을 확인하세요.'}
         </p>
-        <form onSubmit={submit} className="space-y-5">
+        <form method="post" onSubmit={submit} className="space-y-5">
           <label className="block">
             아이디
             <input
@@ -66,7 +70,7 @@ export function AuthForm({ token }: { token?: string }) {
             </p>
           )}
           <button
-            disabled={busy}
+            disabled={busy || !ready}
             className="min-h-12 w-full rounded-lg bg-blue-700 font-bold text-white disabled:opacity-50"
           >
             {busy ? '처리 중…' : token ? '가입하고 시작하기' : '로그인'}
