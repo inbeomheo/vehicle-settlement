@@ -1,3 +1,4 @@
+import { RestrictedEvidenceNotice } from '@/components/evidence/restricted-notice';
 import { evidenceKinds, money, operationLabels, type UseDetail } from '@/client/types';
 import { Section } from './fields';
 
@@ -45,6 +46,7 @@ export function ReadOnlyUse({ use }: { use: UseDetail }) {
         </ul>
       </Section>
       <Section title="증빙">
+        <RestrictedEvidenceNotice count={use.restricted_evidence_count} />
         {use.evidence.length ? (
           <ul className="space-y-2">
             {use.evidence.map((file) => (
@@ -66,7 +68,7 @@ export function ReadOnlyUse({ use }: { use: UseDetail }) {
               </li>
             ))}
           </ul>
-        ) : (
+        ) : use.restricted_evidence_count ? null : (
           <p>첨부된 증빙이 없습니다.</p>
         )}
       </Section>

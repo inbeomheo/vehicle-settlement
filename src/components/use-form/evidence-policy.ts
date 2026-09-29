@@ -15,8 +15,9 @@ export function evidenceError(
   policy: string | undefined,
   existing: UseDetail['evidence'],
   pending: PendingEvidence[],
+  restrictedSatisfied = false,
 ) {
-  if (!policy || policy === 'NONE') return '';
+  if (!policy || policy === 'NONE' || restrictedSatisfied) return '';
   const fileKinds = ['PHOTO', 'RECEIPT', 'WEIGH_TICKET', 'CONFIRMATION'];
   const alternativeKinds = ['SLIP_NO', 'CONFIRMATION'];
   const server = existing.filter((file) => !pending.some((next) => next.replacesId === file.id));

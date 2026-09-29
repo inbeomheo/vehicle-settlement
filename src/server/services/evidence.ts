@@ -60,6 +60,7 @@ export async function createEvidence(ctx: Context, useId: string, raw: z.input<t
       .values({
         ...input,
         vehicle_use_id: useId,
+        owner_driver_id: use.driver_id,
         uploaded_by: tx.user.id,
         upload_status: isText ? 'UPLOADED' : 'PENDING',
         uploaded_at: isText ? new Date() : null,
