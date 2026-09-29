@@ -187,7 +187,7 @@ export function toInput(form: FormValues, mode: Mode): CreateUseInput {
       }),
   };
 }
-export function validate(form: FormValues) {
+export function validate(form: FormValues, intent: 'save' | 'submit' = 'save') {
   const errors: string[] = [];
   if (!form.use_date || !form.project_id || !form.driver_id || !form.vehicle_id)
     errors.push('사용일·현장·기사·차량을 선택하세요.');
@@ -200,6 +200,13 @@ export function validate(form: FormValues) {
       errors.push(`${i + 1}회차 수량·시간은 소수 셋째 자리까지 입력하세요.`);
   });
   form.charges.forEach((c) => {
+    if (
+      intent === 'submit' &&
+      c.charge_type === 'BASE' &&
+      ['PER_TRIP', 'PER_HOUR', 'PER_TON', 'PER_M3'].includes(c.billing_unit) &&
+      !c.quantity
+    )
+      errors.push('청구 수량을 입력하세요');
     if (c.quantity && !/^\d{1,9}(\.\d{1,3})?$/.test(c.quantity))
       errors.push('청구수량은 소수 셋째 자리까지 입력하세요.');
     if (
@@ -209,4 +216,35 @@ export function validate(form: FormValues) {
       errors.push('추가 비용은 정수 원 요청액과 사유를 입력하세요.');
   });
   return errors;
+}
+
+// Copies contain only editable values, never server row IDs or review/statement links.
+export function copyValues(use: UseDetail, mode: Mode): FormValues {
+  const form = fromUse(use, mode);
+  return {
+    ...form,
+    use_date: todaySeoul(),
+    end_date: '',
+    operation_status: 'COMPLETED',
+    trips: form.trips.map((trip) => ({
+      ...trip,
+      id: undefined,
+      client_row_id: crypto.randomUUID(),
+      depart_at: '',
+      arrive_at: '',
+      status: 'COMPLETED',
+    })),
+    charges: form.charges.map((charge) => ({
+      ...charge,
+      id: undefined,
+      trip_id: undefined,
+      key: crypto.randomUUID(),
+    })),
+  };
+}
+
+export function resetBaseRates(charges: FormCharge[]) {
+  return charges.map((charge) =>
+    charge.charge_type === 'BASE' ? { ...charge, billing_unit: '' as const, quantity: '' } : charge,
+  );
 }

@@ -31,6 +31,7 @@ export type Draft = {
   savedRequest?: boolean;
   submitRequest?: { key: string; version: number };
   error?: string;
+  inputError?: boolean;
   conflict?: UseDetail;
 };
 export type Bootstrap = { user: User; lookups: Lookups; recent: UseList; cachedAt: number };
@@ -95,4 +96,18 @@ export async function cachedValue<T>(userId: string, key: string) {
 export async function removeDraft(userId: string, id: string) {
   await (await userDb(userId)).delete('drafts', id);
   notifyChange();
+}
+
+export function isUnsent(draft: Draft) {
+  return draft.phase !== 'saved' && !draft.inputError;
+}
+
+export async function flushDrafts() {
+  const pending: Promise<void>[] = [];
+  window.dispatchEvent(
+    new CustomEvent('vehicle-flush-drafts', {
+      detail: { waitUntil: (promise: Promise<void>) => pending.push(promise) },
+    }),
+  );
+  await Promise.all(pending);
 }
