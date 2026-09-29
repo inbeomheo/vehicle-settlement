@@ -15,7 +15,7 @@
 ## 백업
 
 1. 앱 서버와 외부 쓰기 작업을 중지한다. 진행 중인 사진 업로드가 끝났는지 확인한다. DB는 실행 상태로 둔다. DB snapshot과 파일 복사를 함께 일관되게 보관하려면 이 절차가 필요하다.
-2. 배포와 동일한 코드 디렉터리에서 `DATABASE_URL`, `STORAGE_DIR`를 확인한다. W5 로컬은 PG 54334이며 다른 worktree 포트에 연결하지 않는다.
+2. 배포와 동일한 코드 디렉터리에서 `DATABASE_URL`, `STORAGE_DIR`를 확인한다. main 로컬 기본 PG는 54329, 앱은 .env의 PORT(기본 3000)다. 배포 전 `npm run db:migrate`로 W6 적용 이력 보정과 마이그레이션을 완료한다.
 3. `npm run backup` 또는 `npm run backup -- /보관경로/새디렉터리`를 실행한다. 백업 경로는 storage 밖의 **새 경로**여야 한다.
 4. 종료 코드 0, 출력된 `backup`, `files`, `evidence_files`, `confirmed_statements`를 로그에 보관한다. `manifest.json`과 모든 파일을 함께 별도 매체에 복사한다. 복사가 끝난 후 앱을 재개한다.
 
@@ -23,7 +23,7 @@
 
 W5의 embedded-postgres 18 패키지에는 두 도구가 없어 **app-logical-v1** 대안을 실제 검증했다. 이 형식은 적용된 마이그레이션 SQL·해시, public/drizzle의 모든 테이블·모든 행의 문자열 원문, 시퀀스 값을 `database.json`에 보관한다. 수량·날짜·금액·JSON을 JS 부동소수점 값으로 재해석하지 않는다. DB의 적용 이력과 로컬 마이그레이션이 다르면 실패한다. 사용자 정의 DDL·확장·외부 스키마·대용량 운영 DB는 native pg_dump 방식으로 운영해야 한다. 앱 마이그레이션 밖에서 스키마를 바꾸지 않는다.
 
-`storage/`에는 증빙과 교체·삭제 이력용 원본도 포함한다. manifest에는 UTC 생성시각, 형식, 파일 수(manifest 자체 제외), 상대경로별 크기·SHA-256을 기록한다. 백업 디렉터리는 0700으로 생성하며 심볼릭 링크는 거절한다. 백업 전후 파일 해시와 확정명세 합계를 검증한다.
+`storage/`에는 증빙과 교체·삭제 이력용 원본 및 `imports/`의 XLSX 원본도 포함한다. 원본은 시트 재선택·검증에 사용하므로 DB와 함께 보존한다. manifest에는 UTC 생성시각, 형식, 파일 수(manifest 자체 제외), 상대경로별 크기·SHA-256을 기록한다. 백업 디렉터리는 0700으로 생성하며 심볼릭 링크는 거절한다. 백업 전후 파일 해시와 확정명세 합계를 검증한다.
 
 실패 시 비정상 종료 코드 1과 stderr의 `백업 실패`를 수집한다. 중간 디렉터리 `<경로>.partial` 및 가능한 경우 `FAILED.txt`를 남기며 완료 경로로 승격하지 않는다. 부족한 디스크·접속 장애·누락 파일·해시/합계 오류를 해결한 뒤 **새 경로**로 재실행한다. `.partial`을 성공 백업으로 취급하지 않는다.
 
@@ -43,8 +43,9 @@ STORAGE_DIR=/복구전용/storage npm run restore:verify
 - manifest 경로·파일 수·모든 해시를 먼저 검증한다. 심볼릭 링크·경로 이탈·누락·손상을 거절한다.
 - 대상 DB에 업무 데이터가 있거나 대상 storage에 파일이 있으면 **거부**한다. 기존 데이터를 자동 삭제하지 않는다. 대상 DB/폴더를 백업 원본과 분리한다.
 - app-logical-v1은 트랜잭션에서 스키마를 재구성하고 원문 데이터를 복원한다. 순환 FK는 잠시 제거하고 모든 데이터를 복원한 다음 FK를 재생성·검증한다. superuser 전용 replication 옵션을 사용하지 않는다. 시퀀스 last_value/is_called도 복구한다.
-- native archive는 pg_restore의 `--single-transaction --exit-on-error`로 복구한다. 복구 직후 파일 검증에 실패하면 앱을 재개하지 말고 빈 대상으로 다시 복구한다. native 복구 커밋과 파일 이동은 하나의 DB 트랜잭션이 아니므로 서비스 중지 상태를 유지해야 한다.
+- native archive는 pg_restore의 `--single-transaction --exit-on-error`로 복구한다. 네이티브 복구가 시작된 뒤 DB/파일 검증 또는 파일 이동이 실패하면 public/drizzle 스키마를 비워 빈 DB로 보상 복구한다. 논리 백업은 COMMIT 전 실패를 롤백하고, COMMIT 후 최종 검증 실패도 빈 DB로 되돌린다. 승격된 storage와 staging은 제거한다. 빈 DB/빈 storage 검사에서 거절된 대상은 변경하지 않는다. 보상 초기화 자체가 실패하면 별도 오류를 반환하므로 앱을 재개하지 말고 운영자가 빈 대상 여부를 점검한다. DB와 파일에 걸친 OS 트랜잭션은 없으므로 복구 동안 서비스 중지를 유지한다.
 - 파일은 임시 경로에 복사하여 검증한 후 빈 storage로 이동한다. 검증은 UPLOADED 증빙의 사용 건 연결·파일 크기·SHA-256, 확정명세 INCLUDED 항목의 공급가/세액/총액·스냅샷 금액·잠금을 확인한다.
+- 과거 W6 백업은 `npm run db:migrate`를 실행하여 적용 이력을 보정한다. Drizzle은 마지막 created_at보다 큰 journal when만 실행하므로, journal만 고치면 다음 마이그레이션이 건너뛰어질 수 있다. W6 SQL의 정확한 SHA-256과 기존 when=1790660000000이 일치하는 기록만 1790655000000으로 갱신한다. SQL 재실행이나 업무 데이터 변경은 없다.
 - 복구 성공 후 정산 책임자가 실제 명세 1건과 사진 1건을 열고 확인한다. 동일 코드에서 로그인·사용대장·출력을 확인한 뒤 앱을 재개한다. 자동 시드는 실행하지 않는다.
 
 ## 복구 리허설
@@ -52,10 +53,10 @@ STORAGE_DIR=/복구전용/storage npm run restore:verify
 권장 방법은 개발·운영 자료와 분리된 PostgreSQL 테스트 DB다.
 
 ```sh
-npm test -- tests/integration/W5-backup.test.ts
+npm test -- tests/integration/W5-backup.test.ts tests/integration/W7-operations.test.ts
 ```
 
-이 테스트는 실제 PG에 증빙 1개·확정명세 1개(300,000원)를 만들고, 백업한 뒤 public/drizzle 스키마와 증빙 폴더를 삭제한다. 백업만으로 복원하고 SHA-256·합계·시퀀스·FK를 검증하며, 손상 파일과 잘못된 확정 합계의 실패도 확인한다. 자동 생성 DB와 임시 폴더만 사용하고 종료 시 정리한다. 성공 로그는 [VERIFICATION](VERIFICATION.md)에 첨부했다.
+이 테스트는 실제 PG에 증빙 1개·확정명세 1개(300,000원)를 만들고, 백업한 뒤 public/drizzle 스키마와 증빙 폴더를 삭제한다. 백업만으로 복원하고 SHA-256·합계·시퀀스·FK를 검증하며, 손상 파일과 잘못된 확정 합계의 실패도 확인한다. W7은 네이티브 실행 경계만 대역으로 바꾸고 실제 PG에서 복원 완료 후 파일 검증 실패의 빈 DB 원복, 기존 W6 시각 보정 후 후속 마이그레이션 적용도 검증한다. 실제 pg_restore 바이너리 성공 리허설은 설치 환경에서 별도로 수행한다. 자동 생성 DB와 임시 폴더만 사용하고 종료 시 정리한다. 성공 로그는 [VERIFICATION](VERIFICATION.md)에 첨부했다.
 
 수동으로 `vehicle_app`을 초기화하는 리허설은 반드시 **전용 worktree/전용 DB/전용 storage**에서 진행한다.
 

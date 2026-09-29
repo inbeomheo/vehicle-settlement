@@ -1,7 +1,7 @@
-# 검증 결과 — W5 통합 인계
+# 최종 검증 결과 — W7
 
-검증일: 2026-09-29. `feat/w5`, W1~W4 병합 기반. PostgreSQL 54334 / 앱 3105.
-Vitest는 실제 PostgreSQL의 격리 DB, Playwright는 시드가 있는 개발 DB와 실제 Chromium을 사용했다.
+검증일: **2026-09-29 (Asia/Seoul)**. `main`, PostgreSQL **54329**, E2E 웹 포트 **3000** (`.env`의 PORT, 미지정 시 3000).
+Vitest는 실제 PG의 파일별 격리 DB·임시 storage, Playwright는 **vehicle_e2e / .data/e2e-storage**를 사용한다. 기존 개발 서버를 재사용하지 않는다.
 
 ## 필수 시나리오 14개
 
@@ -24,71 +24,93 @@ Vitest는 실제 PostgreSQL의 격리 DB, Playwright는 시드가 있는 개발 
 | 13 | Excel·PDF 내역·합계 = 확정명세 | `tests/integration/W4-exports-auth.test.ts` — `기준정보·단가 변경 및 원자료 훼손에도 확정 화면/XLSX/PDF 모델과 금액은 고정`; `W4-boundaries.test.ts` — `세액은 각 라인 5원의 1원씩 합산하며 화면·엑셀·PDF 입력이 모두 12원으로 일치` | 통과 |
 | 14 | 단가 미확정 정산 확정 차단·사유 | `tests/integration/W4-statements.test.ts` — `단가 미확정는 확정 시 재검사하여 항목별 차단 사유를 반환한다` (`it.each`의 `%s` = `단가 미확정`) | 통과 |
 
-14개 모두 기존 W1~W4 테스트에 대응한다. W5는 누락을 확인한 뒤 가져오기·복구·전 과정 브라우저 연결에 대한 별도 테스트를 추가했다.
+## W5 회귀
 
-## W5 추가 검증
+- `tests/integration/W5-import.test.ts` **7개**: 유효/오류/중복, 운행·청구수량 분리, 0원·미확정, 동시 확정, 프리셋/작성자 권한, 권한 회수, 입력 검증, 외부 멱등 키 선점 방어. 수식 업로드 전체 거부 기대는 W7 결정에 따라 **캐시 결과 허용**으로 갱신했다.
+- `tests/integration/W5-backup.test.ts` **1개**: 실제 PG 백업 → 스키마/파일 삭제 → 복원, 증빙 SHA-256·확정 300,000원·시퀀스/FK, 손상·덮어쓰기 거부.
+- `tests/e2e/full-flow.spec.ts` **2개**: 기사/담당자 보완·보류 검수 → 전월분 정산 → 실제 Excel/PDF 다운로드 → 지급·기사 확인·void 및 타 기사 차단, 360px 가져오기 재업로드 0건.
 
-`tests/integration/W5-import.test.ts` (7개):
+## W6 회귀 목록
 
-- `유효·오류·중복 행 분류, 운행5/일대1, PROXY DRAFT, 오류 엑셀 및 재가져오기 중복 0`
-- `회당 운행횟수는 청구수량이 아니며 파일 단가 누락은 PENDING, 0원은 CONFIRMED, 계약 차이는 경고`
-- `동일 파일 동시 확정은 한 건만 생성하고 실제 반복행은 보존, 비슷한 기존 사용은 경고만`
-- `CSV 문자열·별칭 자동 매핑·프리셋 저장/수정은 작성자별이며 다른 사용자·기사 접근 차단`
-- `미리보기 이후 현장 권한 회수·비활성화는 확정/재요청 차단하며 클라이언트 검증 결과를 신뢰하지 않음`
-- `잘못된 파일·수식·중복 매핑·금액 범위는 거부하고 확정 직전 기준정보를 다시 검증한다`
-- `외부 client_request_id가 가져오기 해시를 선점해도 기존 사용 건을 덮어쓰지 않는다`
+| 테스트 파일 | 수 | 검증 내용 |
+| --- | ---: | --- |
+| `tests/integration/W6-offline.test.ts` | 15 | 사진·바이너리 오류 상태, 408/429/5xx 재시도, 권한/검증 차단 |
+| `tests/integration/W6-form.test.ts` | 11 | 고정 단위 기본 수량, 상세 입력 간소화, 실패 첨부 취소 |
+| `tests/integration/W6-uses.test.ts` | 10 | 고정 단위 4종, VAT 포함 총액 보존, 공급가 override, 양수/음수 조정 승인 보존 |
+| `tests/integration/W6-invites.test.ts` | 1 | 초대 토큰 최초 응답, DB 평문 제거·멱등 재생 |
+| `tests/integration/W6-statements.test.ts` | 4 | 조정 원명세 취소 차단, 초안 합계, 최초 요청 멱등 비교, 초안 편집 |
+| `tests/integration/W6-statement-ui.test.ts` | 4 | 지급 URL 필터, 초안 후보·제외 UI |
+| `tests/integration/W6-demo.test.ts` | 1 | 시연 16건·명세 2건, 상태·증빙·수량·재실행 멱등 |
+| `tests/e2e/W6-manager.spec.ts` | 2 | 역할별 메뉴/직접 URL, 지급 URL 필터 (SITE_MANAGER 가져오기는 W7에서 허용) |
+| `tests/e2e/W6-offline-form.spec.ts` | 1 | 360px 폼 상세 펼침·입력 보존·첨부 복구 |
+| `tests/e2e/W6-settlement.spec.ts` | 2 | 초안 편집, 미지급 대시보드 연결 |
 
-`tests/integration/W5-backup.test.ts` (1개):
+W6: Vitest **46개**, Playwright **5개**. W6의 초기 보고서는 당시 worktree 결과이며 여기의 합산 결과가 main의 최종 상태다.
 
-- `백업 → DB 초기화 → 복구 → 증빙 SHA-256·확정 합계·시퀀스 검증 통과, 손상·덮어쓰기·실패 차단`
+## W7 회귀 목록
 
-`tests/e2e/full-flow.spec.ts` (2개):
+| 항목 | 테스트 위치 | 수정 전 실패 / 최종 검증 |
+| --- | --- | --- |
+| 1 | `W7-ui.test.ts`, `W7-manager.spec.ts` | SITE_MANAGER 가져오기 가드 실패 → 메뉴/페이지 허용, 배정 외 행 ERROR |
+| 2 | `W7-import.test.ts` (4개) | 반복 32,767자 공유 문자열 허용·뒤늦은 제한 → 3초 내 크기 오류, 행/열/5MB 한도 거부 |
+| 3 | `W7-import.test.ts` | CP949 업로드 HTTP 200 → UTF-8 안내 **422** |
+| 4 | `W7-ui.test.ts`, `W7-manager.spec.ts` | 정산 막다른 링크 → 금액 유지·정산 담당자 확인·링크 없음 |
+| 5 | `W7-import.test.ts` | 행별 lookups 재조회 → 날짜별 1회/확정 시 새 캐시, 전체 로그 동시 query 경고 없음 |
+| 6 | `W7-import.test.ts` (2개) | 수식/오류 하나로 전체 거부 → 캐시 결과 사용·매핑된 오류 행만 ERROR, 미선택 2,001행 시트 무시 |
+| 7 | `W7-import.test.ts` (2개), `W7-manager.spec.ts` | 재저장 파일 해시 상이·제외 입력 거부 → 날짜/수량/ID 표기·빈 행 차이에도 동일 해시, 동시 0/2건, 개별 제외 |
+| 8 | `W7-uses.test.ts` | 생략 수량 1로 초기화 → 기존 2.500·750,000원 유지 |
+| 9 | `W7-operations.test.ts` | 네이티브 복원 이후 검증 실패 시 데이터 잔류 → 실제 PG의 빈 DB로 보상 복구 |
+| 10 | `W7-operations.test.ts` | 미래 journal 시각 → 과거 순서, 기존 적용 기록 보정·재실행 멱등·후속 SQL 적용 |
+| 11 | `W7-operations.test.ts`, 전체 E2E teardown | 개발 DB 2종만 검사 → 6종 데이터 생성 감지 및 전후 비교 |
+| 12 | `W7-ui.test.ts`, `W7-display.test.ts` | 2.500 원문 표시 → 명세 2.5/사용대장 1,234.5, Excel 숫자/서식·PDF 모델, 저장 snapshot 유지 |
+| 13 | `W7-ui.test.ts`, `W7-display.test.ts` | 경로 반복·금액 없음 → 경로/운행 수, 기본 300,000·추가 5,000·합계 305,000·요청비 표시 |
+| 14 | `W7-uses.test.ts`, `W7-driver.spec.ts` | 동일 날짜 ID 정렬·금액 미제공 → 날짜/입력순, 본인 PAYABLE 금액·보조 복사 버튼·360px |
 
-- `기사 → 보완·재제출·보류 검수 → 전월분 정산 → 엑셀/PDF → 지급·기사 확인 → 오입력 취소·미지급, 타 기사 URL 차단`
-- `360px 가져오기: 자동 매핑·프리셋·오류 다운로드·임시저장·같은 파일 재업로드 0건`
+통합 파일명은 `tests/integration/`, 브라우저 파일명은 `tests/e2e/` 기준이다. W7: Vitest **5파일 / 21개**, Playwright **2파일 / 2개**.
+수정 전 실패 로그: `.data/w7-qa/red-import-uses.log`, `red-cp949.log`, `red-ui.log`, `red-operations-ui.log`, `red-display.log`, `red-e2e.log`. 모두 Git 제외.
 
-전체 흐름은 driver1의 일대 5운행(300,000원), driver2의 실적 2운행·청구수량 5(500,000원), site의 8/31 대리입력(300,000원)을 **화면에서 입력**한다. site가 보완 요청하고 기사가 수정·재제출한 뒤 통행료 5,000원을 보류한다. settlement가 9월 명세 2개를 확정하여 부가세 포함 660,000원·550,000원을 확인한다. 각 명세의 실제 Excel/PDF 다운로드와 Excel 재독입, 지급 기록, 두 기사의 내 정산, void 이후 원기록 보존·미지급 복귀를 검증한다. 타 기사 직접 URL과 출력 API는 차단한다.
+## 최종 실행 결과
 
-## 백업·복구 실행 로그
+2026-09-29 14:21~14:24 KST 실행. 다음 명령 모두 종료 코드 0:
 
-실제 PostgreSQL 테스트에서 스키마와 증빙 폴더를 삭제한 후 다음 검증이 통과했다. 임시 경로만 생략했다.
-
-```text
-pg_dump/pg_restore 없음: 앱 논리 백업(마이그레이션·원문 데이터·시퀀스) 사용
-{"format":"app-logical-v1","files":2,"evidence_files":1,"confirmed_statements":1}
-{"result":"통과","evidence_files":1,"confirmed_statements":1}
-W5 리허설 통과: 빈 DB 복구 / 증빙 파일 1 / 확정명세 1 / 총액 300000 / 시퀀스 보존 / 손상 백업 차단
+```sh
+npm run typecheck
+npm run lint
+npm test
+npm run build
+npm run format:check
+npm run test:e2e
 ```
 
-CLI도 별도로 실행했다. `npm run backup -- .data/w5-qa/cli-backup` → 빈 `w5_restore_rehearsal` DB와 별도 storage로 `npm run restore -- ...` → `npm run restore:verify`:
-
-```text
-{"format":"app-logical-v1","files":5,"evidence_files":4,"confirmed_statements":2}
-{"result":"통과","evidence_files":4,"confirmed_statements":2}
-{"result":"통과","evidence_files":4,"confirmed_statements":2}
-```
-
-존재하지 않는 STORAGE_DIR를 지정한 실패 확인:
-
-```text
-STORAGE_DIR=.data/w5-qa/missing-storage npm run backup -- .data/w5-qa/expected-failure
-백업 실패: ENOENT: no such file or directory, open '<백업경로>.partial/storage/<사용ID>/<증빙ID>'
-종료 코드: 1
-```
-
-테스트는 손상 manifest/증빙, 확정 합계 불일치, 비어 있지 않은 storage 거부도 확인한다. native pg_dump 분기는 현재 설치본에 도구가 없어 실행하지 않았으며, 실제 수용 검증은 문서화한 앱 논리 백업 대안으로 완료했다.
-
-## 전체 명령 결과
-
-| 명령 | 결과 |
+| 명령 | 최종 결과 |
 | --- | --- |
 | `npm run typecheck` | 통과 |
 | `npm run lint` | 통과 |
-| `npm test` | 통과 — 15파일 / 102테스트 |
-| `npm run build` | 통과 — Next.js 프로덕션 빌드 |
-| `npm run test:e2e` | 통과 — 4파일 / 8테스트 (1.2분) |
+| `npm test` | **27파일 / 169개 통과** (기존 W1~W6 148 + W7 21) |
+| `npm run build` | Next.js 프로덕션 빌드 통과 |
 | `npm run format:check` | 통과 |
+| `npm run test:e2e` | **9파일 / 15개 통과** (기존 13 + W7 2), 1.5분 |
 
-전체 실행 로그는 Git 제외 경로 `.data/w5-qa/vitest.log`, `build.log`, `e2e.log`, `restore.log`, `backup-failure.log`에 남겼다. 실패 시 Playwright trace는 `test-results/`에 생성된다. 로그에 기존 pg 동시 query 사용의 deprecation 안내가 있으나 테스트 실패는 아니다.
+전체 Vitest·E2E 로그에서 pg 동시 query `DeprecationWarning`은 **0건**이다. Next 개발 서버의 색상 환경변수/exit-listener 진단은 테스트 실패가 아니며 pg 경고와 별개다.
 
-추가 육안 검증: ego-browser에서 가져오기 매핑·미리보기 화면을 360px로 확인했다. 실제 scrollWidth=360으로 페이지 가로 넘침이 없었다. 스크린샷은 `.data/w5-qa/import-mobile.png`에 보관했다.
+개발 DB 전후 (전 항목 동일):
+
+| 테이블 | 전 | 후 |
+| --- | ---: | ---: |
+| vehicle_uses | 16 | 16 |
+| statements | 2 | 2 |
+| payment_records | 1 | 1 |
+| evidence | 14 | 14 |
+| audit_logs | 89 | 89 |
+| import_jobs | 0 | 0 |
+
+로그: `.data/w7-qa/vitest-final.log`, `build-final.log`, `format-final.log`, `e2e-final.log` (Git 제외).
+코드·문서 커밋 후 빌드를 다시 실행하여 `git status --porcelain`이 비어 있고 `git diff --exit-code`가 성공하는지 최종 확인한다.
+
+## 추가 확인과 한계
+
+- 실제 개발 DB에서도 `npm run db:migrate` 성공. W6 SQL은 그대로이며 적용 시각만 해시를 대조해 보정한다. Drizzle 판단 방식과 운영 절차는 [W7 보고서](reports/W7.md), [OPERATIONS](OPERATIONS.md)에 기록했다.
+- 360px ego-browser 육안 확인: 검수함의 경로/금액 카드, SITE_MANAGER 대시보드의 880,000원·정산 담당자 안내. scrollWidth=360, 지급 링크 없음. Playwright 기사 화면 screenshot에서도 작은 복사 버튼·금액 확인.
+- PDF를 Poppler로 PNG 렌더링·텍스트 추출하여 `2.5`, 750,000원 합계, 한글·표·꼬리말을 확인했다. QA 파일은 `.data/w7-qa/quantity.pdf/png/txt`, `review-mobile.png`, `dashboard-mobile.png`, `test-results/W7-driver-360px.png`이며 Git 제외다.
+- 네이티브 `pg_restore` 성공 경계 이후 실패는 실행 경계 대역 + 실제 PG로 검증했다. 설치 바이너리를 통한 native 전체 성공 리허설은 기존 W5와 동일하게 별도 운영 환경에서 수행할 항목이다. 논리 백업 전체 복구는 실제 실행했다.
+- XLSX 수식은 계산하지 않는다. CSV 자동 CP949 변환·대용량 비동기 작업은 지원하지 않는다. W5 과거 바이트 해시는 소급 변경하지 않으며 중복 의심 경고에서 개별 제외할 수 있다.
