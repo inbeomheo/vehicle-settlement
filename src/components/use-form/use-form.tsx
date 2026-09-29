@@ -1,4 +1,5 @@
 'use client';
+import { RestrictedEvidenceNotice } from '@/components/evidence/restricted-notice';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, ApiError, mutate } from '@/client/api';
 import { errorMessage } from '@/client/error-message';
@@ -446,6 +447,8 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
               lookups.projects.find((p) => p.id === draft.form.project_id)?.evidence_policy,
               draft.server?.evidence ?? [],
               draft.uploads,
+              draft.server?.project_id === draft.form.project_id &&
+                draft.server?.restricted_evidence_satisfies_policy,
             )
           : '';
       setEvidenceValidation(missingEvidence);
@@ -1289,6 +1292,7 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
                 </Section>
               )}
             </fieldset>
+            <RestrictedEvidenceNotice count={draft.server?.restricted_evidence_count} />
             <EvidenceEditor
               validationError={
                 evidenceValidation || inputErrors?.find((error) => error.target === 'evidence')?.reason
