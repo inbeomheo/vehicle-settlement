@@ -90,10 +90,8 @@ test('360px 기사 내 정산: 본인분 요약과 다른 기사 export 차단',
   await page.getByRole('button', { name: '로그인', exact: true }).click();
   await page.waitForURL('/d');
   await page.getByRole('link', { name: '내 정산', exact: true }).click();
-  await page.getByLabel('조회 시작일').fill('2026-09-01');
-  await page.getByLabel('조회 종료일').fill('2026-09-30');
-  await page.getByRole('button', { name: '조회', exact: true }).click();
-  await expect(page.getByText('내 사용 건', { exact: true })).toBeVisible();
+  await page.goto('/d/settlements?month=2026-09');
+  await expect(page.getByRole('heading', { name: '9월 운행', exact: true })).toBeVisible();
   await expect(page.getByText(fixture.otherUseNo, { exact: false })).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   const response = await page.request.get(`/api/statements/${fixture.statementId}/export.pdf`);

@@ -5,6 +5,7 @@ import { vehicleUses } from '../../src/server/db/schema';
 import { setupScenario } from '../helpers/factories';
 import { saveFormSettings } from '../../src/server/services/form-settings';
 import { createUse, getUse, requestFix, submitUse } from '../../src/server/services/uses';
+import { submitDriverForm } from './submit-helper';
 
 const database = createDatabase(process.env.DATABASE_URL!);
 test.use({ viewport: { width: 390, height: 844 }, actionTimeout: 15000 });
@@ -107,8 +108,8 @@ test('기존 보완요청 대상은 빈 숨김 항목도 표시·이동·수정�
   await expect(page.getByLabel('1회차 경유 (쉼표 구분)', { exact: true })).toBeVisible();
   await page.getByLabel('1회차 경유 (쉼표 구분)', { exact: true }).fill('중간 창고');
   await page.getByLabel('특이사항', { exact: true }).fill('보완 완료');
-  await page.getByRole('button', { name: '보완 후 재제출', exact: true }).click();
-  await expect(page.getByRole('status')).toHaveText('담당자에게 제출 완료');
+  await submitDriverForm(page, '고쳐서 다시 보내기');
+  await expect(page.getByRole('status')).toHaveText('담당자에게 보냈습니다');
   const use = await getUse(s.driverCtx, s.use.id);
   expect(use).toMatchObject({ requester: '담당자', notes: '보완 완료', review_status: 'SUBMITTED' });
   expect(use.trips[0].via).toEqual(['중간 창고']);
@@ -126,7 +127,7 @@ for (const action of ['수정', '삭제'] as const) {
       project_id: s.project.id,
       fields: [{ field_key: 'extra_charges', driver_mode: 'HIDDEN', manager_mode: 'HIDDEN', version: 0 }],
     });
-    await page.getByRole('button', { name: '담당자에게 제출', exact: true }).click();
+    await submitDriverForm(page);
     await expect(page.locator('#form-errors')).toContainText(
       '추가 비용은 정수 원 요청액과 사유를 입력하세요.',
     );
@@ -139,9 +140,9 @@ for (const action of ['수정', '삭제'] as const) {
       await page.getByRole('button', { name: '추가 비용 삭제', exact: true }).click();
     }
     await page.getByRole('button', { name: '서버 저장', exact: true }).click();
-    await expect(page.getByRole('status')).toHaveText('서버 저장(작성중)');
-    await page.getByRole('button', { name: '담당자에게 제출', exact: true }).click();
-    await expect(page.getByRole('status')).toHaveText('담당자에게 제출 완료');
+    await expect(page.getByRole('status')).toHaveText('작성 중 · 아직 안 보냄');
+    await submitDriverForm(page);
+    await expect(page.getByRole('status')).toHaveText('담당자에게 보냈습니다');
     const [row] = await database.db.select().from(vehicleUses).where(eq(vehicleUses.driver_id, s.driver.id));
     const use = await getUse(s.driverCtx, row.id);
     expect(use.charge_lines.filter((line) => line.charge_type === 'TOLL')).toHaveLength(

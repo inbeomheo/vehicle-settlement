@@ -40,7 +40,7 @@ export function AuthForm({ token }: { token?: string }) {
           <span aria-hidden="true" className="h-6 w-1.5 rounded-sm bg-signal" />
           차량 사용·정산
         </p>
-        <p className="mt-3 text-[15px] leading-relaxed text-slate-300">
+        <p className="mt-3 text-[0.9375rem] leading-relaxed text-slate-300">
           운행 등록부터 검수·월 정산·지급까지 한곳에서.
         </p>
       </div>

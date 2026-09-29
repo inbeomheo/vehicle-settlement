@@ -40,6 +40,7 @@ import { button, control, primary, Field, Section, FormContexts, StatusBadge, Ch
 import { Plate } from '@/components/ui/plate';
 import { ChargeFields } from './charges';
 import { TripFields } from './trips';
+import { ConfirmSubmitSheet, type SubmitSummary } from './confirm-sheet';
 import {
   defaultPayee,
   fromUse,
@@ -130,6 +131,14 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
   const [recent, setRecent] = useState<UseDetail[]>([]);
   const [resumable, setResumable] = useState<Draft[]>([]);
   const [submitted, setSubmitted] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const submitButton = useRef<HTMLButtonElement>(null);
+  const [estimates, setEstimates] = useState<Record<string, number | null>>({});
+  const reportEstimate = useCallback(
+    (key: string, value: number | null) =>
+      setEstimates((previous) => (previous[key] === value ? previous : { ...previous, [key]: value })),
+    [],
+  );
   const [error, setError] = useState('');
   const [validation, setValidation] = useState<FormError[]>([]);
   const [localSaved, setLocalSaved] = useState(false);
@@ -429,7 +438,8 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
       },
     }));
   }
-  async function enqueue(intent: 'save' | 'submit') {
+  async function enqueue(intent: 'save' | 'submit', confirmed = false) {
+    if (confirmed) setConfirmOpen(false);
     if (!draft || busy || evidenceBusy || activeUser() !== boot.user.id) return;
     if (
       draft.server?.is_locked ||
@@ -457,6 +467,11 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
       setValidation(errors);
       if (errors.length) {
         requestAnimationFrame(() => scrollToFirstError(errors));
+        return;
+      }
+      // 기사는 보내기 전에 요약을 한 번 더 확인한다.
+      if (intent === 'submit' && mode === 'driver' && !confirmed) {
+        setConfirmOpen(true);
         return;
       }
       const queued: Draft = {
@@ -675,16 +690,16 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
             ? draft.server.review_status === 'SUBMITTED'
               ? mode === 'manager'
                 ? '검수 대기로 제출 완료'
-                : '담당자에게 제출 완료'
+                : '담당자에게 보냈습니다'
               : reviewLabels[draft.server.review_status]
             : draft.savedRequest
-              ? '서버 저장(작성중) · 전송 처리 중'
+              ? '작성 중 · 아직 안 보냄 · 보내는 중'
               : !shouldPersistDraft(draft)
                 ? '새 운행을 작성하세요'
                 : localSaved
                   ? mode === 'manager'
                     ? '이 기기에 임시저장됨'
-                    : '휴대폰에 임시저장됨'
+                    : '휴대폰에만 저장됨'
                   : mode === 'manager'
                     ? '이 기기에 저장 중…'
                     : '휴대폰에 저장 중…';
@@ -726,12 +741,261 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
     vehicleChoices.length > 0 &&
     vehicleChoices.length <= 4 &&
     (!form.vehicle_id || vehicleChoices.some((v) => v.id === form.vehicle_id));
+  const policy = lookups.projects.find((p) => p.id === form.project_id)?.evidence_policy;
+  const pendingUploads = draft.uploads;
+  const shownServerEvidence = (draft.server?.evidence ?? []).filter(
+    (f) => !pendingUploads.some((u) => u.serverId === f.id || u.replacesId === f.id),
+  );
+  const baseCharges = form.charges.filter((c) => c.direction === 'PAYABLE' && c.charge_type === 'BASE');
+  const baseAmounts = baseCharges.map((c) => estimates[c.key]);
+  const extraAmount = form.charges
+    .filter(
+      (c) =>
+        c.direction === 'PAYABLE' &&
+        c.charge_type !== 'BASE' &&
+        !c.included_in_base &&
+        /^\d+$/.test(c.requested_amount),
+    )
+    .reduce((sum, c) => sum + Number(c.requested_amount), 0);
+  const stepDone = {
+    site: !!form.use_date && !!form.project_id,
+    vehicle: !!form.vehicle_id,
+    trips: form.trips.length > 0 && form.trips.every((t) => t.origin.trim() && t.destination.trim()),
+    evidence: !evidenceError(
+      policy,
+      draft.server?.evidence ?? [],
+      pendingUploads,
+      draft.server?.project_id === form.project_id && draft.server?.restricted_evidence_satisfies_policy,
+    ),
+    fee: baseCharges.length > 0 && baseAmounts.every((value) => typeof value === 'number'),
+  };
+  const firstTrip = form.trips[0];
+  const summary: SubmitSummary = {
+    date: form.use_date,
+    project: lookups.projects.find((p) => p.id === form.project_id)?.name ?? '',
+    plate:
+      lookups.vehicles.find((v) => v.id === form.vehicle_id)?.plate_no ??
+      String(draft.server?.snapshot.plate_no ?? ''),
+    route: firstTrip
+      ? `${firstTrip.origin || '출발 미입력'} → ${firstTrip.destination || '도착 미입력'}${form.trips.length > 1 ? ` 외 ${form.trips.length - 1}회` : ''}`
+      : '',
+    evidenceCount: shownServerEvidence.length + pendingUploads.length,
+    amount: stepDone.fee
+      ? (baseAmounts as number[]).reduce((sum, value) => sum + value, 0) + extraAmount
+      : null,
+  };
+  const dateFields = (
+    <>
+      <Field label="사용일" target="use_date">
+        <input
+          className={control}
+          type="date"
+          value={form.use_date}
+          onChange={(e) =>
+            change({
+              use_date: e.target.value,
+              payee_counterparty_id: defaultPayee(lookups, form.driver_id, e.target.value),
+            })
+          }
+        />
+      </Field>
+      <Field label="종료일 (선택)" target="end_date">
+        <input
+          className={control}
+          type="date"
+          value={form.end_date}
+          onChange={(e) => change({ end_date: e.target.value })}
+        />
+      </Field>
+      <Field label="현장" target="project_id" group={chipProjects}>
+        {chipProjects ? (
+          <ChoiceChips
+            name="project_id"
+            value={form.project_id}
+            onChange={(project_id) => change({ project_id })}
+            choices={sortedProjects.map((p) => ({ value: p.id, name: p.name, label: p.name }))}
+          />
+        ) : (
+          <select
+            className={control}
+            value={form.project_id}
+            onChange={(e) => change({ project_id: e.target.value })}
+          >
+            {options(sortedProjects, form.project_id, draft.server?.snapshot.project_name)}
+          </select>
+        )}
+      </Field>
+    </>
+  );
+  const vehicleFields = (
+    <>
+      {mode === 'manager' && (
+        <Field label="실제 기사" target="driver_id">
+          <select
+            className={control}
+            value={form.driver_id}
+            onChange={(e) => {
+              const driver = lookups.drivers.find((d) => d.id === e.target.value);
+              change({
+                driver_id: e.target.value,
+                vehicle_id: driver?.default_vehicle_id ?? form.vehicle_id,
+                payee_counterparty_id: defaultPayee(lookups, e.target.value, form.use_date),
+              });
+            }}
+          >
+            {options(lookups.drivers, form.driver_id, draft.server?.snapshot.driver_name)}
+          </select>
+        </Field>
+      )}
+      <Field label="차량" target="vehicle_id" group={chipVehicles}>
+        {chipVehicles ? (
+          <ChoiceChips
+            name="vehicle_id"
+            value={form.vehicle_id}
+            onChange={(vehicle_id) => change({ vehicle_id })}
+            choices={vehicleChoices.map((v) => ({
+              value: v.id,
+              name: v.plate_no,
+              label: <Plate value={v.plate_no} size="sm" />,
+            }))}
+          />
+        ) : (
+          <select
+            className={control}
+            value={form.vehicle_id}
+            onChange={(e) => change({ vehicle_id: e.target.value })}
+          >
+            {options(lookups.vehicles, form.vehicle_id, draft.server?.snapshot.plate_no)}
+          </select>
+        )}
+      </Field>
+      <Field label="지급처" target="payee_counterparty_id">
+        {mode === 'manager' ? (
+          <select
+            className={control}
+            value={form.payee_counterparty_id || defaultPayee(lookups, form.driver_id, form.use_date)}
+            onChange={(e) => change({ payee_counterparty_id: e.target.value })}
+          >
+            {options(
+              lookups.counterparties.filter((c) => c.kind !== 'CUSTOMER'),
+              form.payee_counterparty_id,
+              draft.server?.snapshot.payee_name,
+            )}
+          </select>
+        ) : (
+          <span className="flex min-h-12 items-center rounded-lg bg-slate-50 px-3 text-slate-700">
+            {lookups.counterparties.find((c) => c.id === payee)?.name ??
+              String(draft.server?.snapshot.payee_name ?? '사용일의 기사 소속으로 자동 지정')}
+          </span>
+        )}
+      </Field>
+      {mode === 'manager' && (
+        <Field label="고객 (선택)" target="customer_counterparty_id">
+          <select
+            className={control}
+            value={form.customer_counterparty_id}
+            onChange={(e) =>
+              change({
+                customer_counterparty_id: e.target.value,
+                charges: e.target.value
+                  ? form.charges.some((c) => c.direction === 'RECEIVABLE')
+                    ? form.charges
+                    : [...form.charges, newCharge('RECEIVABLE')]
+                  : form.charges.filter((c) => c.direction !== 'RECEIVABLE'),
+              })
+            }
+          >
+            {options(
+              lookups.counterparties.filter((c) => c.kind === 'CUSTOMER'),
+              form.customer_counterparty_id,
+              draft.server?.snapshot.customer_name,
+            )}
+          </select>
+        </Field>
+      )}
+    </>
+  );
+  const extraUseFields = (
+    <>
+      <Field label="공종 (선택)" target="work_type_id">
+        <select
+          className={control}
+          value={form.work_type_id}
+          onChange={(e) => change({ work_type_id: e.target.value })}
+        >
+          {options(lookups.work_types, form.work_type_id)}
+        </select>
+      </Field>
+      <Field label="요청자" target="requester">
+        <input
+          className={control}
+          value={form.requester}
+          onChange={(e) => change({ requester: e.target.value })}
+        />
+      </Field>
+      <Field label="운반 내용" target="cargo_desc">
+        <input
+          className={control}
+          value={form.cargo_desc}
+          onChange={(e) => change({ cargo_desc: e.target.value })}
+        />
+      </Field>
+      <Field
+        label="전체 운행 상태"
+        target="operation_status"
+        hasValue={form.operation_status !== 'COMPLETED'}
+      >
+        <select
+          className={control}
+          value={form.operation_status}
+          onChange={(e) => change({ operation_status: e.target.value as FormValues['operation_status'] })}
+        >
+          {Object.entries(operationLabels).map(([v, n]) => (
+            <option key={v} value={v}>
+              {n}
+            </option>
+          ))}
+        </select>
+      </Field>
+    </>
+  );
   return (
     <FormContexts fixes={fixes} modes={settings.modes} revealed={revealed} errors={fieldErrors}>
       <div className="mx-auto max-w-3xl space-y-5 pb-8">
+        {submitted && (
+          <section
+            aria-labelledby="submit-success-title"
+            className="rounded-2xl border-2 border-emerald-600 bg-emerald-50 px-5 py-6 text-center"
+          >
+            <span
+              aria-hidden="true"
+              className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-700 text-white"
+            >
+              <svg
+                width="36"
+                height="36"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="3"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="m5 12 5 5 9-10" />
+              </svg>
+            </span>
+            <h2 id="submit-success-title" className="mt-3 text-[1.625rem] font-bold text-emerald-900">
+              보냈습니다
+            </h2>
+            <p className="mt-1 text-lg text-emerald-900">담당자가 확인하면 내 운행에서 볼 수 있습니다.</p>
+            <a href="/d" className={`${primary} mt-5 min-h-16 w-full text-xl`}>
+              내 운행으로
+            </a>
+          </section>
+        )}
         <div>
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <h1 className="text-[26px] font-bold">
+            <h1 className="text-[1.625rem] font-bold">
               {mode === 'manager' ? '대리 입력' : (draft.server?.use_no ?? '운행 등록')}
             </h1>
             <p
@@ -742,14 +1006,6 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
               {!online && ' · 오프라인'}
             </p>
           </div>
-          {submitted && (
-            <p
-              aria-live="polite"
-              className="mt-3 rounded-lg border-l-4 border-emerald-600 bg-emerald-50 px-4 py-3 font-semibold text-emerald-900"
-            >
-              담당자에게 제출했습니다
-            </p>
-          )}
           {draft.server && (
             <p className="mt-3 text-sm">
               작성자: {draft.server.created_by_name ?? draft.server.created_by_user_id} · 실제 기사:{' '}
@@ -1128,178 +1384,30 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
             className="space-y-5"
           >
             <fieldset disabled={locked} className="min-w-0 space-y-5">
-              <Section title="운행 정보" target="use">
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <Field label="사용일" target="use_date">
-                    <input
-                      className={control}
-                      type="date"
-                      value={form.use_date}
-                      onChange={(e) =>
-                        change({
-                          use_date: e.target.value,
-                          payee_counterparty_id: defaultPayee(lookups, form.driver_id, e.target.value),
-                        })
-                      }
-                    />
-                  </Field>
-                  <Field label="종료일 (선택)" target="end_date">
-                    <input
-                      className={control}
-                      type="date"
-                      value={form.end_date}
-                      onChange={(e) => change({ end_date: e.target.value })}
-                    />
-                  </Field>
-                  <Field label="현장" target="project_id" group={chipProjects}>
-                    {chipProjects ? (
-                      <ChoiceChips
-                        name="project_id"
-                        value={form.project_id}
-                        onChange={(project_id) => change({ project_id })}
-                        choices={sortedProjects.map((p) => ({ value: p.id, name: p.name, label: p.name }))}
-                      />
-                    ) : (
-                      <select
-                        className={control}
-                        value={form.project_id}
-                        onChange={(e) => change({ project_id: e.target.value })}
-                      >
-                        {options(sortedProjects, form.project_id, draft.server?.snapshot.project_name)}
-                      </select>
-                    )}
-                  </Field>
-                  {mode === 'manager' && (
-                    <Field label="실제 기사" target="driver_id">
-                      <select
-                        className={control}
-                        value={form.driver_id}
-                        onChange={(e) => {
-                          const driver = lookups.drivers.find((d) => d.id === e.target.value);
-                          change({
-                            driver_id: e.target.value,
-                            vehicle_id: driver?.default_vehicle_id ?? form.vehicle_id,
-                            payee_counterparty_id: defaultPayee(lookups, e.target.value, form.use_date),
-                          });
-                        }}
-                      >
-                        {options(lookups.drivers, form.driver_id, draft.server?.snapshot.driver_name)}
-                      </select>
-                    </Field>
-                  )}
-                  <Field label="차량" target="vehicle_id" group={chipVehicles}>
-                    {chipVehicles ? (
-                      <ChoiceChips
-                        name="vehicle_id"
-                        value={form.vehicle_id}
-                        onChange={(vehicle_id) => change({ vehicle_id })}
-                        choices={vehicleChoices.map((v) => ({
-                          value: v.id,
-                          name: v.plate_no,
-                          label: <Plate value={v.plate_no} size="sm" />,
-                        }))}
-                      />
-                    ) : (
-                      <select
-                        className={control}
-                        value={form.vehicle_id}
-                        onChange={(e) => change({ vehicle_id: e.target.value })}
-                      >
-                        {options(lookups.vehicles, form.vehicle_id, draft.server?.snapshot.plate_no)}
-                      </select>
-                    )}
-                  </Field>
-                  <Field label="지급처" target="payee_counterparty_id">
-                    {mode === 'manager' ? (
-                      <select
-                        className={control}
-                        value={
-                          form.payee_counterparty_id || defaultPayee(lookups, form.driver_id, form.use_date)
-                        }
-                        onChange={(e) => change({ payee_counterparty_id: e.target.value })}
-                      >
-                        {options(
-                          lookups.counterparties.filter((c) => c.kind !== 'CUSTOMER'),
-                          form.payee_counterparty_id,
-                          draft.server?.snapshot.payee_name,
-                        )}
-                      </select>
-                    ) : (
-                      <span className="flex min-h-12 items-center rounded-lg bg-slate-50 px-3 text-slate-700">
-                        {lookups.counterparties.find((c) => c.id === payee)?.name ??
-                          String(draft.server?.snapshot.payee_name ?? '사용일의 기사 소속으로 자동 지정')}
-                      </span>
-                    )}
-                  </Field>
-                  {mode === 'manager' && (
-                    <Field label="고객 (선택)" target="customer_counterparty_id">
-                      <select
-                        className={control}
-                        value={form.customer_counterparty_id}
-                        onChange={(e) =>
-                          change({
-                            customer_counterparty_id: e.target.value,
-                            charges: e.target.value
-                              ? form.charges.some((c) => c.direction === 'RECEIVABLE')
-                                ? form.charges
-                                : [...form.charges, newCharge('RECEIVABLE')]
-                              : form.charges.filter((c) => c.direction !== 'RECEIVABLE'),
-                          })
-                        }
-                      >
-                        {options(
-                          lookups.counterparties.filter((c) => c.kind === 'CUSTOMER'),
-                          form.customer_counterparty_id,
-                          draft.server?.snapshot.customer_name,
-                        )}
-                      </select>
-                    </Field>
-                  )}
-                  <Field label="공종 (선택)" target="work_type_id">
-                    <select
-                      className={control}
-                      value={form.work_type_id}
-                      onChange={(e) => change({ work_type_id: e.target.value })}
-                    >
-                      {options(lookups.work_types, form.work_type_id)}
-                    </select>
-                  </Field>
-                  <Field label="요청자" target="requester">
-                    <input
-                      className={control}
-                      value={form.requester}
-                      onChange={(e) => change({ requester: e.target.value })}
-                    />
-                  </Field>
-                  <Field label="운반 내용" target="cargo_desc">
-                    <input
-                      className={control}
-                      value={form.cargo_desc}
-                      onChange={(e) => change({ cargo_desc: e.target.value })}
-                    />
-                  </Field>
-                  <Field
-                    label="전체 운행 상태"
-                    target="operation_status"
-                    hasValue={form.operation_status !== 'COMPLETED'}
-                  >
-                    <select
-                      className={control}
-                      value={form.operation_status}
-                      onChange={(e) =>
-                        change({ operation_status: e.target.value as FormValues['operation_status'] })
-                      }
-                    >
-                      {Object.entries(operationLabels).map(([v, n]) => (
-                        <option key={v} value={v}>
-                          {n}
-                        </option>
-                      ))}
-                    </select>
-                  </Field>
-                </div>
-              </Section>
+              {mode === 'driver' ? (
+                <>
+                  <Section title="현장·날짜" target="use" step={1} done={stepDone.site}>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      {dateFields}
+                      {extraUseFields}
+                    </div>
+                  </Section>
+                  <Section title="차량" step={2} done={stepDone.vehicle}>
+                    <div className="grid gap-4">{vehicleFields}</div>
+                  </Section>
+                </>
+              ) : (
+                <Section title="운행 정보" target="use">
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    {dateFields}
+                    {vehicleFields}
+                    {extraUseFields}
+                  </div>
+                </Section>
+              )}
               <TripFields
+                step={mode === 'driver' ? 3 : undefined}
+                done={stepDone.trips}
                 trips={form.trips}
                 onChange={(trips) => change({ trips })}
                 recent={recent}
@@ -1310,6 +1418,8 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
             </fieldset>
             <RestrictedEvidenceNotice count={draft.server?.restricted_evidence_count} />
             <EvidenceEditor
+              step={mode === 'driver' ? 4 : undefined}
+              done={stepDone.evidence}
               validationError={
                 evidenceValidation || inputErrors?.find((error) => error.target === 'evidence')?.reason
               }
@@ -1331,6 +1441,9 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
             />
             <fieldset disabled={locked} className="min-w-0 space-y-5">
               <ChargeFields
+                step={mode === 'driver' ? 5 : undefined}
+                done={stepDone.fee}
+                onEstimate={reportEstimate}
                 form={displayForm}
                 mode={mode}
                 onChange={(charges, automatic) => change({ charges }, automatic)}
@@ -1370,26 +1483,36 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
                   저장
                 </button>
                 <button
+                  ref={submitButton}
                   type="submit"
                   className={`${primary} min-h-14 flex-1 text-lg`}
                   disabled={locked || evidenceBusy}
                 >
                   {draft.server?.review_status === 'NEEDS_FIX'
-                    ? '보완 후 재제출'
+                    ? '고쳐서 다시 보내기'
                     : mode === 'manager'
                       ? '검수 대기로 제출'
-                      : '담당자에게 제출'}
+                      : '담당자에게 보내기'}
                 </button>
               </div>
             </div>
           </form>
+        )}
+        {confirmOpen && (
+          <ConfirmSubmitSheet
+            summary={summary}
+            busy={busy}
+            onConfirm={() => void enqueue('submit', true)}
+            onClose={() => setConfirmOpen(false)}
+            returnFocus={submitButton}
+          />
         )}
         {draft.phase !== 'saved' && (
           <section className="rounded-lg border border-slate-200 p-4">
             {discardConfirm ? (
               <div {...discardConfirmation.dialog} role="alertdialog" aria-label="기기 초안 폐기 확인">
                 <p className="font-semibold">이 기기의 초안과 미전송 첨부를 폐기할까요?</p>
-                <p className="mt-2 text-sm text-slate-600">
+                <p className="mt-2 text-[0.9375rem] text-slate-700">
                   복구할 수 없습니다. 이미 서버에 저장된 운행과 증빙은 유지됩니다.
                 </p>
                 <div className="mt-3 flex flex-wrap gap-2">
@@ -1451,14 +1574,14 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
                 </div>
               ))}
               {draft.server.revisions.map((r) => (
-                <p key={r.id} className="text-sm text-slate-600">
+                <p key={r.id} className="text-[0.9375rem] text-slate-700">
                   {r.revision_no}차 제출 ·{' '}
                   {
                     {
                       PENDING: '검수 대기',
-                      APPROVED: '승인',
-                      NEEDS_FIX: '보완요청',
-                      SUPERSEDED: '이전 제출본',
+                      APPROVED: '승인됨',
+                      NEEDS_FIX: '고쳐 달라는 요청',
+                      SUPERSEDED: '이전에 보낸 내용',
                     }[r.decision]
                   }
                   {r.comment && ` · ${r.comment}`}

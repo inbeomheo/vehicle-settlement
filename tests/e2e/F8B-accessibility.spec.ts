@@ -2,6 +2,7 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 import { createDatabase } from '../../src/server/db/client';
 import { setupScenario } from '../helpers/factories';
 import { approveUse, createUse, getUse, requestFix, submitUse } from '../../src/server/services/uses';
+import { submitDriverForm } from './submit-helper';
 
 const database = createDatabase(process.env.DATABASE_URL!);
 test.use({ viewport: { width: 390, height: 844 }, actionTimeout: 15000 });
@@ -68,9 +69,8 @@ for (const recovery of ['retry', 'autosave', 'save', 'submit'] as const) {
     if (recovery === 'retry') {
       await page.getByRole('button', { name: '휴대폰 저장 실패 — 다시 시도', exact: true }).click();
     } else if (recovery === 'save' || recovery === 'submit') {
-      await page
-        .getByRole('button', { name: recovery === 'save' ? '서버 저장' : '담당자에게 제출', exact: true })
-        .click();
+      if (recovery === 'save') await page.getByRole('button', { name: '서버 저장', exact: true }).click();
+      else await submitDriverForm(page);
     }
     if (recovery === 'submit') {
       await expect(page).toHaveURL(/\/d\/uses\/[\w-]+/);
@@ -81,7 +81,7 @@ for (const recovery of ['retry', 'autosave', 'save', 'submit'] as const) {
     } else {
       await expect.poll(async () => (await storedDrafts(page))[0]?.form.trips[0].origin).toBe('최신 입력');
       await expect(page.getByRole('status')).toHaveText(
-        recovery === 'save' ? '서버 저장(작성중)' : '휴대폰에 임시저장됨',
+        recovery === 'save' ? '작성 중 · 아직 안 보냄' : '휴대폰에만 저장됨',
       );
       await page.reload();
       await expect(origin).toHaveValue('최신 입력');
@@ -104,7 +104,7 @@ test('검증 오류와 보완 요청은 입력 설명에 연결되고 요약에�
   await expect(origin).toHaveAttribute('aria-invalid', 'true');
   await expect(origin).toHaveAccessibleDescription(/보완 요청: 상세 출발지를 입력하세요/);
   await origin.fill('');
-  await page.getByRole('button', { name: '보완 후 재제출', exact: true }).click();
+  await submitDriverForm(page, '고쳐서 다시 보내기');
   await expect(origin).toBeFocused();
   await expect(origin).toHaveAccessibleDescription(/출발.*보완 요청/s);
   const summary = page.locator('#form-errors').getByRole('button', { name: /출발/ });
@@ -119,7 +119,7 @@ test('증빙 제출 오류를 사진 입력에 연결한다', async ({ page }) =
   await login(page, s.driverUser.login_id, `/d/new?project=${s.project.id}`);
   await page.getByLabel('1회차 출발', { exact: true }).fill('창고');
   await page.getByLabel('1회차 도착', { exact: true }).fill('현장');
-  await page.getByRole('button', { name: '담당자에게 제출', exact: true }).click();
+  await submitDriverForm(page);
   await expect(page.getByLabel('카메라 촬영', { exact: true })).toHaveAttribute('aria-invalid', 'true');
   await expect(page.getByLabel('카메라 촬영', { exact: true })).toHaveAccessibleDescription(
     /사진·인수증·계근표·확인서/,
@@ -139,8 +139,8 @@ test('비용 묶음·증빙 보완 요청도 실제 입력의 설명으로 읽�
     ],
   });
   await login(page, s.driverUser.login_id, `/d/uses/${use.id}`);
-  await expect(page.getByLabel('청구수량', { exact: true })).toHaveAttribute('aria-invalid', 'true');
-  await expect(page.getByLabel('청구수량', { exact: true })).toHaveAccessibleDescription(
+  await expect(page.getByLabel('청구 수량', { exact: true })).toHaveAttribute('aria-invalid', 'true');
+  await expect(page.getByLabel('청구 수량', { exact: true })).toHaveAccessibleDescription(
     /청구 기준을 다시 확인하세요/,
   );
   await expect(page.getByLabel('사진·파일 선택', { exact: true })).toHaveAttribute('aria-invalid', 'true');
@@ -170,11 +170,21 @@ for (const action of ['save', 'submit'] as const) {
       });
     });
     const trigger = page.getByRole('button', {
-      name: action === 'save' ? '서버 저장' : '담당자에게 제출',
+      name: action === 'save' ? '서버 저장' : '담당자에게 보내기',
       exact: true,
     });
     await expect(trigger).toBeEnabled();
-    await trigger.evaluate((button: HTMLButtonElement) => {
+    // 제출은 확인 시트의 "보내기"가 실제 전송 버튼이다.
+    const target =
+      action === 'save'
+        ? trigger
+        : await (async () => {
+            await trigger.click();
+            const sheet = page.getByRole('dialog', { name: '이대로 보낼까요?' });
+            await expect(sheet).toBeVisible();
+            return sheet.getByRole('button', { name: '보내기', exact: true });
+          })();
+    await target.evaluate((button: HTMLButtonElement) => {
       button.click();
       button.click();
     });
@@ -264,10 +274,10 @@ test('계약·예상 금액·조회 실패는 정중한 실시간 알림 영역�
   const region = page.locator('[aria-live="polite"]').filter({ hasText: '기본운임' });
   await expect(region).toContainText('300,000원');
   await expect(region).toHaveAttribute('aria-atomic', 'true');
-  await page.getByLabel('청구수량', { exact: true }).fill('2');
+  await page.getByLabel('청구 수량', { exact: true }).fill('2');
   await expect(region).toContainText('600,000원');
   await page.route('**/api/rates/lookup?**', (route) => route.abort());
-  await page.getByLabel('과금 단위', { exact: true }).selectOption('PER_HOUR');
+  await page.getByLabel('요금 기준', { exact: true }).selectOption('PER_HOUR');
   await expect(region).toContainText('계약을 확인할 수 없습니다');
 });
 

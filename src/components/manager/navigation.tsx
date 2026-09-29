@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { LogoutButton } from '@/components/logout-button';
+import { TextSizeControl } from '@/components/ui/text-size';
 
 type Item = { href: string; title: string };
 
@@ -87,7 +88,7 @@ function MenuLinks({ items, onNavigate }: { items: Item[]; onNavigate?: () => vo
               href={item.href}
               aria-current={on ? 'page' : undefined}
               onClick={onNavigate}
-              className={`relative flex min-h-11 items-center gap-3 rounded-md px-3 text-[15px] ${on ? 'bg-white/10 font-semibold text-white' : 'text-slate-300 hover:bg-white/5 hover:text-white'}`}
+              className={`relative flex min-h-11 items-center gap-3 rounded-md px-3 text-[0.9375rem] ${on ? 'bg-white/10 font-semibold text-white' : 'text-slate-300 hover:bg-white/5 hover:text-white'}`}
             >
               {on && (
                 <span aria-hidden="true" className="absolute inset-y-2 left-0 w-1 rounded-r bg-signal" />
@@ -130,6 +131,10 @@ export function ManagerNavigation({
           <MenuLinks items={items} />
         </nav>
         <div className="mt-4 border-t border-white/10 px-2 pt-4">
+          <p className="mb-1.5 text-sm text-slate-300">글자 크기</p>
+          <div className="mb-4">
+            <TextSizeControl fallback="normal" tone="dark" />
+          </div>
           <p className="font-semibold">{userName}</p>
           <p className="mb-2 text-sm text-slate-400">{roleLabel}</p>
           <LogoutButton tone="dark" />
@@ -165,6 +170,9 @@ export function ManagerNavigation({
         {open && (
           <nav id="manager-menu" aria-label="주 메뉴" className="border-t border-white/10 px-3 pt-2 pb-3">
             <MenuLinks items={items} onNavigate={() => setOpen(false)} />
+            <div className="mt-3 flex items-center justify-between border-t border-white/10 pt-3">
+              <TextSizeControl fallback="normal" tone="dark" />
+            </div>
             <div className="mt-3 flex items-center justify-between border-t border-white/10 pt-3">
               <span className="text-sm text-slate-300">
                 {userName} · {roleLabel}

@@ -77,7 +77,7 @@ for (const mode of ['driver', 'manager'] as const) {
       work_type_id: workType.id,
     });
     if (mode === 'manager') await expect(page).toHaveURL(`/m/uses/${use.id}`);
-    else await expect(page.getByRole('status')).toHaveText('서버 저장(작성중)');
+    else await expect(page.getByRole('status')).toHaveText('작성 중 · 아직 안 보냄');
   });
 }
 
@@ -136,7 +136,7 @@ test('390px 숨김 회차 입력과 추가비의 값을 지워도 포커스를 �
   await amount.fill('2400');
   await reason.fill('새 통행료');
   await page.getByRole('button', { name: '서버 저장', exact: true }).click();
-  await expect(page.getByRole('status')).toHaveText('서버 저장(작성중)');
+  await expect(page.getByRole('status')).toHaveText('작성 중 · 아직 안 보냄');
   const saved = await getUse(s.driverCtx, use.id);
   expect(saved.trips[0]).toMatchObject({
     cargo_desc: '모래',
@@ -184,7 +184,7 @@ test('마지막 상세값 삭제·회차 이동·삭제 후 빈 숨김 입력을
     await navigator.serviceWorker.ready;
   });
   await expect.poll(() => page.evaluate(() => !!navigator.serviceWorker.controller)).toBe(true);
-  await expect(page.getByRole('status')).toHaveText('휴대폰에 임시저장됨');
+  await expect(page.getByRole('status')).toHaveText('휴대폰에만 저장됨');
   await context.setOffline(true);
   await page.reload({ waitUntil: 'domcontentloaded' });
   await expect(via).toBeVisible();
@@ -193,7 +193,7 @@ test('마지막 상세값 삭제·회차 이동·삭제 후 빈 숨김 입력을
   await clearAndRetype(via, '복구 후 경유지');
   await context.setOffline(false);
   await page.getByRole('button', { name: '서버 저장', exact: true }).click();
-  await expect(page.getByRole('status')).toHaveText('서버 저장(작성중)');
+  await expect(page.getByRole('status')).toHaveText('작성 중 · 아직 안 보냄');
   const rows = await database.db.select().from(vehicleUses).where(eq(vehicleUses.driver_id, s.driver.id));
   const created = rows.find((row) => row.id !== recent.id)!;
   expect((await getUse(s.driverCtx, created.id)).trips[0].via).toEqual(['복구 후 경유지']);
@@ -236,7 +236,7 @@ test('한 번 노출된 빈 항목과 기본 상태·공차를 숨김으로 바�
     await navigator.serviceWorker.ready;
   });
   await expect.poll(() => page.evaluate(() => !!navigator.serviceWorker.controller)).toBe(true);
-  await expect(page.getByRole('status')).toHaveText('휴대폰에 임시저장됨');
+  await expect(page.getByRole('status')).toHaveText('휴대폰에만 저장됨');
   await context.setOffline(true);
   await page.reload({ waitUntil: 'domcontentloaded' });
   await expect(page.getByLabel('요청자', { exact: true })).toBeVisible();
@@ -248,7 +248,7 @@ test('한 번 노출된 빈 항목과 기본 상태·공차를 숨김으로 바�
   await clearAndRetype(page.getByLabel('특이사항', { exact: true }), '복구 특이사항');
   await context.setOffline(false);
   await page.getByRole('button', { name: '서버 저장', exact: true }).click();
-  await expect(page.getByRole('status')).toHaveText('서버 저장(작성중)');
+  await expect(page.getByRole('status')).toHaveText('작성 중 · 아직 안 보냄');
   const [row] = await database.db.select().from(vehicleUses).where(eq(vehicleUses.driver_id, s.driver.id));
   const saved = await getUse(s.driverCtx, row.id);
   expect(saved).toMatchObject({ requester: '복구 요청자', notes: '복구 특이사항' });

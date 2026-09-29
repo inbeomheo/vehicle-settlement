@@ -28,14 +28,16 @@ test('대리 입력 신규·수정 문맥, 실제 기사 변경 시 차량·단�
   await expect(page.getByRole('heading', { name: '대리 입력', exact: true })).toBeVisible();
   await page.getByLabel('실제 기사', { exact: true }).selectOption(first.driver.id);
   await page.getByLabel('현장', { exact: true }).selectOption(first.project.id);
-  await expect(page.getByLabel('과금 단위', { exact: true })).toHaveValue('PER_DAY');
+  await expect(page.getByLabel('요금 기준', { exact: true })).toHaveValue('PER_DAY');
   await expect(page.getByText('기본운임 300,000원', { exact: true })).toBeVisible();
   await page.getByLabel('실제 기사', { exact: true }).selectOption(second.driver.id);
   await expect(page.getByLabel('차량', { exact: true })).toHaveValue(second.vehicle.id);
-  await expect(page.getByLabel('과금 단위', { exact: true })).toHaveValue('PER_TRIP');
+  await expect(page.getByLabel('요금 기준', { exact: true })).toHaveValue('PER_TRIP');
   await expect(page.getByText('단가 123,456원', { exact: true })).toBeVisible();
-  await expect(page.getByLabel('청구수량', { exact: true })).toHaveValue('1');
-  await expect(page.getByText('운행 1회 기준 자동 입력, 수정 가능', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('청구 수량', { exact: true })).toHaveValue('1');
+  await expect(
+    page.getByText('운행 1회로 자동 입력했습니다. 고칠 수 있습니다.', { exact: true }),
+  ).toBeVisible();
   await expect(page.getByRole('button', { name: '검수 대기로 제출', exact: true })).toBeVisible();
   await expect(page.getByRole('status')).toHaveText('이 기기에 임시저장됨');
   await page.getByText('1회차 상세 입력', { exact: true }).click();
@@ -58,6 +60,6 @@ test('대리 입력 신규·수정 문맥, 실제 기사 변경 시 차량·단�
   await page.goto(`/m/uses/${use.id}/edit`);
   await expect(page.getByRole('heading', { name: '대리 입력', exact: true })).toBeVisible();
   await page.getByLabel('실제 기사', { exact: true }).selectOption(second.driver.id);
-  await expect(page.getByLabel('과금 단위', { exact: true })).toHaveValue('PER_TRIP');
+  await expect(page.getByLabel('요금 기준', { exact: true })).toHaveValue('PER_TRIP');
   await expect(page.getByText('단가 123,456원', { exact: true })).toBeVisible();
 });

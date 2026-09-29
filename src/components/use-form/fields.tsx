@@ -16,9 +16,9 @@ export { hasFieldValue } from './visibility';
 export const SettingsContext = createContext<FieldModes>(defaultFieldModes('manager'));
 export const RevealedFieldsContext = createContext<ReadonlySet<string>>(new Set());
 export const control =
-  'min-h-12 w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-base focus:border-blue-700 focus:outline-none focus:ring-3 focus:ring-blue-100 disabled:bg-slate-100 disabled:text-slate-500';
+  'min-h-14 w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-base focus:border-blue-700 focus:outline-none focus:ring-3 focus:ring-blue-100 disabled:bg-slate-100 disabled:text-slate-500';
 const buttonBase =
-  'inline-flex min-h-12 items-center justify-center gap-1.5 rounded-lg border px-4 py-2 font-semibold active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50';
+  'inline-flex min-h-14 items-center justify-center gap-1.5 rounded-lg border px-4 py-2 font-semibold active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50';
 export const button = `${buttonBase} border-slate-300 bg-white text-ink hover:bg-slate-50`;
 export const primary = `${buttonBase} border-signal-strong bg-signal font-bold text-ink shadow-[0_2px_0_#c99500] hover:bg-signal-strong active:shadow-none`;
 export const FixContext = createContext<{ target: string; message: string }[]>([]);
@@ -49,7 +49,7 @@ export function FormContexts({
 }
 
 export function HiddenFieldNotice() {
-  return <p className="mt-2 text-sm text-slate-600">관리자 설정상 숨김 항목입니다</p>;
+  return <p className="mt-2 text-sm text-slate-700">관리자 설정상 숨김 항목입니다</p>;
 }
 export function Field({
   label,
@@ -108,7 +108,7 @@ export function Field({
       {required && <span className="ml-2 text-sm font-bold text-red-700">필수</span>}
     </>
   );
-  const labelClass = labelClassName ?? 'mb-1.5 block text-[15px] font-semibold text-ink';
+  const labelClass = labelClassName ?? 'mb-1.5 block text-base font-semibold text-ink';
   return (
     <div data-fix-target={target} className="min-w-0 scroll-mt-24">
       {group ? (
@@ -158,7 +158,7 @@ export function Field({
           )
         : children}
       {errors.length > 0 && (
-        <p id={errorId} className="mt-1.5 text-[15px] font-semibold text-red-700">
+        <p id={errorId} className="mt-1.5 text-[0.9375rem] font-semibold text-red-700">
           {errors.map((error) => error.reason).join(' ')}
         </p>
       )}
@@ -183,6 +183,8 @@ export function Section({
   plain = false,
   action,
   hideTitle = false,
+  step,
+  done = false,
 }: {
   title: string;
   children: ReactNode;
@@ -194,6 +196,10 @@ export function Section({
   action?: ReactNode;
   /** 제목을 화면에서 숨기고 보조기기에만 읽힌다 */
   hideTitle?: boolean;
+  /** 입력 순서 번호(기사 화면). 번호는 순서를 알려주는 시각 정보다. */
+  step?: number;
+  /** 이 단계의 필수 입력을 모두 채웠는지 */
+  done?: boolean;
 }) {
   const sectionId = useId();
   const parentFeedback = useContext(GroupFeedbackContext);
@@ -227,7 +233,39 @@ export function Section({
           hideTitle ? 'sr-only' : `flex items-center justify-between gap-3 ${plain ? 'mb-3' : 'mb-4'}`
         }
       >
-        <h2 className={plain ? 'text-[15px] font-bold text-slate-700' : 'text-[17px] font-bold'}>{title}</h2>
+        <div className="flex min-w-0 items-center gap-2.5">
+          {step !== undefined && (
+            <span
+              aria-hidden="true"
+              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-base font-bold ${done ? 'bg-emerald-700 text-white' : 'bg-ink text-white'}`}
+            >
+              {done ? (
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="3"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="m5 12 5 5 9-10" />
+                </svg>
+              ) : (
+                step
+              )}
+            </span>
+          )}
+          <h2 className={plain ? 'text-base font-bold text-slate-700' : 'text-[1.125rem] font-bold'}>
+            {title}
+          </h2>
+          {step !== undefined && done && (
+            <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-sm font-bold text-emerald-800">
+              완료
+            </span>
+          )}
+        </div>
         {action}
       </div>
       <div id={descriptionId}>
@@ -256,7 +294,7 @@ export function Section({
 export function StatusBadge({ children, warning = false }: { children: ReactNode; warning?: boolean }) {
   return (
     <span
-      className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-bold before:h-1.5 before:w-1.5 before:rounded-full ${warning ? 'border-orange-200 bg-orange-50 text-orange-800 before:bg-orange-600' : 'border-slate-200 bg-slate-50 text-slate-700 before:bg-blue-700'}`}
+      className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-0.5 text-sm font-bold before:h-1.5 before:w-1.5 before:rounded-full ${warning ? 'border-orange-200 bg-orange-50 text-orange-800 before:bg-orange-600' : 'border-slate-200 bg-slate-50 text-slate-700 before:bg-blue-700'}`}
     >
       {children}
     </span>
@@ -289,7 +327,12 @@ export function ChoiceChips({
   'aria-describedby'?: string;
 }) {
   return (
-    <div id={id} role="radiogroup" {...aria} className={`grid gap-2 ${columns === 2 ? 'grid-cols-2' : ''}`}>
+    <div
+      id={id}
+      role="radiogroup"
+      {...aria}
+      className={`grid gap-2 ${columns === 2 ? 'grid-cols-[repeat(auto-fill,minmax(min(100%,11rem),1fr))]' : ''}`}
+    >
       {choices.map((choice) => {
         const selected = choice.value === value;
         return (

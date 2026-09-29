@@ -46,9 +46,9 @@ export function Dashboard({ role }: { role: Context['user']['role'] }) {
   const nothingToDo = data && todo.every((item) => !data[item.key]);
   return (
     <div className="max-w-3xl">
-      <p className="text-[15px] text-slate-600">{todayLabel()}</p>
+      <p className="text-[0.9375rem] text-slate-600">{todayLabel()}</p>
       <div className="mt-0.5 mb-5 flex flex-wrap items-end justify-between gap-3">
-        <h1 className="text-[28px] font-bold">처리할 일</h1>
+        <h1 className="text-[1.75rem] font-bold">처리할 일</h1>
         <Link href="/m/uses/new" className={secondaryClass}>
           대리 입력
         </Link>
@@ -68,7 +68,7 @@ export function Dashboard({ role }: { role: Context['user']['role'] }) {
                   >
                     <span className="flex-1 text-lg font-semibold">{item.title}</span>
                     <span
-                      className={`num text-[32px] leading-none font-bold ${data[item.key] ? item.tone : 'text-slate-300'}`}
+                      className={`num text-[2rem] leading-none font-bold ${data[item.key] ? item.tone : 'text-slate-300'}`}
                     >
                       {data[item.key]}
                     </span>

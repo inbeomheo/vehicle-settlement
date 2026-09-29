@@ -252,8 +252,8 @@ export function Heading({
   return (
     <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
       <div>
-        <h1 className="text-2xl font-bold text-ink sm:text-[28px]">{title}</h1>
-        {description && <p className="mt-1.5 text-[15px] text-slate-600">{description}</p>}
+        <h1 className="text-2xl font-bold text-ink sm:text-[1.75rem]">{title}</h1>
+        {description && <p className="mt-1.5 text-[0.9375rem] text-slate-600">{description}</p>}
       </div>
       {children}
     </div>
@@ -275,7 +275,7 @@ export function Empty({
   children?: React.ReactNode;
 }) {
   return (
-    <p role="status" className="px-6 py-12 text-center text-[15px] text-slate-600">
+    <p role="status" className="px-6 py-12 text-center text-[0.9375rem] text-slate-600">
       {loading ? '불러오는 중…' : children}
     </p>
   );

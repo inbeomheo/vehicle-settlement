@@ -511,7 +511,7 @@ function ReviewCard({
       )}
       <div className="flex w-12 shrink-0 flex-col items-center justify-center py-3 sm:w-16">
         <span className="text-xs text-slate-500">{month}월</span>
-        <span className="num text-2xl leading-none font-bold sm:text-[28px]">{day}</span>
+        <span className="num text-2xl leading-none font-bold sm:text-[1.75rem]">{day}</span>
       </div>
       <div className="slip-perforation w-2 shrink-0" aria-hidden="true" />
       <div className="grid min-w-0 flex-1 gap-3 p-3 sm:grid-cols-[1fr_auto] sm:items-center sm:p-4">
@@ -521,7 +521,7 @@ function ReviewCard({
             <span className="font-semibold">{row.driver_name}</span>
             <span className="text-sm text-slate-500">{row.project_name}</span>
           </div>
-          <p className="mt-1.5 truncate text-[15px]">{row.route_summary}</p>
+          <p className="mt-1.5 truncate text-[0.9375rem]">{row.route_summary}</p>
           <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
             <UseLink id={row.id}>{row.use_no}</UseLink>
             <span className="text-slate-600">증빙 {row.evidence_count}개</span>

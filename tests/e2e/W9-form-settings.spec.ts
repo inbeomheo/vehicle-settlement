@@ -5,6 +5,7 @@ import { vehicleUses } from '../../src/server/db/schema';
 import { setupScenario } from '../helpers/factories';
 import { getAdminFormSettings, saveFormSettings } from '../../src/server/services/form-settings';
 import { getUse } from '../../src/server/services/uses';
+import { submitDriverForm } from './submit-helper';
 
 const database = createDatabase(process.env.DATABASE_URL!);
 test.use({ viewport: { width: 390, height: 844 }, actionTimeout: 15000 });
@@ -73,8 +74,8 @@ test('390px 기본 기사 폼은 최소 항목과 추가비 버튼만 표시하�
   await mobileSize(page);
   await page.screenshot({ path: 'test-results/W9-minimal-390.png', fullPage: true });
   await page.getByLabel('사진·파일 선택', { exact: true }).setInputFiles('public/icons/icon-192.png');
-  await page.getByRole('button', { name: '담당자에게 제출', exact: true }).click();
-  await expect(page.getByRole('status')).toHaveText('담당자에게 제출 완료');
+  await submitDriverForm(page);
+  await expect(page.getByRole('status')).toHaveText('담당자에게 보냈습니다');
   const rows = await database.db.select().from(vehicleUses).where(eq(vehicleUses.driver_id, s.driver.id));
   expect(rows).toHaveLength(1);
   expect(rows[0]).toMatchObject({ review_status: 'SUBMITTED', requester: '', work_type_id: null });
@@ -106,7 +107,7 @@ test('관리자 회사 필수 변경 → 열린 기사 폼 제출 전 검사, �
     await expect(page.getByText('입력 항목 설정을 저장했습니다. 변경 이력에 기록되었습니다.')).toBeVisible();
     await mobileSize(page);
     await page.screenshot({ path: 'test-results/W9-admin-390.png', fullPage: true });
-    await driverPage.getByRole('button', { name: '담당자에게 제출', exact: true }).click();
+    await submitDriverForm(driverPage);
     await expect(driverPage.locator('#form-errors')).toContainText('요청자 항목을 입력하세요.');
     await expect(driverPage.getByLabel(/요청자.*필수/)).toHaveAttribute('aria-required', 'true');
     expect(
@@ -129,8 +130,8 @@ test('관리자 회사 필수 변경 → 열린 기사 폼 제출 전 검사, �
     await driverPage.locator(`input[name="project_id"][value="${b.id}"]`).check();
     await expect(driverPage.getByLabel(/요청자.*필수/)).toBeVisible();
     await driverPage.getByLabel(/요청자.*필수/).fill('현장 담당자');
-    await driverPage.getByRole('button', { name: '담당자에게 제출', exact: true }).click();
-    await expect(driverPage.getByRole('status')).toHaveText('담당자에게 제출 완료');
+    await submitDriverForm(driverPage);
+    await expect(driverPage.getByRole('status')).toHaveText('담당자에게 보냈습니다');
     await page
       .getByRole('region', { name: '요청자 설정', exact: true })
       .getByRole('button', { name: '재정의 해제' })
@@ -173,7 +174,7 @@ test('현장 설정 IndexedDB 캐시로 오프라인 재시작·필수 검사·�
     await navigator.serviceWorker.ready;
   });
   await expect.poll(() => page.evaluate(() => !!navigator.serviceWorker.controller)).toBe(true);
-  await expect(page.getByRole('status')).toHaveText('휴대폰에 임시저장됨');
+  await expect(page.getByRole('status')).toHaveText('휴대폰에만 저장됨');
   await context.setOffline(true);
   await page.reload({ waitUntil: 'domcontentloaded' });
   await expect(
@@ -181,10 +182,10 @@ test('현장 설정 IndexedDB 캐시로 오프라인 재시작·필수 검사·�
   ).toBeVisible();
   await expect(page.getByLabel(/1회차 경유.*필수/)).toBeVisible();
   await expect(page.getByLabel('1회차 출발시각 (서울)', { exact: true })).toHaveCount(0);
-  await page.getByRole('button', { name: '담당자에게 제출', exact: true }).click();
+  await submitDriverForm(page);
   await expect(page.locator('#form-errors')).toContainText('1회차 경유 항목을 입력하세요.');
   await page.getByLabel(/1회차 경유.*필수/).fill('중간 창고');
-  await page.getByRole('button', { name: '담당자에게 제출', exact: true }).click();
+  await submitDriverForm(page);
   await expect(page.getByRole('status')).toContainText('제출 대기');
   await saveFormSettings(s.adminCtx, {
     project_id: s.project.id,
@@ -194,8 +195,8 @@ test('현장 설정 IndexedDB 캐시로 오프라인 재시작·필수 검사·�
   await expect(page.locator('#form-errors')).toContainText('요청자');
   await expect(page.getByLabel(/요청자.*필수/)).toBeVisible();
   await page.getByLabel(/요청자.*필수/).fill('현장 담당');
-  await page.getByRole('button', { name: '담당자에게 제출', exact: true }).click();
-  await expect(page.getByRole('status')).toHaveText('담당자에게 제출 완료');
+  await submitDriverForm(page);
+  await expect(page.getByRole('status')).toHaveText('담당자에게 보냈습니다');
   const [row] = await database.db.select().from(vehicleUses).where(eq(vehicleUses.driver_id, s.driver.id));
   expect((await getUse(s.driverCtx, row.id)).trips[0].via).toEqual(['중간 창고']);
 });

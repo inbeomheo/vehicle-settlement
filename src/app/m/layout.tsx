@@ -1,6 +1,7 @@
 import { guardPage } from '@/server/auth/page';
 import { canAccessManagerPage, managerMenu } from '@/server/auth/manager-access';
 import { ManagerNavigation } from '@/components/manager/navigation';
+import { TextSizeScript } from '@/components/ui/text-size';
 import './manager.css';
 export const dynamic = 'force-dynamic';
 
@@ -14,6 +15,7 @@ export default async function Layout({ children }: { children: React.ReactNode }
   const user = await guardPage('manager');
   return (
     <div className="manager-shell min-h-dvh">
+      <TextSizeScript fallback="normal" />
       <ManagerNavigation
         items={managerMenu.filter((item) => canAccessManagerPage(user.role, item.href))}
         userName={user.name}

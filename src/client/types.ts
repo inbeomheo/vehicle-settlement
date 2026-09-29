@@ -38,10 +38,10 @@ export const evidenceKinds = {
   SLIP_NO: '전표번호',
 };
 export const reviewLabels = {
-  DRAFT: '서버 저장(작성중)',
-  SUBMITTED: '제출 완료',
-  NEEDS_FIX: '보완요청',
-  APPROVED: '승인',
+  DRAFT: '작성 중 · 아직 안 보냄',
+  SUBMITTED: '보냄 · 확인 기다림',
+  NEEDS_FIX: '고쳐서 다시 보내기',
+  APPROVED: '승인됨',
 };
 export const operationLabels = {
   PLANNED: '예정',

@@ -4,6 +4,7 @@ import { createDatabase } from '../../src/server/db/client';
 import { setupScenario } from '../helpers/factories';
 import { createUse, getUse, updateUse, approveUse } from '../../src/server/services/uses';
 import { createEvidence, uploadEvidence } from '../../src/server/services/evidence';
+import { submitDriverForm } from './submit-helper';
 
 const database = createDatabase(process.env.DATABASE_URL!);
 test.afterAll(async () => database.pool.end());
@@ -40,8 +41,8 @@ test('기사 변경 후 파일은 숨기고 제한 안내와 기존 증빙을 �
   await expect(notice).toBeVisible();
   await expect(page.getByText('이전기사_비공개.pdf')).toHaveCount(0);
   expect((await page.request.get(`/api/evidence/${file.id}/file`)).status()).toBe(404);
-  await page.getByRole('button', { name: '담당자에게 제출', exact: true }).click();
-  await expect(page.getByText('담당자에게 제출 완료', { exact: true })).toBeVisible();
+  await submitDriverForm(page);
+  await expect(page.getByText('담당자에게 보냈습니다', { exact: true })).toBeVisible();
   use = await getUse(s.adminCtx, use.id);
   expect(use.review_status).toBe('SUBMITTED');
   await approveUse(s.adminCtx, use.id, { version: use.version });

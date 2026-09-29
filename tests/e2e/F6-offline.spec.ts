@@ -5,6 +5,7 @@ import { createDatabase, defaultDatabaseUrl } from '../../src/server/db/client';
 import { setupScenario } from '../helpers/factories';
 import { vehicleUses } from '../../src/server/db/schema';
 import { getUse, requestFix, updateUse } from '../../src/server/services/uses';
+import { submitDriverForm } from './submit-helper';
 
 test.use({ viewport: { width: 390, height: 844 } });
 test.setTimeout(120000);
@@ -47,11 +48,11 @@ test('R7-2 생성 응답 유실 후 첨부 취소·새로고침·편집은 원�
   await page.getByRole('button', { name: '첨부 취소', exact: true }).click();
   await expect(page.getByLabel('1회차 출발', { exact: true })).toBeEnabled();
   await page.reload();
-  await page.getByLabel('청구수량', { exact: true }).fill('2');
+  await page.getByLabel('청구 수량', { exact: true }).fill('2');
   await page.getByLabel('1회차 도착', { exact: true }).fill('첨부 취소 후 새 도착지');
   recovered = true;
   await page.getByRole('button', { name: '서버 저장', exact: true }).click();
-  await expect(page.getByRole('status').filter({ hasText: '서버 저장(작성중)' })).toBeVisible();
+  await expect(page.getByRole('status').filter({ hasText: '작성 중 · 아직 안 보냄' })).toBeVisible();
   expect(posts.length).toBeGreaterThanOrEqual(2);
   expect(posts.every((body) => body === posts[0])).toBe(true);
   const use = await getUse(s.driverCtx, (await useFor(s.driver.id)).id);
@@ -67,7 +68,7 @@ test('R7-3 재전송은 담당자 최신 수량을 표시하고 다시 불러온
   await page.route(/\/api\/uses\/[^/]+$/, (route) =>
     failing && route.request().method() === 'GET' ? route.abort('failed') : route.continue(),
   );
-  await page.getByRole('button', { name: '담당자에게 제출', exact: true }).click();
+  await submitDriverForm(page);
   await expect(page.locator('#form-errors')).toBeVisible();
   const saved = await useFor(s.driver.id);
   await updateUse(s.adminCtx, saved.id, { version: saved.version, quantity: '9', notes: '담당자 수정 내용' });
@@ -78,8 +79,8 @@ test('R7-3 재전송은 담당자 최신 수량을 표시하고 다시 불러온
   await expect(page.getByText('청구수량: 9.000', { exact: true })).toBeVisible();
   expect((await getUse(s.driverCtx, saved.id)).review_status).toBe('DRAFT');
   await page.getByRole('button', { name: '최신 값으로 불러와 다시 작성', exact: true }).click();
-  await page.getByRole('button', { name: '담당자에게 제출', exact: true }).click();
-  await expect(page.getByRole('status').filter({ hasText: '담당자에게 제출 완료' })).toBeVisible();
+  await submitDriverForm(page);
+  await expect(page.getByRole('status').filter({ hasText: '담당자에게 보냈습니다' })).toBeVisible();
   expect((await getUse(s.driverCtx, saved.id)).charge_lines[0].quantity).toBe('9.000');
 });
 
@@ -92,7 +93,7 @@ test('R7-4 제출 응답 재생 후 폼과 내 운행 목록에 최신 보완요
     await route.fetch();
     await route.abort('failed');
   });
-  await page.getByRole('button', { name: '담당자에게 제출', exact: true }).click();
+  await submitDriverForm(page);
   await expect(page.locator('#form-errors')).toBeVisible();
   const saved = await useFor(s.driver.id);
   await requestFix(s.adminCtx, saved.id, {
@@ -101,9 +102,9 @@ test('R7-4 제출 응답 재생 후 폼과 내 운행 목록에 최신 보완요
   });
   failing = false;
   await page.getByRole('button', { name: '미전송 다시 보내기', exact: true }).click();
-  await expect(page.getByRole('status').filter({ hasText: '보완요청' })).toBeVisible();
+  await expect(page.getByRole('status').filter({ hasText: '고쳐서 다시 보내기' })).toBeVisible();
   await expect(page.getByRole('button', { name: '최신 도착지 보완요청 →', exact: true })).toBeVisible();
   await page.goto('/d');
-  await expect(page.getByText('보완요청', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('고쳐서 다시 보내기', { exact: true }).first()).toBeVisible();
   expect((await getUse(s.driverCtx, saved.id)).current_revision_no).toBe(1);
 });

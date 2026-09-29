@@ -1,6 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import ExcelJS from 'exceljs';
 import { readFile } from 'node:fs/promises';
+import { submitDriverForm } from './submit-helper';
 
 test.setTimeout(180000);
 async function login(page: Page, id: string) {
@@ -37,7 +38,7 @@ async function inputUse(
     await page.getByLabel(`${i}회차 출발`, { exact: true }).fill('자재 창고');
     await page.getByLabel(`${i}회차 도착`, { exact: true }).fill(`서울 ${i}문`);
   }
-  await page.getByLabel('청구수량', { exact: true }).fill(options.quantity);
+  await page.getByLabel('청구 수량', { exact: true }).fill(options.quantity);
   await expect(
     page.getByText(`기본운임 ${options.quantity === '5' ? '500,000' : '300,000'}원`, { exact: true }),
   ).toBeVisible();
@@ -51,13 +52,12 @@ async function inputUse(
   const created = page.waitForResponse(
     (r) => new URL(r.url()).pathname === '/api/uses' && r.request().method() === 'POST',
   );
-  await page
-    .getByRole('button', { name: options.manager ? '검수 대기로 제출' : '담당자에게 제출', exact: true })
-    .click();
+  if (options.manager) await page.getByRole('button', { name: '검수 대기로 제출', exact: true }).click();
+  else await submitDriverForm(page);
   const response = await created;
   expect(response.status()).toBe(200);
   const use = (await response.json()).data as Use;
-  if (!options.manager) await expect(page.getByText('담당자에게 제출 완료', { exact: true })).toBeVisible();
+  if (!options.manager) await expect(page.getByText('담당자에게 보냈습니다', { exact: true })).toBeVisible();
   await expect
     .poll(async () => (await (await page.request.get(`/api/uses/${use.id}`)).json()).data.review_status)
     .toBe('SUBMITTED');
@@ -125,10 +125,7 @@ async function settle(page: Page, party: string, uses: Use[], total: number, pri
   return { id, no };
 }
 async function driverStatement(page: Page, no: string, state: string) {
-  await page.goto('/d/settlements');
-  await page.getByLabel('조회 시작일').fill('2026-09-01');
-  await page.getByLabel('조회 종료일').fill('2026-09-30');
-  await page.getByRole('button', { name: '조회', exact: true }).click();
+  await page.goto('/d/settlements?month=2026-09');
   await expect(
     page
       .getByRole('article')
@@ -165,8 +162,8 @@ test('기사 → 보완·재제출·보류 검수 → 전월분 정산 → 엑�
   await page.goto(`/d/uses/${first.id}`);
   await page.getByRole('button', { name: '2회차 하차장 확인 →' }).click();
   await page.getByLabel('2회차 도착', { exact: true }).fill('서울 동문');
-  await page.getByRole('button', { name: '보완 후 재제출', exact: true }).click();
-  await expect(page.getByText('담당자에게 제출 완료', { exact: true })).toBeVisible();
+  await submitDriverForm(page, '고쳐서 다시 보내기');
+  await expect(page.getByText('담당자에게 보냈습니다', { exact: true })).toBeVisible();
   await login(page, 'site');
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto(`/m/uses/${first.id}`);

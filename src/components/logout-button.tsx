@@ -8,7 +8,7 @@ export function LogoutButton({ tone = 'light' }: { tone?: 'light' | 'dark' }) {
     <div>
       <button
         disabled={busy}
-        className={`min-h-11 rounded-lg px-3 py-2 text-sm font-medium ${tone === 'dark' ? 'text-slate-200 hover:bg-white/10' : 'border border-slate-300 hover:bg-slate-50'}`}
+        className={`min-h-11 whitespace-nowrap rounded-lg px-2.5 py-2 text-sm font-medium ${tone === 'dark' ? 'text-slate-200 hover:bg-white/10' : 'border border-slate-300 hover:bg-slate-50'}`}
         onClick={async () => {
           setBusy(true);
           setError('');

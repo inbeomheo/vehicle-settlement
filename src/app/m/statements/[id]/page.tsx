@@ -108,7 +108,7 @@ export default function StatementPage() {
               <StatementBadge status={statement.status} />
               {statement.direction === 'PAYABLE' ? '운송사 지급명세' : '원청 청구명세'}
             </p>
-            <h1 className="mt-2 break-all text-[28px] font-bold">
+            <h1 className="mt-2 break-all text-[1.75rem] font-bold">
               {String(statement.counterparty_snapshot?.name ?? '거래처')}
             </h1>
           </div>

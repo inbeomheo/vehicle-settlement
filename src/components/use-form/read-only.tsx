@@ -20,7 +20,7 @@ export function ReadOnlyUse({ use }: { use: UseDetail }) {
             ] as [string, React.ReactNode][]
           ).map(([label, value]) => (
             <div key={label}>
-              <dt className="text-sm text-slate-600">{label}</dt>
+              <dt className="text-[0.9375rem] text-slate-700">{label}</dt>
               <dd className="break-words font-medium">{value}</dd>
             </div>
           ))}
@@ -75,7 +75,7 @@ export function ReadOnlyUse({ use }: { use: UseDetail }) {
           <p>첨부된 증빙이 없습니다.</p>
         )}
       </Section>
-      <p className="text-sm text-slate-600">
+      <p className="text-[0.9375rem] text-slate-700">
         인정액{' '}
         {money(
           use.charge_lines

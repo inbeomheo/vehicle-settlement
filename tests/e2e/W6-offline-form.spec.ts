@@ -6,6 +6,7 @@ import { setupScenario } from '../helpers/factories';
 import { vehicleUses } from '../../src/server/db/schema';
 import { saveFormSettings } from '../../src/server/services/form-settings';
 import { getUse } from '../../src/server/services/uses';
+import { submitDriverForm } from './submit-helper';
 
 test.use({ viewport: { width: 360, height: 800 } });
 test.setTimeout(120000);
@@ -50,16 +51,16 @@ test('360px 운행 상세 접기와 과금 필수 입력, 증빙 동작 중에�
   await disclosure.click();
   await expect(via).toBeHidden();
   await expect(via).toHaveValue('동부 창고');
-  await page.getByLabel('과금 단위', { exact: true }).selectOption('PER_TON');
+  await page.getByLabel('요금 기준', { exact: true }).selectOption('PER_TON');
   await expect(quantity).toBeVisible();
   await expect(quantity).toHaveValue('5');
   await expect(hours).toBeHidden();
-  await page.getByLabel('과금 단위', { exact: true }).selectOption('PER_M3');
+  await page.getByLabel('요금 기준', { exact: true }).selectOption('PER_M3');
   await expect(quantity).toBeVisible();
-  await page.getByLabel('과금 단위', { exact: true }).selectOption('PER_HOUR');
+  await page.getByLabel('요금 기준', { exact: true }).selectOption('PER_HOUR');
   await expect(hours).toBeVisible();
   await expect(quantity).toBeHidden();
-  await page.getByLabel('과금 단위', { exact: true }).selectOption('PER_DAY');
+  await page.getByLabel('요금 기준', { exact: true }).selectOption('PER_DAY');
   await page.getByLabel('사진·파일 선택', { exact: true }).setInputFiles('public/icons/icon-192.png');
   await page.getByRole('button', { name: '서버 저장', exact: true }).click();
   await expect(page.getByText('업로드 완료', { exact: true })).toBeVisible();
@@ -90,7 +91,7 @@ test('영구 첨부 실패는 오류 표시·첨부 취소·확인 후 기기 �
     }),
   );
   await page.getByLabel('사진·파일 선택', { exact: true }).setInputFiles('public/icons/icon-192.png');
-  await page.getByRole('button', { name: '담당자에게 제출', exact: true }).click();
+  await submitDriverForm(page);
   await expect(page.locator('#form-errors')).toContainText('확정 명세에 포함되어 증빙을 변경할 수 없습니다.');
   await expect(page.getByText('자동 재전송이 중단되었습니다.', { exact: false })).toBeVisible();
   await expect(page.getByRole('button', { name: '사진 다시 보내기', exact: true })).toHaveCount(0);

@@ -29,7 +29,7 @@ export default function StatementsPage() {
     <div className="min-w-0 space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-[28px] font-bold">월 정산</h1>
+          <h1 className="text-[1.75rem] font-bold">월 정산</h1>
           <p className="mt-2 text-sm text-slate-600">승인된 비용을 모아 거래처별 명세를 확정합니다.</p>
         </div>
         <button className={creating ? secondaryClass : signalClass} onClick={() => setCreating(!creating)}>

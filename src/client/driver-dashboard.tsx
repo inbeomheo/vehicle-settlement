@@ -100,8 +100,8 @@ export function DriverDashboard() {
     <div className="space-y-6">
       <PwaRegistration />
       <div>
-        <p className="text-[15px] text-slate-600">{koreanDate(todaySeoul())}</p>
-        <h1 className="mt-0.5 text-[28px] font-bold">{data.user.name}님</h1>
+        <p className="text-[0.9375rem] text-slate-700">{koreanDate(todaySeoul())}</p>
+        <h1 className="mt-0.5 text-[1.75rem] font-bold">{data.user.name}님</h1>
         <p className="mt-1 flex flex-wrap gap-x-3 text-sm text-slate-600">
           <span>오늘 {today}건 등록</span>
           <span className={pending.length > 0 ? 'font-semibold text-orange-800' : undefined}>
@@ -183,7 +183,7 @@ export function DriverDashboard() {
             >
               <span className="min-w-0">
                 <span className="block font-bold text-orange-700">보완 요청</span>
-                <span className="block truncate text-[15px]">
+                <span className="block truncate text-[0.9375rem]">
                   {koreanDate(row.use_date, false)} · {row.fix_message ?? String(row.snapshot.project_name)}
                 </span>
               </span>
@@ -209,7 +209,7 @@ export function DriverDashboard() {
                   {data.lookups.projects.find((p) => p.id === d.form.project_id)?.name ?? '현장 선택 전'}
                 </p>
                 <div className="mt-2 flex flex-wrap gap-1.5">
-                  <StatusBadge>{d.savedRequest ? '서버 저장(작성중)' : '휴대폰 임시저장'}</StatusBadge>
+                  <StatusBadge>{d.savedRequest ? '작성 중 · 아직 안 보냄' : '휴대폰에만 저장됨'}</StatusBadge>
                   {d.uploads.some((f) => f.status === 'failed') ? (
                     <StatusBadge warning>사진 업로드 실패</StatusBadge>
                   ) : d.uploads.some((f) => f.status !== 'uploaded') ? (
@@ -250,7 +250,7 @@ export function DriverDashboard() {
               <a
                 key={id}
                 href={`/d/new?project=${id}`}
-                className="inline-flex min-h-11 shrink-0 items-center rounded-full border border-slate-300 bg-white px-4 text-[15px] font-semibold"
+                className="inline-flex min-h-11 shrink-0 items-center rounded-full border border-slate-300 bg-white px-4 text-[0.9375rem] font-semibold"
               >
                 {name}
               </a>
@@ -282,21 +282,23 @@ export function DriverDashboard() {
                     className={`slip relative flex rounded-lg border bg-white ${fix ? 'border-orange-300' : 'border-slate-200'} ${canceled ? 'opacity-60' : ''}`}
                   >
                     <span className="flex w-[4.5rem] shrink-0 flex-col items-center justify-center py-3">
-                      <span className="text-xs text-slate-500">{Number(row.use_date.slice(5, 7))}월</span>
-                      <span className="num text-[28px] leading-none font-bold">
+                      <span className="text-sm font-semibold text-slate-700">
+                        {Number(row.use_date.slice(5, 7))}월
+                      </span>
+                      <span className="num text-[1.75rem] leading-none font-bold">
                         {row.use_date.slice(8, 10)}
                       </span>
-                      <span className="mt-0.5 text-xs font-semibold text-slate-500">
+                      <span className="mt-0.5 text-sm font-semibold text-slate-700">
                         {weekday(row.use_date)}
                       </span>
                     </span>
                     <span aria-hidden="true" className="slip-perforation w-2 shrink-0" />
                     <span className="min-w-0 flex-1 py-3 pr-3 pl-2">
                       <span className="flex items-start justify-between gap-2">
-                        <span className="min-w-0 truncate text-[17px] font-bold">
+                        <span className="min-w-0 truncate text-[1.0625rem] font-bold">
                           {String(row.snapshot.project_name)}
                           {row.entered_as === 'PROXY' && (
-                            <span className="ml-1.5 text-xs font-medium text-slate-500">대리 입력</span>
+                            <span className="ml-1.5 text-sm font-medium text-slate-700">대리 입력</span>
                           )}
                         </span>
                         <StatusBadge warning={fix}>

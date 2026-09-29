@@ -5,6 +5,7 @@ import { rateAgreements, vehicleUses } from '../../src/server/db/schema';
 import { setupScenario } from '../helpers/factories';
 import { approveUse, createUse, getUse, submitUse } from '../../src/server/services/uses';
 import { createStatement, confirmStatement } from '../../src/server/services/statements';
+import { submitDriverForm } from './submit-helper';
 
 const database = createDatabase(process.env.DATABASE_URL!);
 test.use({ viewport: { width: 390, height: 844 }, actionTimeout: 15000 });
@@ -40,7 +41,7 @@ test('확정 상세는 읽기 전용, 승인 건은 확인 후 편집·재승인
   await page.getByRole('button', { name: '확인 후 수정' }).click();
   await page.getByLabel('운반 내용', { exact: true }).fill('기사 수정');
   await page.getByRole('button', { name: '서버 저장', exact: true }).click();
-  await expect(page.getByRole('status')).toHaveText('서버 저장(작성중)');
+  await expect(page.getByRole('status')).toHaveText('작성 중 · 아직 안 보냄');
   expect((await getUse(s.driverCtx, use.id)).review_status).toBe('DRAFT');
   use = await getUse(s.driverCtx, use.id);
   use = await submitUse(s.driverCtx, use.id, { version: use.version });
@@ -66,7 +67,7 @@ test('확정 상세는 읽기 전용, 승인 건은 확인 후 편집·재승인
   await expect(page.getByText('휴대폰에 저장 중…', { exact: true })).toHaveCount(0);
   await expect(page.locator('input,select,textarea')).toHaveCount(0);
   await expect(page.getByRole('button', { name: '서버 저장', exact: true })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: '담당자에게 제출', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '담당자에게 보내기', exact: true })).toHaveCount(0);
   await page.reload();
   await expect(
     page.getByText('정산 확정된 운행입니다. 수정이 필요하면 담당자에게 문의하세요', { exact: true }).last(),
@@ -94,7 +95,7 @@ test('이전 운행은 서버 생성 없이 기기 초안 복사, 서버 작성�
     await database.db.select().from(vehicleUses).where(eq(vehicleUses.driver_id, s.driver.id)),
   ).toHaveLength(1);
   await page.getByRole('button', { name: '서버 저장', exact: true }).click();
-  await expect(page.getByRole('status')).toHaveText('서버 저장(작성중)');
+  await expect(page.getByRole('status')).toHaveText('작성 중 · 아직 안 보냄');
   const rows = await database.db.select().from(vehicleUses).where(eq(vehicleUses.driver_id, s.driver.id));
   expect(rows).toHaveLength(2);
   const copied = rows.find((row) => row.id !== use.id)!;
@@ -109,7 +110,7 @@ test('증빙 필수 검사는 편집 유지·영역 강조, 서버 SUBMIT_BLOCKE
   const s = await setupScenario(database.db, { evidence_policy: 'PHOTO_REQUIRED' });
   await login(page, s.driverUser.login_id);
   await fillTrip(page);
-  await page.getByRole('button', { name: '담당자에게 제출', exact: true }).click();
+  await submitDriverForm(page);
   const evidence = page.locator('[data-fix-target="evidence"]');
   await expect(evidence.getByRole('alert')).toHaveText('사진·인수증·계근표·확인서 중 1개 이상을 등록하세요.');
   await expect(page.getByLabel('1회차 출발', { exact: true })).toBeEnabled();
@@ -126,7 +127,7 @@ test('증빙 필수 검사는 편집 유지·영역 강조, 서버 SUBMIT_BLOCKE
       }),
     }),
   );
-  await page.getByRole('button', { name: '담당자에게 제출', exact: true }).click();
+  await submitDriverForm(page);
   await expect(page.locator('#form-errors')).toContainText('변경된 현장 정책');
   await expect(page.getByLabel('1회차 출발', { exact: true })).toBeEnabled();
   await expect(page.getByRole('button', { name: '미전송 다시 보내기' })).toHaveCount(0);
@@ -195,16 +196,18 @@ test('PER_TRIP 청구수량 안내·필수 검사', async ({ page }) => {
     .where(eq(rateAgreements.id, s.rate.id));
   await login(page, s.driverUser.login_id);
   await fillTrip(page);
-  await expect(page.getByLabel('과금 단위', { exact: true })).toHaveValue('PER_TRIP');
-  await expect(page.getByLabel('청구수량', { exact: true })).toHaveValue('1');
-  await expect(page.getByText('운행 1회 기준 자동 입력, 수정 가능', { exact: true })).toBeVisible();
-  await page.getByLabel('청구수량', { exact: true }).fill('');
+  await expect(page.getByLabel('요금 기준', { exact: true })).toHaveValue('PER_TRIP');
+  await expect(page.getByLabel('청구 수량', { exact: true })).toHaveValue('1');
+  await expect(
+    page.getByText('운행 1회로 자동 입력했습니다. 고칠 수 있습니다.', { exact: true }),
+  ).toBeVisible();
+  await page.getByLabel('청구 수량', { exact: true }).fill('');
   await expect(page.getByText('청구 수량을 입력하세요', { exact: true })).toBeVisible();
   await expect(page.getByText('기본운임 단가 미확정', { exact: true })).toHaveCount(0);
-  await page.getByRole('button', { name: '담당자에게 제출', exact: true }).click();
+  await submitDriverForm(page);
   await expect(page.locator('#form-errors')).toContainText('청구 수량을 입력하세요');
-  await expect(page.getByLabel('청구수량', { exact: true })).toBeEnabled();
-  await page.getByLabel('청구수량', { exact: true }).fill('5');
+  await expect(page.getByLabel('청구 수량', { exact: true })).toBeEnabled();
+  await page.getByLabel('청구 수량', { exact: true }).fill('5');
   await expect(page.getByText('기본운임 500,000원', { exact: true })).toBeVisible();
 });
 
@@ -242,7 +245,7 @@ test('오프라인 제출 대기·로그아웃 N건 확인 취소/승인·정적
   });
   await expect.poll(() => page.evaluate(() => !!navigator.serviceWorker.controller)).toBe(true);
   await context.setOffline(true);
-  await page.getByRole('button', { name: '담당자에게 제출', exact: true }).click();
+  await submitDriverForm(page);
   await expect(page.getByRole('status')).toContainText('제출 대기 · 연결되면 자동 제출');
   const firstDialog = page.waitForEvent('dialog');
   await page.getByRole('button', { name: '로그아웃', exact: true }).click();
@@ -268,6 +271,11 @@ test('내 정산 검수 전 표시와 날짜 16px·44px', async ({ page }) => {
   const card = page.locator('article').filter({ hasText: use.use_no });
   await expect(card).toContainText('인정 공급가 검수 전');
   await expect(card).not.toContainText('인정 공급가 0원');
+  // 기간은 날짜 입력 대신 큰 이전/다음 달 버튼으로 바꾼다.
+  for (const name of ['이전 달', '다음 달'])
+    expect(
+      (await page.getByRole('button', { name, exact: true }).boundingBox())!.height,
+    ).toBeGreaterThanOrEqual(44);
   for (const field of await page.locator('input[type=date]').all()) {
     expect(
       await field.evaluate((element) => parseFloat(getComputedStyle(element).fontSize)),

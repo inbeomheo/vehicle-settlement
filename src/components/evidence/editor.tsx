@@ -61,6 +61,8 @@ export function EvidenceEditor({
   canRemovePending = !locked,
   canRetry = true,
   onProcessingChange,
+  step,
+  done,
 }: {
   pending: PendingEvidence[];
   validationError?: string;
@@ -74,6 +76,8 @@ export function EvidenceEditor({
   canRetry?: boolean;
   locked: boolean;
   onProcessingChange: (value: boolean) => void;
+  step?: number;
+  done?: boolean;
 }) {
   const [kind, setKind] = useState<PendingEvidence['kind']>('PHOTO');
   const [slip, setSlip] = useState('');
@@ -135,7 +139,7 @@ export function EvidenceEditor({
     (f) => !pending.some((p) => p.serverId === f.id || p.replacesId === f.id),
   );
   return (
-    <Section title="사진·증빙" target="evidence" feedbackId={feedbackId}>
+    <Section title="사진·증빙" target="evidence" feedbackId={feedbackId} step={step} done={done}>
       {validationError && (
         <p
           role="alert"
@@ -145,7 +149,7 @@ export function EvidenceEditor({
           {validationError}
         </p>
       )}
-      <p className="mb-3 text-sm text-slate-600">
+      <p className="mb-3 text-[0.9375rem] text-slate-700">
         {evidenceInstruction(policy) || '필요한 사진이나 서류를 첨부하세요.'}
       </p>
       <div
@@ -176,7 +180,7 @@ export function EvidenceEditor({
                 <FileGlyph />
               )}
               <span
-                className={`absolute top-1.5 left-1.5 rounded px-1.5 py-0.5 text-xs font-bold ${uploadTone(f.upload_status)}`}
+                className={`absolute top-1.5 left-1.5 rounded px-1.5 py-0.5 text-sm font-bold ${uploadTone(f.upload_status)}`}
               >
                 {f.upload_status === 'UPLOADED'
                   ? '업로드 완료'
@@ -235,7 +239,7 @@ export function EvidenceEditor({
                 {evidenceKinds[file.kind]} · {file.text_value ?? file.original_name}
               </p>
               <p
-                className={`mt-1 inline-block rounded px-1.5 py-0.5 text-xs font-bold ${uploadTone(file.status)}`}
+                className={`mt-1 inline-block rounded px-1.5 py-0.5 text-sm font-bold ${uploadTone(file.status)}`}
               >
                 {file.status === 'uploaded'
                   ? '업로드 완료'
@@ -364,8 +368,8 @@ export function EvidenceEditor({
             >
               <path d="M9 3 7.2 5H4a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-3.2L15 3Zm3 14a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9Zm0-2.2a2.3 2.3 0 1 0 0-4.6 2.3 2.3 0 0 0 0 4.6Z" />
             </svg>
-            <span className="text-[17px] font-bold">사진 촬영·추가</span>
-            <span className="text-sm text-slate-600">찍거나 앨범·파일에서 고르세요</span>
+            <span className="text-[1.0625rem] font-bold">사진 촬영·추가</span>
+            <span className="text-[0.9375rem] text-slate-700">찍거나 앨범·파일에서 고르세요</span>
             <input
               {...evidenceFeedback}
               aria-label="사진·파일 선택"
@@ -380,7 +384,7 @@ export function EvidenceEditor({
               }}
             />
           </label>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,10rem),1fr))] gap-2">
             <label className={fileLabel}>
               카메라로 바로 촬영
               <input

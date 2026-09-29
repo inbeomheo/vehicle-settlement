@@ -136,7 +136,7 @@ export function Totals({
   grand_total: number;
 }) {
   return (
-    <dl className="ml-auto grid w-full max-w-sm gap-1.5 rounded-lg border border-slate-200 bg-white p-5 text-[15px]">
+    <dl className="ml-auto grid w-full max-w-sm gap-1.5 rounded-lg border border-slate-200 bg-white p-5 text-[0.9375rem]">
       <div className="flex justify-between">
         <dt className="text-slate-600">공급가</dt>
         <dd className="num">{money(supply_total)}</dd>

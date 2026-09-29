@@ -21,11 +21,15 @@ export function TripFields({
   onChange,
   recent,
   billingUnits = [],
+  step,
+  done,
 }: {
   trips: FormTrip[];
   onChange: (trips: FormTrip[]) => void;
   recent: UseDetail[];
   billingUnits?: FormCharge['billing_unit'][];
+  step?: number;
+  done?: boolean;
 }) {
   const settings = useContext(SettingsContext);
   const fixes = useContext(FixContext);
@@ -177,7 +181,12 @@ export function TripFields({
   );
   const multiple = trips.length > 1;
   return (
-    <Section title={multiple ? `운행 ${trips.length}회` : '출발 → 도착'} target="trips">
+    <Section
+      title={multiple ? `출발 → 도착 · 운행 ${trips.length}회` : '출발 → 도착'}
+      target="trips"
+      step={step}
+      done={done}
+    >
       <div className="grid gap-4">
         {trips.map((t, i) => (
           <fieldset
@@ -185,7 +194,9 @@ export function TripFields({
             className={`min-w-0 ${multiple ? 'rounded-lg border border-slate-200 p-3' : ''}`}
           >
             <legend
-              className={isCollapsed(t, i) || !multiple ? 'sr-only' : 'px-1 text-sm font-bold text-slate-600'}
+              className={
+                isCollapsed(t, i) || !multiple ? 'sr-only' : 'px-1 text-base font-bold text-slate-700'
+              }
             >
               {i + 1}회차
             </legend>
@@ -209,7 +220,7 @@ export function TripFields({
                 <span className="min-w-0 flex-1 truncate font-semibold">
                   {t.origin} → {t.destination}
                   {(settings.cargo !== 'HIDDEN' || t.cargo_desc) && (
-                    <span className="font-normal text-slate-600"> · {t.cargo_desc || '화물 없음'}</span>
+                    <span className="font-normal text-slate-700"> · {t.cargo_desc || '화물 없음'}</span>
                   )}
                 </span>
                 <span aria-hidden="true" className="text-slate-400">
@@ -220,7 +231,7 @@ export function TripFields({
             <div hidden={isCollapsed(t, i)}>
               {multiple && (
                 <div className="mb-2 flex items-center gap-1.5">
-                  <span className="mr-auto text-sm font-bold text-slate-600" aria-hidden="true">
+                  <span className="mr-auto text-sm font-bold text-slate-700" aria-hidden="true">
                     {i + 1}회차
                   </span>
                   <button
@@ -254,7 +265,7 @@ export function TripFields({
               {routeBlock(t, i)}
               {routes.length > 0 && (
                 <div role="group" aria-label={`${i + 1}회차 최근 경로`} className="mt-3">
-                  <p aria-hidden="true" className="mb-1.5 text-sm font-semibold text-slate-600">
+                  <p aria-hidden="true" className="mb-1.5 text-sm font-semibold text-slate-700">
                     최근 경로
                   </p>
                   <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
@@ -262,7 +273,7 @@ export function TripFields({
                       <button
                         key={name}
                         type="button"
-                        className={`inline-flex min-h-11 shrink-0 items-center rounded-full border px-3.5 text-[15px] font-semibold ${t.origin === route.origin && t.destination === route.destination ? 'border-blue-700 bg-blue-50 text-blue-900' : 'border-slate-300 bg-white text-ink'}`}
+                        className={`inline-flex min-h-11 shrink-0 items-center rounded-full border px-3.5 text-[0.9375rem] font-semibold ${t.origin === route.origin && t.destination === route.destination ? 'border-blue-700 bg-blue-50 text-blue-900' : 'border-slate-300 bg-white text-ink'}`}
                         onClick={() =>
                           change(i, {
                             origin: route.origin,
@@ -395,7 +406,9 @@ export function TripFields({
           </fieldset>
         ))}
       </div>
-      <div className={`mt-4 grid gap-2 ${trips.length > 0 ? 'grid-cols-2' : ''}`}>
+      <div
+        className={`mt-4 grid gap-2 ${trips.length > 0 ? 'grid-cols-[repeat(auto-fit,minmax(min(100%,10rem),1fr))]' : ''}`}
+      >
         <button type="button" className={button} onClick={() => addTrip()}>
           + 운행 추가
         </button>
