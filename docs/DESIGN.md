@@ -282,4 +282,4 @@ scripts/             db 시작, 시드, 백업/복구
 
 사용자 승인 범위로 `0300_w9_field_settings.sql`을 추가한다. `form_field_settings`는 `project_id`(null=회사), `field_key`, nullable `driver_mode`/`manager_mode`(HIDDEN/OPTIONAL/REQUIRED), `updated_by`, `version`, 생성·수정 시각을 보관한다. 회사 필드와 현장 필드는 별도 부분 유니크 인덱스로 중복을 막는다. null 모드는 상위 기본값을 따르며 재정의 해제 후에도 버전을 유지한다.
 
-`/m/master/form-fields` 및 `/api/admin/form-fields`는 ADMIN 전용이다. `/api/form-settings?project_id=`는 접근 가능한 현장의 요청자 역할에 유효한 모드만 반환한다. 공통 폼과 서버 제출은 `src/shared/form-settings.ts`의 항목·라벨·기본값·필수 검사를 공유한다. 표시 설정으로 금액·권한·청구수량·증빙 정책을 해제할 수 없다. 세부 판단은 [ASSUMPTIONS](ASSUMPTIONS.md)의 W9 절을 따른다.
+`/m/master/form-fields` 및 `/api/admin/form-fields`는 ADMIN 전용이다. `/api/form-settings?project_id=`는 접근 가능한 현장의 요청자 역할에 유효한 모드를 반환하며, 담당자에게는 보완요청 대상 판단용 기사 모드도 제공한다. 공통 폼과 서버 제출은 `src/shared/form-settings.ts`의 항목·라벨·기본값·필수 검사를 공유한다. 표시 설정으로 금액·권한·청구수량·증빙 정책을 해제할 수 없다. 세부 판단은 [ASSUMPTIONS](ASSUMPTIONS.md)의 W9 절을 따른다.

@@ -201,6 +201,13 @@ export function FormFieldSettings() {
                     </Field>
                   ))}
                 </div>
+                {(row.driver_mode ?? inherited!.driver[row.field_key]) === 'HIDDEN' &&
+                  !!settings.pending_fixes[row.field_key] && (
+                    <p role="alert" className="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
+                      미해결 보완요청이 {settings.pending_fixes[row.field_key]}건 있습니다. 숨김으로 저장해도
+                      해당 기사는 보완을 마칠 수 있도록 이 항목이 표시됩니다.
+                    </p>
+                  )}
               </section>
             ))}
           </fieldset>

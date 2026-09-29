@@ -119,11 +119,12 @@ W7: 캐시 결과가 없는 수식/오류 셀은 매핑된 열에서만 해당 �
 
 ## W9 입력 항목 설정
 
-- `GET /api/form-settings?project_id=<uuid>`: 현장 접근 권한 검사 후 `{data:{project_id,modes:{[field_key]:"HIDDEN"|"OPTIONAL"|"REQUIRED"}}}`. DRIVER는 기사 모드, 나머지는 담당자 모드만 반환한다.
-- `GET /api/admin/form-fields?project_id=<uuid>`: ADMIN 전용. query 생략은 회사 기본. `{data:{project_id,fields:[{field_key,driver_mode,manager_mode,version}],company:{driver,manager},effective:{driver,manager}}}`. 설정 없는 항목은 mode=null, version=0이다.
+- `GET /api/form-settings?project_id=<uuid>`: 현장 접근 권한 검사 후 `{data:{project_id,modes:{[field_key]:"HIDDEN"|"OPTIONAL"|"REQUIRED"}}}`. DRIVER는 기사 모드만 반환한다. 담당자는 본인 모드와 보완요청 대상 선택에 필요한 `driver_modes`(현장에 유효한 기사 모드)를 함께 받는다.
+- `GET /api/admin/form-fields?project_id=<uuid>`: ADMIN 전용. query 생략은 회사 기본. `{data:{project_id,fields:[{field_key,driver_mode,manager_mode,version}],company:{driver,manager},effective:{driver,manager},pending_fixes:{[field_key]:건수}}}`. 설정 없는 항목은 mode=null, version=0이다. `pending_fixes`는 취소되지 않은 현재 NEEDS_FIX 사용 건의 해당 항목 보완요청 수(동일 건·항목 중복 제외)다. 회사 범위는 현장 기사 모드 재정의가 없는 항목만 센다.
 - `PUT /api/admin/form-fields`: ADMIN 전용, 멱등 키 지원. `{project_id:null|uuid,fields:[{field_key,driver_mode:null|mode,manager_mode:null|mode,version}]}`. 변경할 항목만 보내며 각 행의 두 역할 모드를 함께 보낸다. null은 상위 기본 따름. 저장 후 위 GET 형식 반환. 다중 항목은 원자적으로 저장·감사 기록하며 버전 충돌은 `409 VERSION_CONFLICT`, `details.current`에 최신 설정을 반환한다.
 - `field_key`: `end_date`, `work_type`, `requester`, `cargo_desc`, `operation_status`, `notes`, `via`, `cargo`, `quantity`, `quantity_unit`, `hours`, `depart_at`, `arrive_at`, `trip_status`, `is_empty_return`, `trip_notes`, `extra_charges`. 고정 필수 항목은 설정할 수 없다.
 - 사용 제출의 설정 필수 누락은 `422 SUBMIT_BLOCKED`, `details.fields:[{target,reason}]`. reason과 message에 한국어 항목 이름을 포함한다. DRAFT 저장·HIDDEN의 기존 값은 허용한다.
+- `request-fix`는 담당자 모드와 무관하게 최신 현장 기사 모드가 HIDDEN인 대상을 `422 VALIDATION_FAILED`, `details.fields:[{target,reason}]`로 거부한다. 헤더·`use.` 별칭·회차·추가비 그룹/개별 라인을 검사하며 고객 청구·정산 조정도 기사 수정 불가 사유로 거부한다. 기본운임은 추가비 숨김과 별개다. 취소는 자동 재제출·설정 필수값 검사를 수행하지 않고 승인 무효화·잠금 검사·이력 보존만 수행한다.
 
 ## F1 명세 확정 재확인
 

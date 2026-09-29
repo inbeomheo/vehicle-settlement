@@ -1,4 +1,4 @@
-import { requiredFieldErrors } from '../../shared/form-settings';
+import { fixTargetBlockedReason, requiredFieldErrors } from '../../shared/form-settings';
 import { getEffectiveFormSettings } from './form-settings';
 import { and, asc, desc, eq, ne, inArray, isNull, lte, gte, or, ilike, sql } from 'drizzle-orm';
 import { z } from 'zod';
@@ -823,6 +823,18 @@ export async function requestFix(ctx: Context, id: string, raw: z.input<typeof f
     assertVersion(before, input.version);
     await assertUnlocked(tx, id);
     assertTransition(before.review_status, 'request-fix');
+    // Serialize with settings changes so every request uses the current driver policy.
+    await tx.db.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended('w9:form-settings', 0))`);
+    const settings = await getEffectiveFormSettings(tx, before.project_id);
+    const charges = await tx.db
+      .select()
+      .from(chargeLines)
+      .where(and(eq(chargeLines.vehicle_use_id, id), isNull(chargeLines.deleted_at)));
+    const fields = input.fix_items.flatMap(({ target }) => {
+      const reason = fixTargetBlockedReason(target, settings.driver_modes!, charges);
+      return reason ? [{ target, reason }] : [];
+    });
+    if (fields.length) invalid(fields.map((field) => field.reason).join(' '), { fields });
     await tx.db
       .update(useRevisions)
       .set({

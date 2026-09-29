@@ -1010,7 +1010,9 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
                 userId={boot.user.id}
                 saved={draft.server}
               />
-              {(settings.modes.notes !== 'HIDDEN' || form.notes) && (
+              {(settings.modes.notes !== 'HIDDEN' ||
+                form.notes ||
+                fixes.some((fix) => ['notes', 'use.notes'].includes(fix.target))) && (
                 <Section title="특이사항">
                   <Field label="특이사항" target="notes">
                     <textarea

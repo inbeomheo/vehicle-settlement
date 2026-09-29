@@ -58,7 +58,8 @@ export function Field({
   const modes = useContext(SettingsContext);
   const hidden = !!key && modes[key] === 'HIDDEN';
   const input = isValidElement<{ value?: unknown; checked?: boolean }>(children) ? children : undefined;
-  if (hidden && !(hasValue ?? hasFieldValue(input?.props.value ?? input?.props.checked))) return null;
+  if (hidden && !fixes.length && !(hasValue ?? hasFieldValue(input?.props.value ?? input?.props.checked)))
+    return null;
   const required = !!key && modes[key] === 'REQUIRED';
   return (
     <div data-fix-target={target} className="min-w-0 scroll-mt-8">
@@ -92,7 +93,10 @@ export function Section({
 }) {
   const fixes = useContext(FixContext).filter(
     (f) =>
-      target && (f.target === target || (target.startsWith('charge:') && f.target.startsWith(`${target}.`))),
+      target &&
+      (f.target === target ||
+        (target === 'charges' && f.target === 'extra_charges') ||
+        (target.startsWith('charge:') && f.target.startsWith(`${target}.`))),
   );
   return (
     <section

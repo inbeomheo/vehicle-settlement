@@ -2,7 +2,8 @@
 import { useContext, useEffect, useState } from 'react';
 import type { UseDetail } from '@/client/types';
 import { operationLabels } from '@/client/types';
-import { Field, button, control, Section, SettingsContext, hasFieldValue } from './fields';
+import { Field, button, control, Section, SettingsContext, FixContext, hasFieldValue } from './fields';
+import { fieldKeyForTarget } from '@/shared/form-settings';
 import { newTrip, type FormCharge, type FormTrip } from './model';
 export function TripFields({
   trips,
@@ -16,6 +17,7 @@ export function TripFields({
   billingUnits?: FormCharge['billing_unit'][];
 }) {
   const settings = useContext(SettingsContext);
+  const fixes = useContext(FixContext);
   const [collapsed, setCollapsed] = useState<Set<string>>(
     () =>
       new Set(
@@ -82,6 +84,14 @@ export function TripFields({
       ? !!trip.id || trip.is_empty_return
       : hasFieldValue(trip[key === 'trip_notes' ? 'notes' : key]);
   const requiredDetails = detailKeys.some((key) => settings[key] === 'REQUIRED');
+  const hasDetailFix = (index: number) =>
+    fixes.some(
+      (fix) =>
+        fix.target.startsWith(`trip:${index + 1}.`) &&
+        detailKeys.some((key) => key === fieldKeyForTarget(fix.target)),
+    );
+  const isCollapsed = (trip: FormTrip, index: number) =>
+    collapsed.has(trip.client_row_id) && !fixes.some((fix) => fix.target.startsWith(`trip:${index + 1}.`));
   const routes = [
     ...new Map(recent.flatMap((u) => u.trips).map((t) => [`${t.origin} → ${t.destination}`, t])).entries(),
   ].slice(0, 8);
@@ -115,10 +125,8 @@ export function TripFields({
       <div className="grid gap-5">
         {trips.map((t, i) => (
           <fieldset key={t.client_row_id} className="min-w-0 rounded-xl border border-slate-200 p-3">
-            <legend className={collapsed.has(t.client_row_id) ? 'sr-only' : 'px-2 font-bold'}>
-              {i + 1}회차
-            </legend>
-            {collapsed.has(t.client_row_id) && (
+            <legend className={isCollapsed(t, i) ? 'sr-only' : 'px-2 font-bold'}>{i + 1}회차</legend>
+            {isCollapsed(t, i) && (
               <button
                 type="button"
                 className="flex min-h-11 w-full min-w-0 items-center gap-2 text-left"
@@ -139,7 +147,7 @@ export function TripFields({
                 <span aria-hidden="true">⌄</span>
               </button>
             )}
-            <div hidden={collapsed.has(t.client_row_id)}>
+            <div hidden={isCollapsed(t, i)}>
               <div className="mb-4 flex flex-wrap gap-2">
                 <button
                   type="button"
@@ -214,9 +222,15 @@ export function TripFields({
                 {showQuantity && inputField(t, i, 'quantity')}
                 {showHours && inputField(t, i, 'hours')}
               </div>
-              {detailKeys.some((key) => settings[key] !== 'HIDDEN' || detailValue(t, key)) && (
+              {(hasDetailFix(i) ||
+                detailKeys.some((key) => settings[key] !== 'HIDDEN' || detailValue(t, key))) && (
                 <details
-                  open={requiredDetails || detailKeys.some((key) => detailValue(t, key)) || undefined}
+                  open={
+                    hasDetailFix(i) ||
+                    requiredDetails ||
+                    detailKeys.some((key) => detailValue(t, key)) ||
+                    undefined
+                  }
                   className="mt-4 rounded-xl bg-slate-50 p-3"
                 >
                   <summary className="min-h-11 cursor-pointer py-2 font-semibold text-slate-700">

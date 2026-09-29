@@ -69,6 +69,25 @@ export function fieldKeyForTarget(target?: string): FieldKey | undefined {
   if (key === 'work_type_id') return 'work_type';
   return fieldKeys.includes(key as FieldKey) ? (key as FieldKey) : undefined;
 }
+type FixCharge = { id: string; charge_type: string; direction: string };
+export function fieldKeyForFixTarget(target: string, charges: FixCharge[]): FieldKey | undefined {
+  if (target === 'charges') return 'extra_charges';
+  if (target.startsWith('charge:')) {
+    const line = charges.find((line) => line.id === target.slice(7).split('.')[0]);
+    return line && !['BASE', 'ADJUSTMENT'].includes(line.charge_type) ? 'extra_charges' : undefined;
+  }
+  return fieldKeyForTarget(target);
+}
+export function fixTargetBlockedReason(target: string, modes: FieldModes, charges: FixCharge[]) {
+  if (target.startsWith('charge:')) {
+    const line = charges.find((line) => line.id === target.slice(7).split('.')[0]);
+    if (line?.direction === 'RECEIVABLE' || line?.charge_type === 'ADJUSTMENT')
+      return '기사가 수정할 수 없는 비용 항목은 보완요청할 수 없습니다.';
+  }
+  const key = fieldKeyForFixTarget(target, charges);
+  if (key && modes[key] === 'HIDDEN')
+    return `${fieldLabels[key]} 항목은 기사에게 숨김으로 설정되어 보완요청할 수 없습니다. 입력 항목 설정을 변경하세요.`;
+}
 export type FieldSetting = {
   field_key: FieldKey;
   driver_mode: FieldMode | null;
@@ -80,8 +99,9 @@ export type AdminFieldSettings = {
   fields: FieldSetting[];
   company: { driver: FieldModes; manager: FieldModes };
   effective: { driver: FieldModes; manager: FieldModes };
+  pending_fixes: Partial<Record<FieldKey, number>>;
 };
-export type EffectiveFieldSettings = { project_id: string; modes: FieldModes };
+export type EffectiveFieldSettings = { project_id: string; modes: FieldModes; driver_modes?: FieldModes };
 
 type Submission = {
   end_date?: unknown;

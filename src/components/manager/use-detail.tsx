@@ -7,6 +7,7 @@ import { sumMoney } from '@/server/domain/money';
 import { AuditPanel } from './audit';
 import { chargeTypeLabel, chargeUnitLabel } from './charge-display';
 import { formatQuantity } from '@/shared/quantity';
+import { fixTargetBlockedReason, type EffectiveFieldSettings } from '@/shared/form-settings';
 import {
   ApiError,
   Badge,
@@ -28,6 +29,9 @@ type Detail = Awaited<ReturnType<typeof getUse>>;
 type Decision = { line_review_status: 'APPROVED' | 'HELD' | 'REJECTED'; amount: string; reason: string };
 export function UseDetail({ id, canSettle = false }: { id: string; canSettle?: boolean }) {
   const detail = useRemote<Detail>(`/api/uses/${id}`);
+  const driverSettings = useRemote<EffectiveFieldSettings>(
+    detail.data ? `/api/form-settings?project_id=${detail.data.project_id}` : null,
+  );
   const metadata = useRemote<LedgerResult>(`/api/ledger?use_id=${id}`);
   const [tab, setTab] = useState('detail');
   const [decisions, setDecisions] = useState<Record<string, Decision>>({});
@@ -70,6 +74,31 @@ export function UseDetail({ id, canSettle = false }: { id: string; canSettle?: b
     );
   const locked = use.charge_lines.some((line) => line.locked_statement_id);
   const canReview = use.review_status === 'SUBMITTED' && !locked && !busy && !conflict && !detail.loading;
+  const driverModes =
+    driverSettings.data?.project_id === use.project_id ? driverSettings.data.driver_modes : undefined;
+  const fixOptions = [
+    { target: 'evidence', label: '증빙' },
+    { target: 'cargo_desc', label: '작업내용' },
+    { target: 'requester', label: '요청자' },
+    ...use.trips.map((trip) => ({
+      target: `trip:${trip.seq}.destination`,
+      label: `${trip.seq}회 하차 장소`,
+    })),
+    ...use.charge_lines.map((line) => ({
+      target: `charge:${line.id}`,
+      label: `${label(line.charge_type)} (${label(line.direction)})`,
+    })),
+  ].map((option) => ({
+    ...option,
+    reason: driverModes
+      ? fixTargetBlockedReason(option.target, driverModes, use.charge_lines)
+      : '기사 입력 설정을 확인하고 있습니다.',
+  }));
+  const canRequestFix =
+    canReview &&
+    !!driverModes &&
+    !driverSettings.loading &&
+    fixes.every((fix) => !fixOptions.find((option) => option.target === fix.target)?.reason);
   const snapshot = (key: string) => String(use.snapshot[key] ?? '—');
   const decisionBody = (lineId: string) => {
     const decision = decisions[lineId];
@@ -524,18 +553,32 @@ export function UseDetail({ id, canSettle = false }: { id: string; canSettle?: b
           {use.review_status === 'SUBMITTED' && (
             <section className={panelClass}>
               <h2 className="mb-3 text-lg font-bold">보완 요청</h2>
+              <p className="mb-3 text-sm text-slate-600">
+                기사에게 숨긴 항목은 보완 대상으로 선택할 수 없습니다.
+              </p>
+              {driverSettings.error && (
+                <div role="alert" className="mb-3 text-sm text-red-800">
+                  {driverSettings.error}
+                  <button type="button" className={secondaryClass} onClick={driverSettings.refresh}>
+                    기사 입력 설정 다시 불러오기
+                  </button>
+                </div>
+              )}
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
-                  void run(
-                    () =>
-                      mutate(`/api/uses/${id}/request-fix`, 'POST', {
+                  if (!canRequestFix) return;
+                  void run(async () => {
+                    try {
+                      return await mutate(`/api/uses/${id}/request-fix`, 'POST', {
                         version: use.version,
                         comment,
                         fix_items: fixes,
-                      }),
-                    '보완 요청을 전달했습니다.',
-                  );
+                      });
+                    } finally {
+                      driverSettings.refresh();
+                    }
+                  }, '보완 요청을 전달했습니다.');
                 }}
               >
                 <div className="grid gap-3">
@@ -553,17 +596,15 @@ export function UseDetail({ id, canSettle = false }: { id: string; canSettle?: b
                             )
                           }
                         >
-                          <option value="evidence">증빙</option>
-                          <option value="cargo_desc">작업내용</option>
-                          <option value="requester">요청자</option>
-                          {use.trips.map((trip) => (
-                            <option key={trip.id} value={`trip:${trip.seq}.destination`}>
-                              {trip.seq}회 하차 장소
-                            </option>
-                          ))}
-                          {use.charge_lines.map((line) => (
-                            <option key={line.id} value={`charge:${line.id}`}>
-                              {label(line.charge_type)} ({label(line.direction)})
+                          {fixOptions.map((option) => (
+                            <option
+                              key={option.target}
+                              value={option.target}
+                              disabled={!!option.reason}
+                              title={option.reason}
+                            >
+                              {option.label}
+                              {option.reason ? ' · 기사 수정 불가' : ''}
                             </option>
                           ))}
                         </select>
@@ -604,7 +645,7 @@ export function UseDetail({ id, canSettle = false }: { id: string; canSettle?: b
                   >
                     항목 추가
                   </button>
-                  <button className={buttonClass} disabled={!canReview}>
+                  <button className={buttonClass} disabled={!canRequestFix}>
                     보완 요청 보내기
                   </button>
                 </div>

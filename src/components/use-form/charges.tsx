@@ -4,7 +4,7 @@ import Decimal from 'decimal.js';
 import { api, ApiError } from '@/client/api';
 import { cachedValue, cacheValue } from '@/client/offline/store';
 import { units, chargeKinds, money, type RateResult, type UseDetail } from '@/client/types';
-import { button, control, Field, Section, SettingsContext, HiddenFieldNotice } from './fields';
+import { button, control, Field, Section, SettingsContext, FixContext, HiddenFieldNotice } from './fields';
 import { newCharge, type FormCharge, type FormValues } from './model';
 function RateFields({
   charge,
@@ -173,14 +173,24 @@ export function ChargeFields({
   saved?: UseDetail;
 }) {
   const settings = useContext(SettingsContext);
-  const showExtra = settings.extra_charges !== 'HIDDEN';
+  const fixes = useContext(FixContext);
   const visibleCharges = form.charges.filter((c) => mode === 'manager' || c.direction === 'PAYABLE');
+  const hasExtraFix = fixes.some(
+    (fix) =>
+      ['charges', 'extra_charges'].includes(fix.target) ||
+      (fix.target.startsWith('charge:') &&
+        !visibleCharges.some(
+          (line) => line.id === fix.target.slice(7).split('.')[0] && line.charge_type === 'BASE',
+        )),
+  );
+  const extraHidden = settings.extra_charges === 'HIDDEN';
+  const showExtra = !extraHidden || hasExtraFix;
   const hasExtra = visibleCharges.some((c) => c.charge_type !== 'BASE');
   const patch = (key: string, change: Partial<FormCharge>) =>
     onChange(form.charges.map((c) => (c.key === key ? { ...c, ...change } : c)));
   return (
     <Section title={showExtra || hasExtra ? '과금·추가 비용' : '과금'} target="charges">
-      {!showExtra && hasExtra && <HiddenFieldNotice />}
+      {extraHidden && (hasExtra || hasExtraFix) && <HiddenFieldNotice />}
       <div className="grid gap-6">
         {visibleCharges.map((c, i) => (
           <div
