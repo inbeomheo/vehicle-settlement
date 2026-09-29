@@ -3,7 +3,16 @@ import { api, mutate, type ApiError } from '../../src/client/api';
 import { sendDraft, type Transport } from '../../src/client/offline/engine';
 import type { Draft } from '../../src/client/offline/store';
 import { initialValues } from '../../src/components/use-form/model';
-import type { Lookups } from '../../src/client/types';
+import type { Lookups, UseDetail } from '../../src/client/types';
+
+const server = {
+  id: 'use-1',
+  version: 1,
+  review_status: 'DRAFT',
+  trips: [],
+  charge_lines: [],
+  evidence: [],
+} as unknown as UseDetail;
 
 function queuedDraft(): Draft {
   return {
@@ -15,6 +24,8 @@ function queuedDraft(): Draft {
       { client_upload_id: 'file-1', kind: 'SLIP_NO', text_value: '전표 1', status: 'pending', progress: 0 },
     ],
     serverId: 'use-1',
+    server,
+    version: server.version,
     savedRequest: true,
     phase: 'queued',
     intent: 'save',
@@ -39,7 +50,7 @@ describe('W6-1 증빙 전송 오류 분류', () => {
             { error: { code: status === 409 ? 'STATEMENT_LOCKED' : 'VALIDATION_FAILED', message } },
             { status },
           );
-        return Response.json({ data: { id: 'use-1', version: 1, review_status: 'DRAFT' } });
+        return Response.json({ data: server });
       });
       vi.stubGlobal('fetch', fetch);
       const persist = vi.fn(async () => {});
@@ -66,7 +77,7 @@ describe('W6-1 증빙 전송 오류 분류', () => {
             { status },
           );
         }
-        return Response.json({ data: { id: 'use-1', version: 1, review_status: 'DRAFT' } });
+        return Response.json({ data: server });
       });
       vi.stubGlobal('fetch', fetch);
       const draft = await sendDraft(queuedDraft(), async () => {}, transport());
@@ -104,7 +115,7 @@ describe('W6-1 증빙 전송 오류 분류', () => {
     };
     vi.stubGlobal('fetch', async (url: string) =>
       Response.json({
-        data: url === '/api/me' ? { id: 'driver-1' } : { id: 'use-1', version: 1, review_status: 'DRAFT' },
+        data: url === '/api/me' ? { id: 'driver-1' } : server,
       }),
     );
     const { ApiError } = await import('../../src/client/api');

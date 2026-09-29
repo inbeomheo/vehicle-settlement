@@ -23,6 +23,7 @@ import {
   type Draft,
 } from '@/client/offline/store';
 import { syncQueue, withQueuePaused } from '@/client/offline/engine';
+import { reconcileServer } from '@/client/offline/reconcile';
 import { copyToDevice } from '@/client/copy-draft';
 import { useFormSettings } from './settings';
 import { revealDraftFields } from './visibility';
@@ -125,6 +126,7 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
             updatedAt: Date.now(),
             phase: server ? 'saved' : 'editing',
             server,
+            lastSaved: server,
             serverId: server?.id,
             version: server?.version,
           };
@@ -133,7 +135,7 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
         if (found.serverId && found.phase !== 'saved') {
           try {
             const server = await api<UseDetail>(`/api/uses/${found.serverId}`);
-            found = { ...found, server };
+            found = { ...found, lastSaved: found.lastSaved ?? found.server, server };
           } catch (error) {
             if (error instanceof ApiError) throw error;
           }
@@ -362,10 +364,24 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
       setBusy(false);
     }
   }
-  async function refresh() {
+  async function deleteStoredEvidence(id: string, reason: string) {
     if (!draft?.serverId) return;
-    const server = await api<UseDetail>(`/api/uses/${draft.serverId}`);
-    const next = { ...draft, server, version: server.version };
+    const next = structuredClone(draft);
+    try {
+      reconcileServer(next, await api<UseDetail>(`/api/uses/${draft.serverId}`));
+      await mutate(`/api/evidence/${id}`, { reason }, crypto.randomUUID(), 'DELETE');
+      next.removedEvidenceIds = [...(next.removedEvidenceIds ?? []), id];
+      await putDraft(next);
+      reconcileServer(next, await api<UseDetail>(`/api/uses/${draft.serverId}`));
+    } catch (error) {
+      if (error instanceof ApiError && error.code === 'VERSION_CONFLICT') {
+        next.phase = 'conflict';
+        next.error = error.message;
+      }
+      await putDraft(next);
+      setDraft(next);
+      throw error;
+    }
     await putDraft(next);
     setDraft(next);
   }
@@ -381,13 +397,20 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
         if (!file || file.status === 'uploaded') return value;
         if (file.serverId) {
           try {
+            reconcileServer(value, await api<UseDetail>(`/api/uses/${value.serverId}`));
             await mutate(
               `/api/evidence/${file.serverId}`,
               { reason: '업로드 실패 첨부 취소' },
               crypto.randomUUID(),
               'DELETE',
             );
+            value.removedEvidenceIds = [...(value.removedEvidenceIds ?? []), file.serverId];
           } catch (e) {
+            if (e instanceof ApiError && e.code === 'VERSION_CONFLICT') {
+              const conflict = { ...value, phase: 'conflict' as const, error: e.message };
+              await putDraft(conflict);
+              return conflict;
+            }
             setError(
               `이 기기의 대기 첨부는 제거했습니다. 서버 증빙: ${e instanceof Error ? e.message : '삭제하지 못했습니다.'}`,
             );
@@ -397,14 +420,25 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
         if (value.serverId) {
           try {
             server = await api<UseDetail>(`/api/uses/${value.serverId}`);
-          } catch {
+            reconcileServer(value, server);
+          } catch (e) {
+            if (e instanceof ApiError && e.code === 'VERSION_CONFLICT') {
+              const conflict = { ...value, phase: 'conflict' as const, error: e.message };
+              await putDraft(conflict);
+              return conflict;
+            }
             // Local queue cancellation is available even after access is revoked.
           }
         }
         const updated: Draft = {
           ...value,
           server,
-          version: server?.version ?? value.version,
+          version: value.version,
+          pendingCreate:
+            value.pendingCreate ??
+            (value.phase === 'queued' && !value.serverId && value.request && !value.savedRequest
+              ? { request: structuredClone(value.request), form: structuredClone(value.form) }
+              : undefined),
           uploads: value.uploads.filter((upload) => upload.client_upload_id !== uploadId),
           phase: 'editing',
           request: undefined,
@@ -569,6 +603,7 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
                       server,
                       // Confirmation must not make an older local edit safe to overwrite newer content.
                       version: draft.version === draft.server!.version ? server.version : draft.version,
+                      lastSaved: draft.version === draft.server!.version ? server : draft.lastSaved,
                     };
                     await putDraft(next);
                     setDraft(next);
@@ -651,6 +686,11 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
                   </p>
                   <p>운반 내용: {draft.conflict.cargo_desc || '없음'}</p>
                   <p>특이사항: {draft.conflict.notes || '없음'}</p>
+                  {draft.conflict.charge_lines
+                    .filter((line) => line.charge_type === 'BASE')
+                    .map((line) => (
+                      <p key={line.id}>청구수량: {line.quantity ?? '미입력'}</p>
+                    ))}
                   {draft.conflict.trips.map((t) => (
                     <p key={t.id}>
                       {t.seq}회차 {t.origin} → {t.destination}
@@ -674,6 +714,7 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
                       phase: 'editing',
                       form: fromUse(draft.conflict!, mode),
                       server: draft.conflict,
+                      lastSaved: draft.conflict,
                       version: draft.conflict!.version,
                       conflict: undefined,
                       request: undefined,
@@ -1049,10 +1090,7 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
               onRetry={() => {
                 void syncQueue(boot.user.id, true);
               }}
-              onDelete={async (id, reason) => {
-                await mutate(`/api/evidence/${id}`, { reason }, crypto.randomUUID(), 'DELETE');
-                await refresh();
-              }}
+              onDelete={deleteStoredEvidence}
             />
             <div className="grid grid-cols-2 gap-3">
               <button

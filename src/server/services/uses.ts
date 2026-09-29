@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { fixTargetBlockedReason, requiredFieldErrors } from '../../shared/form-settings';
 import { getEffectiveFormSettings } from './form-settings';
 import { and, asc, desc, eq, ne, inArray, isNull, lte, gte, or, ilike, sql } from 'drizzle-orm';
@@ -93,8 +94,10 @@ export async function rawDetail(ctx: Context, use: Use) {
   const duplicateHint = tripRows.some((t, i) =>
     tripRows.some((s, j) => j < i && t.origin === s.origin && t.destination === s.destination),
   );
+  const { create_request_hash: _hash, ...publicUse } = use;
+  void _hash;
   return {
-    ...use,
+    ...publicUse,
     created_by_name: creator?.name ?? '알 수 없음',
     trips: tripRows,
     charge_lines: lines,
@@ -393,7 +396,9 @@ async function saveCharges(
     const base = input.charge_type === 'BASE';
     const preserve =
       existing &&
-      existing.rate_agreement_id !== null &&
+      (existing.rate_agreement_id !== null ||
+        existing.unit_price !== null ||
+        existing.agreement_snapshot !== null) &&
       !reprice &&
       (!input.billing_unit || existing.billing_unit === input.billing_unit);
     const rate =
@@ -496,6 +501,9 @@ async function saveCharges(
 }
 export async function createUse(ctx: Context, raw: CreateUseInput) {
   const input = createUseSchema.parse(raw);
+  // Zod reconstructs the nested objects in schema order and applies defaults.
+  // Keep the original creation fingerprint independent of subsequent edits.
+  const requestHash = createHash('sha256').update(JSON.stringify(input)).digest('hex');
   return atomic(ctx, async (tx) => {
     if (input.client_request_id) {
       await tx.db.execute(
@@ -507,6 +515,11 @@ export async function createUse(ctx: Context, raw: CreateUseInput) {
         .where(eq(vehicleUses.client_request_id, input.client_request_id));
       if (previous) {
         await assertCanReadUse(tx, previous);
+        if (previous.create_request_hash !== requestHash)
+          throw new AppError(
+            'IDEMPOTENCY_MISMATCH',
+            '같은 생성 식별자에 다른 내용을 저장할 수 없습니다. 기존 운행을 열어 수정하세요.',
+          );
         return getUse(tx, previous.id);
       }
     }
@@ -518,6 +531,7 @@ export async function createUse(ctx: Context, raw: CreateUseInput) {
       .values({
         ...header,
         client_request_id: input.client_request_id,
+        create_request_hash: input.client_request_id ? requestHash : null,
         use_no: await nextUseNo(tx.db, input.use_date),
         created_by_user_id: tx.user.id,
         entered_as: tx.user.role === 'DRIVER' ? 'DRIVER_SELF' : 'PROXY',
@@ -585,6 +599,7 @@ export async function updateUse(ctx: Context, id: string, raw: UpdateUseInput) {
     await saveTrips(tx, use, input.trips);
     const reprice = [
       'project_id',
+      'driver_id',
       'vehicle_id',
       'payee_counterparty_id',
       'customer_counterparty_id',
@@ -1010,7 +1025,8 @@ export async function listUses(ctx: Context, raw: unknown = {}) {
           ),
         )
     : [];
-  const displayRows = rows.map((row) => {
+  const displayRows = rows.map(({ create_request_hash: _hash, ...row }) => {
+    void _hash;
     const lines = baseAmounts.filter((line) => line.use_id === row.id);
     const amounts = lines.map((line) => line.approved ?? line.amount);
     return {
