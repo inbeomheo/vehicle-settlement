@@ -33,14 +33,32 @@ export function FormContexts({
   );
 }
 
-export function Field({ label, target, children }: { label: string; target?: string; children?: ReactNode }) {
+export function hasFieldValue(value: unknown): boolean {
+  return value !== undefined && value !== null && value !== '' && (!Array.isArray(value) || value.length > 0);
+}
+export function HiddenFieldNotice() {
+  return <p className="mt-2 text-sm text-slate-600">관리자 설정상 숨김 항목입니다</p>;
+}
+export function Field({
+  label,
+  target,
+  children,
+  hasValue,
+}: {
+  label: string;
+  target?: string;
+  children?: ReactNode;
+  hasValue?: boolean;
+}) {
   const inputId = useId();
   const fixes = useContext(FixContext).filter(
     (f) => target && (f.target === target || f.target === `use.${target}`),
   );
   const key = fieldKeyForTarget(target);
   const modes = useContext(SettingsContext);
-  if (key && modes[key] === 'HIDDEN') return null;
+  const hidden = !!key && modes[key] === 'HIDDEN';
+  const input = isValidElement<{ value?: unknown; checked?: boolean }>(children) ? children : undefined;
+  if (hidden && !(hasValue ?? hasFieldValue(input?.props.value ?? input?.props.checked))) return null;
   const required = !!key && modes[key] === 'REQUIRED';
   return (
     <div data-fix-target={target} className="min-w-0 scroll-mt-8">
@@ -54,6 +72,7 @@ export function Field({ label, target, children }: { label: string; target?: str
             ...(required ? { 'aria-required': true } : {}),
           })
         : children}
+      {hidden && <HiddenFieldNotice />}
       {fixes.map((f, i) => (
         <p key={i} className="mt-2 rounded-lg bg-amber-50 p-2 text-sm font-semibold text-amber-900">
           보완 요청: {f.message}

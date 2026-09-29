@@ -4,7 +4,7 @@ import Decimal from 'decimal.js';
 import { api, ApiError } from '@/client/api';
 import { cachedValue, cacheValue } from '@/client/offline/store';
 import { units, chargeKinds, money, type RateResult, type UseDetail } from '@/client/types';
-import { button, control, Field, Section, SettingsContext } from './fields';
+import { button, control, Field, Section, SettingsContext, HiddenFieldNotice } from './fields';
 import { newCharge, type FormCharge, type FormValues } from './model';
 function RateFields({
   charge,
@@ -174,92 +174,90 @@ export function ChargeFields({
 }) {
   const settings = useContext(SettingsContext);
   const showExtra = settings.extra_charges !== 'HIDDEN';
+  const visibleCharges = form.charges.filter((c) => mode === 'manager' || c.direction === 'PAYABLE');
+  const hasExtra = visibleCharges.some((c) => c.charge_type !== 'BASE');
   const patch = (key: string, change: Partial<FormCharge>) =>
     onChange(form.charges.map((c) => (c.key === key ? { ...c, ...change } : c)));
   return (
-    <Section title={showExtra ? '과금·추가 비용' : '과금'} target="charges">
+    <Section title={showExtra || hasExtra ? '과금·추가 비용' : '과금'} target="charges">
+      {!showExtra && hasExtra && <HiddenFieldNotice />}
       <div className="grid gap-6">
-        {form.charges
-          .filter(
-            (c) =>
-              (mode === 'manager' || c.direction === 'PAYABLE') && (c.charge_type === 'BASE' || showExtra),
-          )
-          .map((c, i) => (
-            <div
-              key={c.key}
-              data-fix-target={`charge:${c.id ?? c.key}`}
-              className="scroll-mt-6 rounded-xl border border-slate-200 p-4"
+        {visibleCharges.map((c, i) => (
+          <div
+            key={c.key}
+            data-fix-target={`charge:${c.id ?? c.key}`}
+            className="scroll-mt-6 rounded-xl border border-slate-200 p-4"
+          >
+            <Section
+              title={`${c.direction === 'RECEIVABLE' ? '고객 청구' : '지급'} · ${chargeKinds[c.charge_type]}`}
+              target={`charge:${c.id ?? c.key}`}
             >
-              <Section
-                title={`${c.direction === 'RECEIVABLE' ? '고객 청구' : '지급'} · ${chargeKinds[c.charge_type]}`}
-                target={`charge:${c.id ?? c.key}`}
-              >
-                {c.charge_type === 'BASE' ? (
-                  <RateFields
-                    charge={c}
-                    form={form}
-                    onChange={(change) => patch(c.key, change)}
-                    userId={userId}
-                    saved={saved}
-                  />
-                ) : (
-                  <div className="grid gap-4">
-                    <Field label={`추가비 ${i} 종류`}>
-                      <select
-                        className={control}
-                        value={c.charge_type}
-                        disabled={!!c.id}
-                        onChange={(e) =>
-                          patch(c.key, { charge_type: e.target.value as FormCharge['charge_type'] })
-                        }
-                      >
-                        {Object.entries(chargeKinds)
-                          .filter(([v]) => v !== 'BASE')
-                          .map(([v, n]) => (
-                            <option key={v} value={v}>
-                              {n}
-                            </option>
-                          ))}
-                      </select>
-                    </Field>
-                    <Field label={`추가비 ${i} 요청액 (원)`}>
-                      <input
-                        className={control}
-                        inputMode="numeric"
-                        value={c.requested_amount}
-                        onChange={(e) => patch(c.key, { requested_amount: e.target.value })}
-                      />
-                    </Field>
-                    <Field label={`추가비 ${i} 사유`}>
-                      <input
-                        className={control}
-                        value={c.reason ?? ''}
-                        onChange={(e) => patch(c.key, { reason: e.target.value })}
-                      />
-                    </Field>
-                    <label className="flex items-center gap-3">
-                      <input
-                        className="h-11 w-11 shrink-0 text-base"
-                        type="checkbox"
-                        checked={c.included_in_base}
-                        onChange={(e) => patch(c.key, { included_in_base: e.target.checked })}
-                      />
-                      기본운임에 포함 (0원)
-                    </label>
-                  </div>
-                )}
-                {c.charge_type !== 'BASE' && (
-                  <button
-                    type="button"
-                    className={`${button} mt-4 text-red-700`}
-                    onClick={() => onChange(form.charges.filter((row) => row.key !== c.key))}
-                  >
-                    추가 비용 삭제
-                  </button>
-                )}
-              </Section>
-            </div>
-          ))}
+              {c.charge_type === 'BASE' ? (
+                <RateFields
+                  charge={c}
+                  form={form}
+                  onChange={(change) => patch(c.key, change)}
+                  userId={userId}
+                  saved={saved}
+                />
+              ) : (
+                <div className="grid gap-4">
+                  <Field label={`추가비 ${i} 종류`}>
+                    <select
+                      className={control}
+                      value={c.charge_type}
+                      disabled={!!c.id}
+                      onChange={(e) =>
+                        patch(c.key, { charge_type: e.target.value as FormCharge['charge_type'] })
+                      }
+                    >
+                      {Object.entries(chargeKinds)
+                        .filter(([v]) => v !== 'BASE')
+                        .map(([v, n]) => (
+                          <option key={v} value={v}>
+                            {n}
+                          </option>
+                        ))}
+                    </select>
+                  </Field>
+                  <Field label={`추가비 ${i} 요청액 (원)`}>
+                    <input
+                      className={control}
+                      inputMode="numeric"
+                      value={c.requested_amount}
+                      onChange={(e) => patch(c.key, { requested_amount: e.target.value })}
+                    />
+                  </Field>
+                  <Field label={`추가비 ${i} 사유`}>
+                    <input
+                      className={control}
+                      value={c.reason ?? ''}
+                      onChange={(e) => patch(c.key, { reason: e.target.value })}
+                    />
+                  </Field>
+                  <label className="flex items-center gap-3">
+                    <input
+                      className="h-11 w-11 shrink-0 text-base"
+                      type="checkbox"
+                      checked={c.included_in_base}
+                      onChange={(e) => patch(c.key, { included_in_base: e.target.checked })}
+                    />
+                    기본운임에 포함 (0원)
+                  </label>
+                </div>
+              )}
+              {c.charge_type !== 'BASE' && (
+                <button
+                  type="button"
+                  className={`${button} mt-4 text-red-700`}
+                  onClick={() => onChange(form.charges.filter((row) => row.key !== c.key))}
+                >
+                  추가 비용 삭제
+                </button>
+              )}
+            </Section>
+          </div>
+        ))}
       </div>
       {showExtra && (
         <div className="mt-4 flex flex-wrap gap-2">

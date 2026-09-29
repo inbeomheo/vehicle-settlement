@@ -2,7 +2,7 @@
 import { useContext, useEffect, useState } from 'react';
 import type { UseDetail } from '@/client/types';
 import { operationLabels } from '@/client/types';
-import { Field, button, control, Section, SettingsContext } from './fields';
+import { Field, button, control, Section, SettingsContext, hasFieldValue } from './fields';
 import { newTrip, type FormCharge, type FormTrip } from './model';
 export function TripFields({
   trips,
@@ -77,7 +77,10 @@ export function TripFields({
       'trip_notes',
     ] as const
   ).filter((key) => !(key === 'quantity' && showQuantity) && !(key === 'hours' && showHours));
-  const showDetails = detailKeys.some((key) => settings[key] !== 'HIDDEN');
+  const detailValue = (trip: FormTrip, key: (typeof detailKeys)[number]) =>
+    key === 'is_empty_return'
+      ? !!trip.id || trip.is_empty_return
+      : hasFieldValue(trip[key === 'trip_notes' ? 'notes' : key]);
   const requiredDetails = detailKeys.some((key) => settings[key] === 'REQUIRED');
   const routes = [
     ...new Map(recent.flatMap((u) => u.trips).map((t) => [`${t.origin} → ${t.destination}`, t])).entries(),
@@ -131,7 +134,7 @@ export function TripFields({
               >
                 <span className="min-w-0 flex-1 truncate text-sm font-semibold">
                   {i + 1}회차 · {t.origin} → {t.destination}
-                  {settings.cargo !== 'HIDDEN' && ` · ${t.cargo_desc || '화물 없음'}`}
+                  {(settings.cargo !== 'HIDDEN' || t.cargo_desc) && ` · ${t.cargo_desc || '화물 없음'}`}
                 </span>
                 <span aria-hidden="true">⌄</span>
               </button>
@@ -191,7 +194,11 @@ export function TripFields({
               )}
               <div className="mt-4 grid gap-4 sm:grid-cols-2">
                 {(['origin', 'destination', 'cargo_desc'] as const).map((key) => inputField(t, i, key))}
-                <Field label={`${i + 1}회차 운행 상태`} target={`trip:${i + 1}.status`}>
+                <Field
+                  label={`${i + 1}회차 운행 상태`}
+                  target={`trip:${i + 1}.status`}
+                  hasValue={!!t.id || t.status !== 'COMPLETED'}
+                >
                   <select
                     className={control}
                     value={t.status}
@@ -207,8 +214,11 @@ export function TripFields({
                 {showQuantity && inputField(t, i, 'quantity')}
                 {showHours && inputField(t, i, 'hours')}
               </div>
-              {showDetails && (
-                <details open={requiredDetails || undefined} className="mt-4 rounded-xl bg-slate-50 p-3">
+              {detailKeys.some((key) => settings[key] !== 'HIDDEN' || detailValue(t, key)) && (
+                <details
+                  open={requiredDetails || detailKeys.some((key) => detailValue(t, key)) || undefined}
+                  className="mt-4 rounded-xl bg-slate-50 p-3"
+                >
                   <summary className="min-h-11 cursor-pointer py-2 font-semibold text-slate-700">
                     {i + 1}회차 상세 입력
                   </summary>
@@ -233,7 +243,11 @@ export function TripFields({
                         onChange={(e) => change(i, { arrive_at: e.target.value })}
                       />
                     </Field>
-                    <Field label={`${i + 1}회차 공차회차`} target={`trip:${i + 1}.is_empty_return`}>
+                    <Field
+                      label={`${i + 1}회차 공차회차`}
+                      target={`trip:${i + 1}.is_empty_return`}
+                      hasValue={!!t.id || t.is_empty_return}
+                    >
                       <input
                         className="h-11 w-11 text-base"
                         type="checkbox"

@@ -974,7 +974,11 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
                       onChange={(e) => change({ cargo_desc: e.target.value })}
                     />
                   </Field>
-                  <Field label="전체 운행 상태" target="operation_status">
+                  <Field
+                    label="전체 운행 상태"
+                    target="operation_status"
+                    hasValue={!!draft.server || form.operation_status !== 'COMPLETED'}
+                  >
                     <select
                       className={control}
                       value={form.operation_status}
@@ -1006,7 +1010,7 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
                 userId={boot.user.id}
                 saved={draft.server}
               />
-              {settings.modes.notes !== 'HIDDEN' && (
+              {(settings.modes.notes !== 'HIDDEN' || form.notes) && (
                 <Section title="특이사항">
                   <Field label="특이사항" target="notes">
                     <textarea
