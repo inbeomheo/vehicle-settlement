@@ -1,28 +1,37 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { api, mutate } from './api';
-import { todaySeoul, reviewLabels, type UseDetail, type UseList } from './types';
+import { api, ApiError } from './api';
+import { todaySeoul, reviewLabels, type UseList } from './types';
 import { useBootstrap, PwaRegistration } from './offline/runtime';
-import { cacheValue, listDrafts, OFFLINE_EVENT, type Draft } from './offline/store';
+import { isUnsent, listDrafts, OFFLINE_EVENT, type Draft } from './offline/store';
+import { copyToDevice } from './copy-draft';
 import { syncQueue } from './offline/engine';
 import { button, primary, Section, StatusBadge } from '@/components/use-form/fields';
 export function DriverDashboard() {
-  const { data, error } = useBootstrap('driver');
+  const { data, error, authRequired, retry } = useBootstrap('driver');
   const [list, setList] = useState<UseList>();
   const [todayCount, setTodayCount] = useState<number>();
   const [fixes, setFixes] = useState<UseList['rows']>([]);
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
+  const [copyMenu, setCopyMenu] = useState<string>();
+  const [refreshAttempt, setRefreshAttempt] = useState(0);
+  const [listAuthRequired, setListAuthRequired] = useState(false);
   useEffect(() => {
     if (!data) return;
     setList(data.recent);
     const refresh = () => {
+      setMessage('');
+      setListAuthRequired(false);
       void listDrafts(data.user.id).then(setDrafts);
       if (navigator.onLine) {
         void api<UseList>('/api/uses?pageSize=20&sort=use_date')
           .then(setList)
-          .catch(() => {});
+          .catch((e) => {
+            setMessage('잠시 후 다시 시도해 주세요.');
+            setListAuthRequired(e instanceof ApiError && e.status === 401);
+          });
         void api<UseList>(`/api/uses?from=${todaySeoul()}&to=${todaySeoul()}&pageSize=1`)
           .then((r) => setTodayCount(r.total))
           .catch(() => {});
@@ -38,20 +47,13 @@ export function DriverDashboard() {
       window.removeEventListener(OFFLINE_EVENT, refresh);
       window.removeEventListener('online', refresh);
     };
-  }, [data]);
+  }, [data, refreshAttempt]);
   async function copy(id: string) {
     if (!data) return;
     setBusy(true);
     setMessage('');
-    // Keep this copy command stable if a response is lost.
-    const keyName = `vehicle-copy-${data.user.id}-${id}`;
-    const key = sessionStorage.getItem(keyName) ?? crypto.randomUUID();
-    sessionStorage.setItem(keyName, key);
     try {
-      const result = await mutate<UseDetail>(`/api/uses/${id}/copy`, { client_request_id: key }, key);
-      sessionStorage.removeItem(keyName);
-      await cacheValue(data.user.id, `use:${result.id}`, result);
-      location.assign(`/d/uses/${result.id}`);
+      location.assign(await copyToDevice(data.user.id, id));
     } catch (e) {
       setMessage(e instanceof Error ? e.message : '복사하지 못했습니다.');
     } finally {
@@ -62,13 +64,19 @@ export function DriverDashboard() {
     return (
       <p role="alert">
         {error}{' '}
-        <a href="/login" className="underline">
-          로그인
-        </a>
+        {authRequired ? (
+          <a href="/login" className={button}>
+            로그인
+          </a>
+        ) : (
+          <button className={button} onClick={retry}>
+            다시 시도
+          </button>
+        )}
       </p>
     );
   if (!data || !list) return <p role="status">내 운행을 불러오고 있습니다…</p>;
-  const pending = drafts.filter((d) => d.phase !== 'saved');
+  const pending = drafts.filter(isUnsent);
   const projects = [
     ...new Map(data.recent.rows.map((r) => [r.project_id, String(r.snapshot.project_name)])).entries(),
   ].slice(0, 5);
@@ -103,6 +111,15 @@ export function DriverDashboard() {
       {message && (
         <p role="alert" className="rounded-xl bg-red-50 p-4 text-red-800">
           {message}
+          {listAuthRequired ? (
+            <a href="/login" className={button}>
+              로그인
+            </a>
+          ) : (
+            <button className={`${button} ml-2`} onClick={() => setRefreshAttempt((value) => value + 1)}>
+              다시 시도
+            </button>
+          )}
         </p>
       )}
       {fixes.length > 0 && (
@@ -189,7 +206,7 @@ export function DriverDashboard() {
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="text-sm text-slate-500">{row.use_date}</span>
                     <StatusBadge warning={row.review_status === 'NEEDS_FIX'}>
-                      {reviewLabels[row.review_status]}
+                      {row.operation_status === 'CANCELED' ? '취소' : reviewLabels[row.review_status]}
                     </StatusBadge>
                   </div>
                   <p className="mt-3 font-bold">
@@ -214,12 +231,28 @@ export function DriverDashboard() {
                   type="button"
                   className="mt-3 min-h-11 px-2 text-sm text-slate-600 underline underline-offset-4"
                   disabled={busy}
+                  aria-haspopup="menu"
+                  aria-expanded={copyMenu === row.id}
                   onClick={() => {
-                    void copy(row.id);
+                    setCopyMenu(copyMenu === row.id ? undefined : row.id);
                   }}
                 >
                   이전 운행 복사
                 </button>
+                {copyMenu === row.id && (
+                  <div role="menu" aria-label="운행 보조 메뉴" className="mt-2 rounded-xl border p-3">
+                    <button
+                      role="menuitem"
+                      className={button}
+                      disabled={busy}
+                      onClick={() => {
+                        void copy(row.id);
+                      }}
+                    >
+                      새 기기 초안으로 복사
+                    </button>
+                  </div>
+                )}
               </li>
             ))}
           </ul>

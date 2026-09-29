@@ -117,6 +117,7 @@ export async function sendDraft(
     }
     draft.phase = 'saved';
     draft.error = undefined;
+    draft.inputError = false;
     // The authoritative detail now contains all uploaded files. Remove queued
     // blobs/metadata so subsequent edits use authorized server thumbnails.
     draft.uploads = [];
@@ -124,7 +125,26 @@ export async function sendDraft(
   } catch (error) {
     draft.error = error instanceof Error ? error.message : '전송하지 못했습니다.';
     if (error instanceof ApiError) {
-      if (stopStatuses.includes(error.status)) draft.phase = 'blocked';
+      if (error.code === 'SUBMIT_BLOCKED') {
+        draft.phase = 'editing';
+        draft.inputError = true;
+        draft.intent = undefined;
+        draft.request = undefined;
+        draft.submitRequest = undefined;
+        draft.savedRequest = false;
+      } else if (error.code === 'STATEMENT_LOCKED') {
+        if (draft.mode === 'driver' && /명세.*취소/.test(error.message))
+          draft.error = '정산 확정된 운행입니다. 수정이 필요하면 담당자에게 문의하세요';
+        draft.phase = 'blocked';
+        if (draft.serverId) {
+          try {
+            draft.server = await io.get<UseDetail>(`/api/uses/${draft.serverId}`);
+            draft.version = draft.server.version;
+          } catch {
+            /* Preserve local edits when the detail is unavailable. */
+          }
+        }
+      } else if (stopStatuses.includes(error.status)) draft.phase = 'blocked';
       else if (error.code === 'VERSION_CONFLICT') {
         draft.phase = 'conflict';
         if (draft.serverId) {

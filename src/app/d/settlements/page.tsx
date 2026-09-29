@@ -3,14 +3,13 @@ import { useState, type FormEvent } from 'react';
 import type { driverSettlements } from '@/server/services/statements-driver';
 import {
   ErrorMessage,
-  Field,
-  inputClass,
   money,
   monthPeriod,
   panelClass,
   secondaryClass,
   useResource,
 } from '../../m/statements/ui';
+import { Field, control as inputClass } from '@/components/use-form/fields';
 const reviews: Record<string, string> = {
   DRAFT: '작성 중',
   SUBMITTED: '제출',
@@ -70,7 +69,7 @@ export default function DriverSettlementsPage() {
                 <p className="text-sm">
                   {use.use_no} · {reviews[use.review_status]}
                 </p>
-                <p>인정 공급가 {money(use.approved_supply)}</p>
+                <p>인정 공급가 {use.review_status === 'APPROVED' ? money(use.approved_supply) : '검수 전'}</p>
                 {use.held_count > 0 && <p className="text-sm text-amber-800">보류 비용 {use.held_count}건</p>}
               </article>
             ))}

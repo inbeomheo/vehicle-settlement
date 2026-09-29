@@ -102,6 +102,7 @@ export async function rawDetail(ctx: Context, use: Use) {
     }),
     revisions,
     duplicate_hint: duplicateHint,
+    is_locked: lines.some((line) => line.locked_statement_id !== null),
   };
 }
 export async function getUse(ctx: Context, id: string) {
@@ -123,7 +124,12 @@ export async function assertUnlocked(ctx: Context, id: string) {
     .orderBy(asc(chargeLines.id))
     .for('update');
   if (lines.some((line) => line.locked_statement_id !== null))
-    throw new AppError('STATEMENT_LOCKED', '확정 명세를 취소한 후 수정하세요.');
+    throw new AppError(
+      'STATEMENT_LOCKED',
+      ctx.user.role === 'DRIVER'
+        ? '정산 확정된 운행입니다. 수정이 필요하면 담당자에게 문의하세요'
+        : '확정 명세를 취소한 후 수정하세요.',
+    );
 }
 export async function assertEvidenceSatisfied(ctx: Context, use: Use) {
   const [project] = await ctx.db.select().from(projects).where(eq(projects.id, use.project_id));
@@ -618,6 +624,23 @@ export async function submitUse(ctx: Context, id: string, raw: z.input<typeof ve
     assertTransition(before.review_status, 'submit');
     if (before.operation_status === 'CANCELED') invalid('취소된 사용 건은 제출할 수 없습니다.');
     await assertEvidenceSatisfied(tx, before);
+    const lines = await tx.db
+      .select()
+      .from(chargeLines)
+      .where(and(eq(chargeLines.vehicle_use_id, id), isNull(chargeLines.deleted_at)));
+    const missing = lines.filter(
+      (line) =>
+        line.charge_type === 'BASE' &&
+        ['PER_TRIP', 'PER_HOUR', 'PER_TON', 'PER_M3'].includes(line.billing_unit) &&
+        line.quantity === null,
+    );
+    if (missing.length)
+      throw new AppError('SUBMIT_BLOCKED', '청구 수량을 입력하세요', {
+        fields: missing.map((line) => ({
+          target: `charge:${line.id}.quantity`,
+          reason: '청구 수량을 입력하세요',
+        })),
+      });
     const [use] = await tx.db
       .update(vehicleUses)
       .set({
