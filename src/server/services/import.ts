@@ -357,7 +357,8 @@ async function evaluate(ctx: Context, job: Job, raw: unknown) {
             ...line,
             quantity: line.quantity == null ? null : new Decimal(line.quantity).toString(),
           })),
-          price: data.price,
+          // Identity follows the source row, never the current contract or option.
+          price: data.importedPrice,
         }),
       );
       const occurrence = (occurrences.get(contentHash) ?? 0) + 1;
