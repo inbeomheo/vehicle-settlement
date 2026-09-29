@@ -393,7 +393,9 @@ async function saveCharges(
     const base = input.charge_type === 'BASE';
     const preserve =
       existing &&
-      existing.rate_agreement_id !== null &&
+      (existing.rate_agreement_id !== null ||
+        existing.unit_price !== null ||
+        existing.agreement_snapshot !== null) &&
       !reprice &&
       (!input.billing_unit || existing.billing_unit === input.billing_unit);
     const rate =
@@ -585,6 +587,7 @@ export async function updateUse(ctx: Context, id: string, raw: UpdateUseInput) {
     await saveTrips(tx, use, input.trips);
     const reprice = [
       'project_id',
+      'driver_id',
       'vehicle_id',
       'payee_counterparty_id',
       'customer_counterparty_id',
