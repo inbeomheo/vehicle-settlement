@@ -51,7 +51,7 @@ export type ItemSnapshot = {
   tax_amount: number | null;
   notes: string;
   carried_forward: boolean;
-  charge_type: string;
+  charge_type?: string;
   adjusts_statement_id: string | null;
 };
 export function statementVersion(statement: Statement, version: number) {

@@ -1,14 +1,13 @@
 'use client';
-import { formatQuantity } from '@/shared/quantity';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
 import { PaymentPanel } from '../../payments/payment-panel';
 import { NewStatement } from '../new-statement';
 import { DraftEditor } from '../draft-editor';
+import { StatementItems } from '../statement-items';
 import {
   api,
-  billingLabels,
   buttonClass,
   dateTime,
   ErrorMessage,
@@ -23,7 +22,6 @@ import {
   useResource,
   type StatementDetail,
 } from '../ui';
-import type { ItemSnapshot } from '@/server/services/statements';
 export default function StatementPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -31,6 +29,7 @@ export default function StatementPage() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [canceling, setCanceling] = useState(false);
+  const [confirmingVersion, setConfirmingVersion] = useState<number | null>(null);
   const [replacing, setReplacing] = useState(false);
   const [notice, setNotice] = useState('');
   const statement = result.data;
@@ -77,7 +76,7 @@ export default function StatementPage() {
   if (!statement)
     return (
       <div className="space-y-4">
-        <Link href="/m/statements" className="text-blue-700 underline">
+        <Link href="/m/statements" className="inline-flex min-h-11 items-center text-blue-700 underline">
           월 정산
         </Link>
         <ErrorMessage error={result.error} />
@@ -88,7 +87,10 @@ export default function StatementPage() {
   const held = statement.items.filter((i) => i.inclusion === 'HELD');
   return (
     <div className="min-w-0 space-y-6">
-      <Link href="/m/statements" className="text-sm text-blue-700 underline">
+      <Link
+        href="/m/statements"
+        className="inline-flex min-h-11 items-center text-sm text-blue-700 underline"
+      >
         ← 월 정산 목록
       </Link>
       <header className="flex flex-wrap justify-between gap-4">
@@ -122,65 +124,7 @@ export default function StatementPage() {
       {statement.status === 'DRAFT' && <DraftWarnings {...statement} />}
       <section className={`${panelClass} space-y-4`}>
         <h2 className="text-lg font-bold">포함 내역 · {included.length}건</h2>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[1250px] text-left text-sm">
-            <thead className="bg-slate-50">
-              <tr>
-                {[
-                  '사용일 / 사용번호',
-                  '현장',
-                  '차량 / 기사',
-                  '운반내용',
-                  '운행수',
-                  '과금단위',
-                  '수량',
-                  '단가',
-                  '공급가',
-                  '세액',
-                  '비고',
-                ].map((h) => (
-                  <th key={h} className="p-3">
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {included.map((item) => {
-                const s = item.snapshot as ItemSnapshot;
-                return (
-                  <tr key={item.id} className="border-b align-top">
-                    <td className="p-3">
-                      {s.use_date}
-                      <br />
-                      {s.use_no}
-                    </td>
-                    <td className="p-3">{s.project_name}</td>
-                    <td className="p-3">
-                      {s.plate_no}
-                      <br />
-                      {s.driver_name}
-                    </td>
-                    <td className="max-w-56 whitespace-pre-wrap p-3">{s.cargo_desc}</td>
-                    <td className="p-3">{s.trip_count}</td>
-                    <td className="p-3">{billingLabels[s.billing_unit]}</td>
-                    <td className="p-3">{formatQuantity(s.quantity)}</td>
-                    <td className="p-3">{money(s.unit_price)}</td>
-                    <td className="p-3">{money(item.supply_amount)}</td>
-                    <td className="p-3">{money(item.tax_amount)}</td>
-                    <td className="max-w-64 whitespace-pre-wrap p-3">
-                      {s.carried_forward && (
-                        <span className="mr-2 rounded bg-amber-100 px-2 text-amber-900">전월분</span>
-                      )}
-                      {s.charge_type === 'ADJUSTMENT' && '조정 · '}
-                      {s.notes}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <StatementItems items={included} />
         {!included.length && <p>포함 항목이 없습니다.</p>}
         <h3 className="pt-3 font-semibold">보류 내역 · {held.length}건</h3>
         {!held.length ? (
@@ -208,13 +152,41 @@ export default function StatementPage() {
             <p className="mb-3 text-sm">
               저장된 포함 항목과 합계로 확정합니다. 확정 후 수정은 취소·재작성 또는 조정으로 처리합니다.
             </p>
-            <button
-              className={buttonClass}
-              disabled={busy}
-              onClick={() => action(`/api/statements/${id}/confirm`, { version: statement.version })}
-            >
-              {busy ? '처리 중…' : '명세 확정'}
-            </button>
+            {confirmingVersion === statement.version ? (
+              <div role="group" aria-label="명세 확정 확인" className="space-y-3">
+                <p className="font-bold">
+                  포함 {included.length}건 · 총액 {money(statement.grand_total)}
+                </p>
+                <p className="text-sm">이 내용으로 명세를 확정하시겠습니까?</p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    className={buttonClass}
+                    disabled={busy}
+                    onClick={async () => {
+                      if (await action(`/api/statements/${id}/confirm`, { version: statement.version }))
+                        setConfirmingVersion(null);
+                    }}
+                  >
+                    {busy ? '처리 중…' : '확정'}
+                  </button>
+                  <button
+                    className={secondaryClass}
+                    disabled={busy}
+                    onClick={() => setConfirmingVersion(null)}
+                  >
+                    돌아가기
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                className={buttonClass}
+                disabled={busy}
+                onClick={() => setConfirmingVersion(statement.version)}
+              >
+                명세 확정
+              </button>
+            )}
           </div>
         </section>
       )}
@@ -227,7 +199,7 @@ export default function StatementPage() {
         {statement.replaces_statement_id && (
           <p className="text-sm">
             <Link
-              className="text-blue-700 underline"
+              className="inline-flex min-h-11 items-center text-blue-700 underline"
               href={`/m/statements/${statement.replaces_statement_id}`}
             >
               재작성 전 취소 명세 보기
@@ -246,7 +218,10 @@ export default function StatementPage() {
             </button>
             {statement.replacements.map((s) => (
               <p key={s.id}>
-                <Link className="text-sm text-blue-700 underline" href={`/m/statements/${s.id}`}>
+                <Link
+                  className="inline-flex min-h-11 items-center text-sm text-blue-700 underline"
+                  href={`/m/statements/${s.id}`}
+                >
                   재작성 명세: {s.statement_no ?? '작성 중'} ({statusLabels[s.status]})
                 </Link>
               </p>
@@ -269,7 +244,11 @@ export default function StatementPage() {
           </>
         )}
         {canceling && (
-          <form onSubmit={cancel} className="space-y-3">
+          <form onSubmit={cancel} className="space-y-3 rounded-lg border border-red-200 bg-red-50 p-4">
+            <p className="text-sm">
+              포함 {included.length}건 · 총액 {money(statement.grand_total)} 명세를 취소합니다. 사유를
+              확인하고 취소를 확정하세요.
+            </p>
             <Field label="명세 취소 사유">
               <input name="reason" className={inputClass} required maxLength={1000} />
             </Field>

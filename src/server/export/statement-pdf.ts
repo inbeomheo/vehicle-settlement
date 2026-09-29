@@ -20,7 +20,7 @@ export async function renderStatementPdf(model: StatementExportModel): Promise<B
     doc.on('error', reject);
   });
   doc.font(path.join(process.cwd(), 'assets/fonts/NotoSansKR-Regular.ttf'));
-  const widths = [57, 78, 64, 61, 43, 77, 30, 40, 37, 62, 65, 54, 117];
+  const widths = [57, 73, 57, 60, 43, 68, 30, 40, 35, 60, 62, 49, 91, 60];
   const totalWidth = widths.reduce((a, b) => a + b, 0);
   const left = 28;
   let y = 28;

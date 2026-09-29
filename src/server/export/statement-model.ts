@@ -11,6 +11,20 @@ export const billingLabels: Record<string, string> = {
   PER_M3: '루베',
   LUMP_SUM: '1식',
 };
+const chargeLabels: Record<string, string> = {
+  BASE: '기본운임',
+  WAITING: '대기료',
+  TOLL: '통행료',
+  EXTRA_STOP: '경유비',
+  CANCEL_FEE: '취소·회차비',
+  EXPENSE: '실비',
+  OTHER: '기타',
+  ADJUSTMENT: '조정',
+};
+export function exportChargeUnit(type: string | undefined, unit: string) {
+  if (type && type !== 'BASE' && !['PER_HOUR', 'PER_TON', 'PER_M3'].includes(unit)) return '건';
+  return billingLabels[unit] ?? '—';
+}
 export const exportHeaders = [
   '실제 사용일',
   '사용번호',
@@ -25,6 +39,7 @@ export const exportHeaders = [
   '공급가',
   '세액',
   '비고',
+  '비용 종류',
 ];
 export const formatWon = (n: number) => `${n.toLocaleString('ko-KR')}원`;
 export function seoulTime(value: Date | string | null) {
@@ -81,7 +96,7 @@ export function rowValues(row: StatementExportModel['rows'][number]): (string | 
     row.driver_name,
     row.cargo_desc,
     row.trip_count,
-    billingLabels[row.billing_unit] ?? row.billing_unit,
+    exportChargeUnit(row.charge_type, row.billing_unit),
     row.quantity === null ? null : formatQuantity(row.quantity),
     row.unit_price,
     row.supply_amount,
@@ -89,5 +104,6 @@ export function rowValues(row: StatementExportModel['rows'][number]): (string | 
     [row.carried_forward ? '전월분' : '', row.charge_type === 'ADJUSTMENT' ? '조정' : '', row.notes]
       .filter(Boolean)
       .join(' / '),
+    chargeLabels[row.charge_type ?? ''] ?? '—',
   ];
 }

@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { LedgerResult, LedgerRow } from '@/server/services/ledger';
 import {
   Badge,
@@ -32,8 +32,11 @@ const columns: { key: keyof LedgerRow; title: string; render?: (row: LedgerRow) 
   { key: 'driver_name', title: '기사' },
   { key: 'plate_no', title: '차량' },
   { key: 'payee_name', title: '운송사/지급처' },
-  { key: 'origin', title: '출발' },
-  { key: 'destination', title: '도착' },
+  {
+    key: 'route_summary',
+    title: '경로',
+    render: (row) => <span className="block max-w-64 break-words">{row.route_summary}</span>,
+  },
   { key: 'cargo_desc', title: '작업내용' },
   {
     key: 'billing_units',
@@ -58,21 +61,41 @@ const columns: { key: keyof LedgerRow; title: string; render?: (row: LedgerRow) 
   { key: 'settlement_status', title: '정산상태', render: (row) => label(row.settlement_status) },
   { key: 'payment_status', title: '지급상태', render: (row) => label(row.payment_status) },
 ];
+const defaults: Search = { page: '1', pageSize: '20', sort: 'use_date', order: 'desc' };
+const defaultColumns: (keyof LedgerRow)[] = [
+  'use_no',
+  'use_date',
+  'project_name',
+  'driver_name',
+  'plate_no',
+  'route_summary',
+  'total_amount',
+  'review_status',
+  'settlement_status',
+  'payment_status',
+];
 export function Ledger({ initial = {} }: { initial?: Search }) {
-  const [query, setQuery] = useState<Search>({
-    page: '1',
-    pageSize: '20',
-    sort: 'use_date',
-    order: 'desc',
-    ...initial,
-  });
+  const [query, setQuery] = useState<Search>({ ...defaults, ...initial });
   const [draft, setDraft] = useState(query);
-  const [visible, setVisible] = useState(columns.map((column) => column.key));
+  const [visible, setVisible] = useState(defaultColumns);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const filterCount = Object.entries(query).filter(
+    ([key, value]) => value && !['page', 'pageSize', 'sort', 'order'].includes(key),
+  ).length;
+  useEffect(() => {
+    const restore = () => {
+      const next = { ...defaults, ...Object.fromEntries(new URLSearchParams(window.location.search)) };
+      setQuery(next);
+      setDraft(next);
+    };
+    window.addEventListener('popstate', restore);
+    return () => window.removeEventListener('popstate', restore);
+  }, []);
   const { data, error, loading, refresh } = useRemote<LedgerResult>(`/api/ledger?${queryString(query)}`);
   const lookups = useRemote<Options>('/api/ledger/options');
   const change = (next: Search) => {
     setQuery(next);
-    window.history.replaceState(null, '', `/m/ledger?${queryString(next)}`);
+    window.history.pushState(null, '', `/m/ledger?${queryString(next)}`);
   };
   const draftValue = (key: string, value: string) => setDraft((previous) => ({ ...previous, [key]: value }));
   const optionField = (title: string, key: string, options: Option[]) => (
@@ -105,11 +128,23 @@ export function Ledger({ initial = {} }: { initial?: Search }) {
           검색 결과 전체 엑셀
         </a>
       </Heading>
+      <button
+        type="button"
+        className={`${secondaryClass} mb-3 w-full justify-between md:hidden`}
+        aria-expanded={filtersOpen}
+        aria-controls="ledger-filters"
+        onClick={() => setFiltersOpen(!filtersOpen)}
+      >
+        <span>필터{filterCount > 0 ? ` (${filterCount})` : ''}</span>
+        <span aria-hidden="true">{filtersOpen ? '접기 −' : '펼치기 +'}</span>
+      </button>
       <form
-        className={`${panelClass} mb-5`}
+        id="ledger-filters"
+        className={`${panelClass} mb-5 ${filtersOpen ? 'block' : 'hidden'} md:block`}
         onSubmit={(event) => {
           event.preventDefault();
           change({ ...draft, page: '1' });
+          setFiltersOpen(false);
         }}
       >
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -228,7 +263,7 @@ export function Ledger({ initial = {} }: { initial?: Search }) {
         기본비·추가비·합계는 지급 승인 공급가입니다. 승인액이 없는 항목은 미확정으로 표시하며 합계에서
         제외합니다. 엑셀에는 현재 필터의 전체 행·전체 열이 포함됩니다.
       </p>
-      <details className={`${panelClass} mb-3`}>
+      <details className={`${panelClass} mb-3 hidden md:block`}>
         <summary className="cursor-pointer text-sm font-semibold">표시 열 선택</summary>
         <div className="mt-3 flex flex-wrap gap-4">
           {columns.map((column) => (
@@ -251,7 +286,7 @@ export function Ledger({ initial = {} }: { initial?: Search }) {
         </div>
       </details>
       <div
-        className="max-w-full overflow-x-auto rounded-xl border border-slate-200 bg-white"
+        className="hidden max-w-full overflow-x-auto rounded-xl border border-slate-200 bg-white md:block"
         aria-busy={loading}
       >
         <table className="w-full border-collapse text-left text-sm">
@@ -260,7 +295,7 @@ export function Ledger({ initial = {} }: { initial?: Search }) {
               {columns
                 .filter((c) => visible.includes(c.key))
                 .map((c) => (
-                  <th className="whitespace-nowrap px-4 py-3" key={c.key}>
+                  <th className="whitespace-nowrap px-2 py-3" key={c.key}>
                     {c.title}
                   </th>
                 ))}
@@ -275,7 +310,7 @@ export function Ledger({ initial = {} }: { initial?: Search }) {
                     .map((c) => (
                       <td
                         key={c.key}
-                        className={`max-w-72 min-w-24 px-4 py-4 ${['use_no', 'use_date'].includes(c.key) ? 'whitespace-nowrap' : ''}`}
+                        className={`max-w-64 px-2 py-3 ${['use_no', 'use_date'].includes(c.key) ? 'whitespace-nowrap' : ''}`}
                       >
                         {c.render ? c.render(row) : String(row[c.key] ?? '—')}
                       </td>
@@ -284,6 +319,32 @@ export function Ledger({ initial = {} }: { initial?: Search }) {
               ))}
           </tbody>
         </table>
+        {(loading || !data?.rows.length) && <Empty loading={loading} />}
+      </div>
+      <div className="grid gap-3 md:hidden" aria-label="사용대장 카드 목록" aria-busy={loading}>
+        {!loading &&
+          data?.rows.map((row) => (
+            <article key={row.id} className={panelClass}>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <UseLink id={row.id}>{row.use_no}</UseLink>
+                <Badge value={row.review_status} />
+              </div>
+              <p className="font-semibold">
+                {row.use_date} · {row.project_name}
+              </p>
+              <p className="mt-2 text-sm text-slate-600">
+                {row.driver_name} · {row.plate_no}
+              </p>
+              <p className="mt-2 break-words text-sm">{row.route_summary}</p>
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3">
+                <strong>{money(row.total_amount)}</strong>
+                <div className="flex flex-wrap gap-2">
+                  <Badge value={row.settlement_status} />
+                  <Badge value={row.payment_status} />
+                </div>
+              </div>
+            </article>
+          ))}
         {(loading || !data?.rows.length) && <Empty loading={loading} />}
       </div>
       <div className="mt-4 flex justify-end">

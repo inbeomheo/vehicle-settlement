@@ -17,6 +17,14 @@ function PaymentsContent({ requestedState }: { requestedState: string | null }) 
     `/api/payments/overview?${new URLSearchParams({ direction, state, page: String(page) })}`,
   );
   const word = direction === 'PAYABLE' ? '지급' : '입금';
+  const summaryLabel =
+    state === 'PAID'
+      ? `${word} 완료 내역`
+      : state === 'OVERDUE'
+        ? `${word} 예정일 경과 내역`
+        : state === 'ALL'
+          ? `전체 ${word} 내역`
+          : `미${word} 내역`;
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold">지급·입금 관리</h1>
@@ -31,7 +39,7 @@ function PaymentsContent({ requestedState }: { requestedState: string | null }) 
         <label className="text-sm">
           조회 상태{' '}
           <select
-            className="ml-2 min-h-11 rounded-lg border border-slate-300 bg-white px-3"
+            className="ml-2 min-h-11 text-base rounded-lg border border-slate-300 bg-white px-3"
             value={state}
             onChange={(e) => {
               setState(e.target.value);
@@ -50,13 +58,13 @@ function PaymentsContent({ requestedState }: { requestedState: string | null }) 
       {result.data && (
         <>
           <section className={`${panelClass} space-y-3`}>
-            <h2 className="text-lg font-bold">거래처·현장별 미{word}</h2>
+            <h2 className="text-lg font-bold">거래처·현장별 {summaryLabel}</h2>
             <p className="text-sm text-slate-600">
               현재 페이지 {money(result.data.totals.pageSum)} · 전체 검색 합계{' '}
               {money(result.data.totals.filteredSum)}
             </p>
             {!result.data.groups.length && (
-              <p className="text-sm text-slate-500">해당 조건의 미{word} 내역이 없습니다.</p>
+              <p className="text-sm text-slate-500">해당 조건의 {summaryLabel}이 없습니다.</p>
             )}
             {result.data.groups.map((g) => (
               <div
@@ -67,22 +75,27 @@ function PaymentsContent({ requestedState }: { requestedState: string | null }) 
                   {g.counterparty_name} · {g.project_name}
                 </span>
                 <span>
-                  {g.unpaid_count}건 · <strong>{money(g.unpaid_amount)}</strong>{' '}
-                  <span className="text-red-700">
-                    예정일 경과 {g.overdue_count}건 · {money(g.overdue_amount)}
-                  </span>
+                  {g.count}건 · <strong>{money(g.amount)}</strong>{' '}
+                  {state !== 'PAID' && (
+                    <span className="text-red-700">
+                      예정일 경과 {g.overdue_count}건 · {money(g.overdue_amount)}
+                    </span>
+                  )}
                 </span>
               </div>
             ))}
           </section>
           {!result.data.rows.length && (
-            <p className="py-5 text-center text-slate-500">해당 조건의 확정 명세가 없습니다.</p>
+            <p className="py-5 text-center text-slate-500">해당 조건의 {summaryLabel}이 없습니다.</p>
           )}
           {result.data.rows.map((statement) => (
             <section key={statement.id} className={`${panelClass} space-y-5`}>
               <div className="flex flex-wrap justify-between gap-3">
                 <div>
-                  <Link className="font-bold text-blue-700 underline" href={`/m/statements/${statement.id}`}>
+                  <Link
+                    className="inline-flex min-h-11 items-center break-all font-bold text-blue-700 underline"
+                    href={`/m/statements/${statement.id}`}
+                  >
                     {statement.statement_no}
                   </Link>
                   <p className="mt-1 text-sm">

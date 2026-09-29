@@ -19,9 +19,9 @@ export async function renderStatementXlsx(model: StatementExportModel) {
       oddFooter: '&R&P / &N',
     },
   });
-  sheet.columns = [15, 22, 20, 18, 14, 26, 9, 12, 12, 16, 18, 15, 34].map((width) => ({ width }));
+  sheet.columns = [15, 22, 20, 18, 14, 26, 9, 12, 12, 16, 18, 15, 34, 18].map((width) => ({ width }));
   const mergeRow = (row: number, text: string) => {
-    sheet.mergeCells(row, 1, row, 13);
+    sheet.mergeCells(row, 1, row, exportHeaders.length);
     sheet.getCell(row, 1).value = text;
     sheet.getRow(row).height = 25;
   };
@@ -83,7 +83,7 @@ export async function renderStatementXlsx(model: StatementExportModel) {
     const row = sheet.addRow([]);
     sheet.mergeCells(row.number, 1, row.number, 10);
     row.getCell(1).value = label;
-    sheet.mergeCells(row.number, 11, row.number, 13);
+    sheet.mergeCells(row.number, 11, row.number, exportHeaders.length);
     row.getCell(11).value = amount;
     row.getCell(11).numFmt = '#,##0"원"';
     row.height = 30;
