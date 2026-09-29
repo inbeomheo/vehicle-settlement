@@ -301,6 +301,42 @@ async function resolveRow(
       : null;
   return { input, price, importedPrice, appliedContract, rate, computed, warnings };
 }
+// Compare the persisted source fields as well as the current normalized-v1 hash.
+// Old hashes included the applied contract price. Source identity must not depend
+// on file bytes, row/column positions, today's contracts, or mutable use records.
+function sourceContentHash(values: string[], mapping: ImportMapping) {
+  const get = (field: keyof ImportMapping) =>
+    mapping[field] === undefined ? '' : (values[mapping[field]!] ?? '').trim();
+  const unit = units[get('billing_unit')] ?? get('billing_unit');
+  const quantity =
+    get('quantity') || (['PER_DAY', 'HALF_DAY', 'MONTHLY', 'LUMP_SUM'].includes(unit) ? '1' : null);
+  const extra = money(get('extra'), '추가비');
+  return sha(
+    JSON.stringify({
+      use_date: date(get('use_date')),
+      project: normalize(get('project')),
+      driver: normalize(get('driver')),
+      vehicle: normalize(get('vehicle')),
+      payee: normalize(get('payee')),
+      origin: get('origin'),
+      destination: get('destination'),
+      cargo_desc: get('cargo_desc'),
+      trips: Number(get('trips') || '1'),
+      billing_unit: unit,
+      quantity: quantity === null ? null : new Decimal(quantity).toString(),
+      unit_price: money(get('unit_price'), '단가'),
+      extra,
+      reason: extra === null ? '' : get('reason'),
+      notes: get('notes'),
+    }),
+  );
+}
+function sourceRowIdentity(values: string[], mapping: ImportMapping, occurrences: Map<string, number>) {
+  const hash = sourceContentHash(values, mapping);
+  const occurrence = (occurrences.get(hash) ?? 0) + 1;
+  occurrences.set(hash, occurrence);
+  return `${hash}:${occurrence}`;
+}
 async function evaluate(ctx: Context, job: Job, raw: unknown) {
   const selection = previewSchema.parse(raw);
   const payload = job.rows as Payload;
@@ -316,34 +352,36 @@ async function evaluate(ctx: Context, job: Job, raw: unknown) {
   if (!sheet || selection.header_row > sheet.rows.length) invalid('시트·헤더 행을 확인하세요.');
   if (new Set(Object.values(selection.mapping)).size !== Object.keys(selection.mapping).length)
     invalid('같은 열을 두 항목에 지정할 수 없습니다.');
-  // Previously committed files may carry the old contract-dependent hash. Match their
-  // original file/sheet/mapping/row identity as well, without changing settled records.
   const priorRows = await ctx.db
     .select({
       use_ids: sql<string[]>`array_agg(${vehicleUses.id})`,
       preview: sql<ImportRow[]>`${importJobs.rows}->'preview'`,
+      mapping: importJobs.mapping,
     })
     .from(importJobs)
     .innerJoin(vehicleUses, eq(vehicleUses.import_job_id, importJobs.id))
-    .where(
-      and(
-        eq(importJobs.status, 'COMMITTED'),
-        sql`${importJobs.rows}->>'file_hash' = ${payload.file_hash}`,
-        sql`${importJobs.mapping}->>'sheet' = ${String(selection.sheet)}`,
-        sql`${importJobs.mapping}->>'header_row' = ${String(selection.header_row)}`,
-        sql`${importJobs.mapping}->'mapping' = ${JSON.stringify(selection.mapping)}::jsonb`,
-      ),
-    )
+    .where(eq(importJobs.status, 'COMMITTED'))
     .groupBy(importJobs.id);
   const importedRows = new Set(
     priorRows.flatMap((prior) => {
       const useIds = new Set(prior.use_ids);
-      return prior.preview.filter((row) => row.use_id && useIds.has(row.use_id)).map((row) => row.row);
+      const mapping = previewSchema.parse(prior.mapping).mapping;
+      const occurrences = new Map<string, number>();
+      const imported: string[] = [];
+      for (const row of [...prior.preview].sort((a, b) => a.row - b.row)) {
+        // Valid but excluded/skipped rows still occupy an occurrence, just as in
+        // normalized-v1. Never treat a preview without a persisted use as imported.
+        if (!row.source_row_hash) continue;
+        const identity = sourceRowIdentity(row.values, mapping, occurrences);
+        if (row.use_id && useIds.has(row.use_id)) imported.push(identity);
+      }
+      return imported;
     }),
   );
   const rows: ImportRow[] = [];
   const cache: LookupCache = new Map();
   const occurrences = new Map<string, number>();
+  const sourceOccurrences = new Map<string, number>();
   const excluded = new Set(selection.excluded_rows);
   const resolved = new Map<number, Awaited<ReturnType<typeof resolveRow>>>();
   const existing = await ctx.db
@@ -389,13 +427,14 @@ async function evaluate(ctx: Context, job: Job, raw: unknown) {
       const occurrence = (occurrences.get(contentHash) ?? 0) + 1;
       occurrences.set(contentHash, occurrence);
       row.source_row_hash = sha(`normalized-v1:${contentHash}:${occurrence}`);
+      const sourceIdentity = sourceRowIdentity(values, selection.mapping, sourceOccurrences);
       resolved.set(row.row, data);
       row.warnings = data.warnings;
       const [duplicate] = await ctx.db
         .select({ id: vehicleUses.id })
         .from(vehicleUses)
         .where(eq(vehicleUses.source_row_hash, row.source_row_hash));
-      if (duplicate || importedRows.has(row.row)) row.status = 'SKIPPED';
+      if (duplicate || importedRows.has(sourceIdentity)) row.status = 'SKIPPED';
       else if (
         existing.some(
           (u) =>
