@@ -1,14 +1,19 @@
 node_modules/
 .next/
+.env
+.env.local
 .data/
 storage/
 coverage/
 playwright-report/
 test-results/
-*.log
-.env
-.env.local
-.DS_Store
-next-env.d.ts
 *.tsbuildinfo
+next-env.d.ts
+.DS_Store
+
+# graft's local graph cache — regenerable, not committed (run `graft build`).
+/graft/
+*.log
+# Local workspace task metadata
 graft/
+.ignore
