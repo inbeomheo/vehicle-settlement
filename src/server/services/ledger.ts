@@ -1,0 +1,182 @@
+import { sql, type SQL } from 'drizzle-orm';
+import { z } from 'zod';
+import type { Context } from '../context';
+import { accessibleUseFilter } from '../authz';
+import { managerOnly } from './admin';
+import { dateString, uuid } from './schemas';
+
+export const ledgerQuerySchema = z
+  .object({
+    page: z.coerce.number().int().min(1).max(1000000).default(1),
+    pageSize: z.coerce.number().int().min(1).max(100).default(20),
+    from: dateString.optional(),
+    to: dateString.optional(),
+    period: z
+      .string()
+      .regex(/^\d{4}-(0[1-9]|1[0-2])$/)
+      .optional(),
+    project_id: uuid.optional(),
+    driver_id: uuid.optional(),
+    vehicle_id: uuid.optional(),
+    counterparty_id: uuid.optional(),
+    use_id: uuid.optional(),
+    review_status: z.enum(['DRAFT', 'SUBMITTED', 'NEEDS_FIX', 'APPROVED']).optional(),
+    settlement_status: z.enum(['UNSETTLED', 'PARTIAL', 'SETTLED']).optional(),
+    payment_status: z.enum(['UNPAID', 'PARTIAL', 'PAID', 'NOT_SETTLED']).optional(),
+    evidence_missing: z.enum(['true', 'false']).optional(),
+    unsettled_approved: z.enum(['true']).optional(),
+    search: z.string().trim().max(100).optional(),
+    sort: z.enum(['use_date', 'use_no', 'total_amount', 'project_name', 'driver_name']).default('use_date'),
+    order: z.enum(['asc', 'desc']).default('desc'),
+  })
+  .refine((q) => !q.from || !q.to || q.from <= q.to, {
+    message: '사용일 종료일을 확인하세요.',
+    path: ['to'],
+  });
+export type LedgerRow = {
+  id: string;
+  use_no: string;
+  use_date: string;
+  project_id: string;
+  driver_id: string;
+  vehicle_id: string;
+  project_name: string;
+  driver_name: string;
+  plate_no: string;
+  vehicle_type: string;
+  tonnage: string;
+  payee_name: string;
+  work_type_name: string | null;
+  requester: string | null;
+  cargo_desc: string | null;
+  creator_name: string;
+  actor_names: Record<string, string>;
+  origin: string | null;
+  destination: string | null;
+  billing_units: string[];
+  performance: string | null;
+  base_amount: number | null;
+  extra_amount: number | null;
+  total_amount: number | null;
+  receivable_amount: number | null;
+  evidence_count: number;
+  evidence_missing: boolean;
+  review_status: string;
+  entered_as: string;
+  settlement_status: string;
+  payment_status: string;
+  statement_numbers: string | null;
+  locked_statements: {
+    id: string;
+    statement_no: string | null;
+    direction: string;
+    period_start: string;
+    period_end: string;
+  }[];
+};
+export type LedgerResult = {
+  rows: LedgerRow[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totals: { pageSum: number; filteredSum: number };
+};
+// One shared predicate matches W1's submission policy, including replaced/deleted/upload-failed evidence.
+export const missingEvidenceSql = sql`(p.evidence_policy <> 'NONE' AND NOT EXISTS (
+  SELECT 1 FROM evidence e WHERE e.vehicle_use_id=vehicle_uses.id AND e.deleted_at IS NULL AND e.replaced_by_id IS NULL AND e.upload_status='UPLOADED'
+  AND ((e.storage_key IS NOT NULL AND e.kind IN ('PHOTO','RECEIPT','WEIGH_TICKET','CONFIRMATION'))
+    OR (p.evidence_policy='PHOTO_OR_ALTERNATIVE' AND e.kind IN ('SLIP_NO','CONFIRMATION') AND length(trim(e.text_value)) > 0))
+))`;
+export async function ledgerBase(ctx: Context) {
+  await managerOnly(ctx);
+  const scope = await accessibleUseFilter(ctx);
+  return sql`SELECT vehicle_uses.*, vehicle_uses.snapshot->>'project_name' AS project_name,
+    vehicle_uses.snapshot->>'driver_name' AS driver_name, vehicle_uses.snapshot->>'plate_no' AS plate_no,
+    vehicle_uses.snapshot->>'vehicle_type' AS vehicle_type, vehicle_uses.snapshot->>'tonnage' AS tonnage,
+    vehicle_uses.snapshot->>'payee_name' AS payee_name, w.name AS work_type_name, u.name AS creator_name,
+    (SELECT COALESCE(jsonb_object_agg(actor.id::text,actor.name),'{}'::jsonb) FROM users actor
+      WHERE actor.id=vehicle_uses.created_by_user_id OR EXISTS (SELECT 1 FROM use_revisions r
+        WHERE r.vehicle_use_id=vehicle_uses.id AND (r.submitted_by=actor.id OR r.decided_by=actor.id))) AS actor_names,
+    t.origin, t.destination, t.performance, c.billing_units, c.base_amount, c.extra_amount, c.total_amount, c.receivable_amount,
+    COALESCE(e.evidence_count,0)::int AS evidence_count, ${missingEvidenceSql} AS evidence_missing,
+    CASE WHEN c.payable_count=0 OR c.locked_count=0 THEN 'UNSETTLED' WHEN c.locked_count=c.payable_count THEN 'SETTLED' ELSE 'PARTIAL' END AS settlement_status,
+    CASE WHEN c.locked_count=0 THEN 'NOT_SETTLED' WHEN c.paid_count=0 THEN 'UNPAID' WHEN c.paid_count=c.locked_count THEN 'PAID' ELSE 'PARTIAL' END AS payment_status,
+    c.unsettled_approved, st.statement_numbers, COALESCE(st.locked_statements,'[]'::jsonb) AS locked_statements
+    FROM vehicle_uses
+    JOIN projects p ON p.id=vehicle_uses.project_id
+    JOIN users u ON u.id=vehicle_uses.created_by_user_id
+    LEFT JOIN work_types w ON w.id=vehicle_uses.work_type_id
+    LEFT JOIN LATERAL (SELECT string_agg(origin,' / ' ORDER BY seq) AS origin, string_agg(destination,' / ' ORDER BY seq) AS destination,
+      count(*) FILTER (WHERE status='COMPLETED')::text || '회 운행' || COALESCE(' · ' || string_agg(CASE WHEN quantity IS NOT NULL THEN quantity::text || COALESCE(quantity_unit,'') END, ' / ' ORDER BY seq),'') AS performance
+      FROM trips WHERE vehicle_use_id=vehicle_uses.id) t ON true
+    LEFT JOIN LATERAL (SELECT count(*) AS evidence_count FROM evidence WHERE vehicle_use_id=vehicle_uses.id AND deleted_at IS NULL AND replaced_by_id IS NULL AND upload_status='UPLOADED') e ON true
+    LEFT JOIN LATERAL (SELECT array_agg(DISTINCT billing_unit::text) FILTER (WHERE direction='PAYABLE') AS billing_units,
+      sum(approved_amount) FILTER (WHERE direction='PAYABLE' AND line_review_status='APPROVED' AND charge_type='BASE') AS base_amount,
+      sum(approved_amount) FILTER (WHERE direction='PAYABLE' AND line_review_status='APPROVED' AND charge_type<>'BASE') AS extra_amount,
+      sum(approved_amount) FILTER (WHERE direction='PAYABLE' AND line_review_status='APPROVED') AS total_amount,
+      sum(approved_amount) FILTER (WHERE direction='RECEIVABLE' AND line_review_status='APPROVED') AS receivable_amount,
+      count(*) FILTER (WHERE direction='PAYABLE' AND line_review_status<>'REJECTED') AS payable_count,
+      count(*) FILTER (WHERE direction='PAYABLE' AND locked_statement_id IS NOT NULL) AS locked_count,
+      count(*) FILTER (WHERE direction='PAYABLE' AND locked_statement_id IS NOT NULL AND EXISTS (SELECT 1 FROM payment_records pr WHERE pr.statement_id=locked_statement_id AND pr.voided_at IS NULL)) AS paid_count,
+      bool_or(direction='PAYABLE' AND line_review_status='APPROVED' AND approved_amount IS NOT NULL AND locked_statement_id IS NULL AND vehicle_uses.review_status='APPROVED') AS unsettled_approved
+      FROM charge_lines WHERE vehicle_use_id=vehicle_uses.id AND deleted_at IS NULL) c ON true
+    LEFT JOIN LATERAL (SELECT string_agg(s.statement_no, ', ' ORDER BY s.statement_no) AS statement_numbers,
+      jsonb_agg(jsonb_build_object('id',s.id,'statement_no',s.statement_no,'direction',s.direction,'period_start',s.period_start,'period_end',s.period_end) ORDER BY s.period_start,s.id) AS locked_statements
+      FROM statements s WHERE s.status='CONFIRMED' AND EXISTS (SELECT 1 FROM charge_lines cl WHERE cl.vehicle_use_id=vehicle_uses.id AND cl.deleted_at IS NULL AND cl.locked_statement_id=s.id)) st ON true
+    WHERE ${scope ?? sql`true`}`;
+}
+export async function getLedger(ctx: Context, raw: unknown, exportAll = false): Promise<LedgerResult> {
+  const q = ledgerQuerySchema.parse(raw);
+  const base = await ledgerBase(ctx);
+  const clauses: SQL[] = [sql`true`];
+  for (const key of [
+    'project_id',
+    'driver_id',
+    'vehicle_id',
+    'review_status',
+    'settlement_status',
+    'payment_status',
+  ] as const) {
+    if (q[key]) clauses.push(sql`${sql.identifier(key)}=${q[key]}`);
+  }
+  if (q.use_id) clauses.push(sql`id=${q.use_id}::uuid`);
+  if (q.counterparty_id) clauses.push(sql`payee_counterparty_id=${q.counterparty_id}::uuid`);
+  if (q.from) clauses.push(sql`use_date>=${q.from}::date`);
+  if (q.to) clauses.push(sql`use_date<=${q.to}::date`);
+  if (q.evidence_missing)
+    clauses.push(sql`evidence_missing=${q.evidence_missing === 'true'} AND operation_status<>'CANCELED'`);
+  if (q.unsettled_approved) clauses.push(sql`unsettled_approved=true`);
+  if (q.period)
+    clauses.push(sql`EXISTS (SELECT 1 FROM statement_items si JOIN statements s ON s.id=si.statement_id JOIN charge_lines cl ON cl.id=si.charge_line_id
+    WHERE cl.vehicle_use_id=enriched.id AND si.inclusion='INCLUDED' AND s.status<>'CANCELED'
+      AND s.period_start < (${q.period + '-01'}::date + interval '1 month') AND s.period_end >= ${q.period + '-01'}::date)`);
+  if (q.search)
+    clauses.push(
+      sql`concat_ws(' ',use_no,project_name,driver_name,plate_no,payee_name,cargo_desc,requester,origin,destination) ILIKE ${'%' + q.search.replace(/[\\%_]/g, '\\$&') + '%'}`,
+    );
+  const order = sql`${sql.identifier(q.sort)} ${q.order === 'asc' ? sql`ASC` : sql`DESC`} NULLS LAST, id ASC`;
+  const result = await ctx.db
+    .execute(sql`WITH enriched AS (${base}), filtered AS (SELECT * FROM enriched WHERE ${sql.join(clauses, sql` AND `)}),
+    paged AS (SELECT * FROM filtered ORDER BY ${order} ${exportAll ? sql`` : sql`LIMIT ${q.pageSize} OFFSET ${(q.page - 1) * q.pageSize}`})
+    SELECT COALESCE((SELECT jsonb_agg(to_jsonb(paged) ORDER BY ${order}) FROM paged),'[]'::jsonb) AS rows,
+      (SELECT count(*)::int FROM filtered) AS total,
+      (SELECT COALESCE(sum(total_amount),0)::text FROM paged) AS page_sum,
+      (SELECT COALESCE(sum(total_amount),0)::text FROM filtered) AS filtered_sum`);
+  const resultRow = result.rows[0];
+  const safeMoney = (value: unknown) => {
+    const number = Number(value);
+    if (!Number.isSafeInteger(number)) throw new RangeError('합계 금액 범위를 초과했습니다.');
+    return number;
+  };
+  const rows = resultRow.rows as LedgerRow[];
+  for (const row of rows)
+    for (const key of ['base_amount', 'extra_amount', 'total_amount', 'receivable_amount'] as const)
+      if (row[key] !== null) row[key] = safeMoney(row[key]);
+  return {
+    rows,
+    page: exportAll ? 1 : q.page,
+    pageSize: exportAll ? rows.length : q.pageSize,
+    total: Number(resultRow.total),
+    totals: { pageSum: safeMoney(resultRow.page_sum), filteredSum: safeMoney(resultRow.filtered_sum) },
+  };
+}

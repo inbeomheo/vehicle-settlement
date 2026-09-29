@@ -1,0 +1,223 @@
+import { and, eq, isNull, sql } from 'drizzle-orm';
+import { z } from 'zod';
+import type { Context } from '../context';
+import { assertActive, assertAdmin, accessibleProjectIds } from '../authz';
+import { audit } from '../audit';
+import { AppError, invalid, notFound } from '../errors';
+import { users, sessions, projectAssignments, drivers, projects } from '../db/schema';
+import { publicUser } from '../auth/session';
+import { atomic } from './uses';
+import {
+  masterSchemas,
+  type MasterResource,
+  userPatchSchema,
+  assignmentSchema,
+  validateDates,
+} from './admin-schemas';
+import { uuid } from './schemas';
+
+const tableNames: Record<MasterResource, string> = {
+  projects: 'projects',
+  'work-types': 'work_types',
+  counterparties: 'counterparties',
+  drivers: 'drivers',
+  vehicles: 'vehicles',
+  affiliations: 'driver_affiliations',
+  company: 'company_settings',
+};
+export async function managerOnly(ctx: Context) {
+  await assertActive(ctx);
+  if (ctx.user.role === 'DRIVER') throw new AppError('FORBIDDEN', '담당자 권한이 필요합니다.');
+}
+export async function adminTransaction<T>(ctx: Context, fn: (tx: Context) => Promise<T>) {
+  return atomic(ctx, async (tx) => {
+    assertAdmin(tx);
+    // All administrative writes share one lock: period checks and last-admin checks are atomic.
+    await tx.db.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended('w3:administration', 0))`);
+    return fn(tx);
+  });
+}
+export function masterResource(value: string): MasterResource {
+  if (!Object.prototype.hasOwnProperty.call(masterSchemas, value)) notFound();
+  return value as MasterResource;
+}
+export async function listMaster(ctx: Context, resource: MasterResource) {
+  await managerOnly(ctx);
+  if (resource === 'company' || resource === 'affiliations') assertAdmin(ctx);
+  const ids = resource === 'projects' ? await accessibleProjectIds(ctx) : null;
+  const scope =
+    ids === null
+      ? sql`true`
+      : ids.length
+        ? sql`id in (${sql.join(
+            ids.map((id) => sql`${id}::uuid`),
+            sql`,`,
+          )})`
+        : sql`false`;
+  return (
+    await ctx.db.execute(
+      sql`SELECT * FROM ${sql.identifier(tableNames[resource])} WHERE ${scope} ORDER BY created_at DESC, id`,
+    )
+  ).rows;
+}
+export async function saveMaster(ctx: Context, resource: MasterResource, raw: unknown, id?: string) {
+  if (id) uuid.parse(id);
+  return adminTransaction(ctx, async (tx) => {
+    const table = sql.identifier(tableNames[resource]);
+    const before = id
+      ? (await tx.db.execute(sql`SELECT * FROM ${table} WHERE id=${id}::uuid FOR UPDATE`)).rows[0]
+      : undefined;
+    if (id && !before) notFound();
+    const parsed = (id ? masterSchemas[resource].partial() : masterSchemas[resource]).parse(raw);
+    // Zod defaults also run inside optional fields; PATCH must only write explicitly supplied keys.
+    const input = id
+      ? Object.fromEntries(Object.entries(parsed).filter(([key]) => Object.hasOwn(raw as object, key)))
+      : parsed;
+    const merged: Record<string, unknown> = { ...before, ...input };
+    const references =
+      resource === 'drivers'
+        ? [['default_vehicle_id', 'vehicles', '기본차량']]
+        : resource === 'affiliations'
+          ? [
+              ['driver_id', 'drivers', '기사'],
+              ['counterparty_id', 'counterparties', '지급처'],
+            ]
+          : [];
+    for (const [key, targetTable, title] of references) {
+      if (merged[key] && merged[key] !== before?.[key]) {
+        const [target] = (
+          await tx.db.execute(
+            sql`SELECT active FROM ${sql.identifier(targetTable)} WHERE id=${merged[key]}::uuid`,
+          )
+        ).rows;
+        if (!target?.active) invalid(`사용 중인 ${title}을 선택하세요.`);
+      }
+    }
+    if (resource === 'affiliations') {
+      const affiliation = masterSchemas.affiliations.parse(
+        mergedFields(merged, masterSchemas.affiliations.shape),
+      );
+      validateDates(affiliation);
+      const conflict = await tx.db
+        .execute(sql`SELECT id FROM driver_affiliations WHERE driver_id=${affiliation.driver_id}::uuid
+        AND id IS DISTINCT FROM ${id ?? null}::uuid AND valid_from <= COALESCE(${affiliation.valid_to}::date, 'infinity'::date)
+        AND COALESCE(valid_to,'infinity'::date) >= ${affiliation.valid_from}::date`);
+      if (conflict.rows.length) invalid('기사 소속 기간이 겹칩니다. 기존 종료일을 먼저 확인하세요.');
+      const [party] = (
+        await tx.db.execute(
+          sql`SELECT kind FROM counterparties WHERE id=${affiliation.counterparty_id}::uuid`,
+        )
+      ).rows;
+      if (!party || party.kind === 'CUSTOMER') invalid('소속 지급처는 운송사 또는 기사 사업자여야 합니다.');
+    }
+    const entries = Object.entries(input).filter(([, value]) => value !== undefined);
+    if (!entries.length) invalid('변경할 값을 입력하세요.');
+    const [after] = (
+      await tx.db.execute(
+        id
+          ? sql`UPDATE ${table} SET ${sql.join(
+              entries.map(([key, value]) => sql`${sql.identifier(key)}=${value}`),
+              sql`,`,
+            )}, updated_at=now() WHERE id=${id}::uuid RETURNING *`
+          : sql`INSERT INTO ${table} (${sql.join(
+              entries.map(([key]) => sql.identifier(key)),
+              sql`,`,
+            )}) VALUES (${sql.join(
+              entries.map(([, value]) => sql`${value}`),
+              sql`,`,
+            )}) RETURNING *`,
+      )
+    ).rows;
+    await audit(tx, id ? 'UPDATE' : 'CREATE', tableNames[resource], String(after.id), before, after);
+    return after;
+  });
+}
+function mergedFields(value: Record<string, unknown>, shape: Record<string, unknown>) {
+  return Object.fromEntries(Object.keys(shape).map((key) => [key, value[key]]));
+}
+export async function listUsers(ctx: Context) {
+  await assertActive(ctx);
+  assertAdmin(ctx);
+  const rows = await ctx.db.select().from(users).orderBy(users.name, users.id);
+  const assignments = await ctx.db.select().from(projectAssignments);
+  return rows.map((user) => ({
+    ...publicUser(user),
+    assignments: assignments.filter((a) => a.user_id === user.id),
+  }));
+}
+export async function updateUser(ctx: Context, id: string, raw: unknown) {
+  uuid.parse(id);
+  const { version, ...input } = userPatchSchema.parse(raw);
+  return adminTransaction(ctx, async (tx) => {
+    const [before] = await tx.db.select().from(users).where(eq(users.id, id)).for('update');
+    if (!before) notFound();
+    if (before.version !== version)
+      throw new AppError('VERSION_CONFLICT', '사용자 정보가 변경되었습니다. 새로고침하세요.');
+    const next = { ...before, ...input };
+    if (next.role === 'DRIVER' && !next.driver_id) invalid('기사 연결이 필요합니다.');
+    if (next.driver_id) {
+      const [driver] = await tx.db.select().from(drivers).where(eq(drivers.id, next.driver_id));
+      if (!driver || (!driver.active && before.driver_id !== next.driver_id))
+        invalid('기사 연결을 확인하세요.');
+    }
+    if (next.all_projects && next.role !== 'SETTLEMENT_MANAGER' && next.role !== 'ADMIN')
+      invalid('모든 현장 권한은 정산 담당자와 관리자만 사용할 수 있습니다.');
+    if (
+      before.role === 'ADMIN' &&
+      before.status === 'ACTIVE' &&
+      (next.role !== 'ADMIN' || next.status !== 'ACTIVE')
+    ) {
+      const admins = await tx.db
+        .select({ id: users.id })
+        .from(users)
+        .where(and(eq(users.role, 'ADMIN'), eq(users.status, 'ACTIVE')));
+      if (admins.length <= 1) invalid('마지막 활성 관리자는 비활성화하거나 역할을 변경할 수 없습니다.');
+    }
+    const [after] = await tx.db
+      .update(users)
+      .set({ ...input, version: version + 1, updated_at: new Date() })
+      .where(eq(users.id, id))
+      .returning();
+    if (after.status === 'DISABLED')
+      await tx.db
+        .update(sessions)
+        .set({ revoked_at: new Date(), updated_at: new Date() })
+        .where(and(eq(sessions.user_id, id), isNull(sessions.revoked_at)));
+    await audit(tx, 'UPDATE_USER', 'user', id, publicUser(before), publicUser(after));
+    return publicUser(after);
+  });
+}
+export async function addAssignment(ctx: Context, raw: unknown) {
+  const input = assignmentSchema.parse(raw);
+  validateDates(input);
+  return adminTransaction(ctx, async (tx) => {
+    const [project] = await tx.db.select().from(projects).where(eq(projects.id, input.project_id));
+    if (!project?.active) invalid('사용 중인 현장을 선택하세요.');
+    const conflict = await tx.db
+      .execute(sql`SELECT id FROM project_assignments WHERE user_id=${input.user_id}::uuid AND project_id=${input.project_id}::uuid AND revoked_at IS NULL
+      AND valid_from <= COALESCE(${input.valid_to}::date,'infinity'::date) AND COALESCE(valid_to,'infinity'::date) >= ${input.valid_from}::date`);
+    if (conflict.rows.length) invalid('같은 현장에 유효한 배정 기간이 겹칩니다.');
+    const [after] = await tx.db.insert(projectAssignments).values(input).returning();
+    await audit(tx, 'ASSIGN_PROJECT', 'project_assignment', after.id, null, after);
+    return after;
+  });
+}
+export async function revokeAssignment(ctx: Context, id: string) {
+  uuid.parse(id);
+  return adminTransaction(ctx, async (tx) => {
+    const [before] = await tx.db
+      .select()
+      .from(projectAssignments)
+      .where(eq(projectAssignments.id, id))
+      .for('update');
+    if (!before) notFound();
+    const [after] = await tx.db
+      .update(projectAssignments)
+      .set({ revoked_at: new Date(), updated_at: new Date() })
+      .where(eq(projectAssignments.id, id))
+      .returning();
+    await audit(tx, 'REVOKE_PROJECT', 'project_assignment', id, before, after);
+    return after;
+  });
+}
+export const unknownBody = z.unknown();
