@@ -1,5 +1,6 @@
 'use client';
 import Link from 'next/link';
+import { chargeTypeLabel } from '@/components/manager/charge-display';
 import { useParams, useRouter } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
 import { PaymentPanel } from '../../payments/payment-panel';
@@ -17,6 +18,7 @@ import {
   panelClass,
   secondaryClass,
   statusLabels,
+  StatementBadge,
   Totals,
   DraftWarnings,
   useResource,
@@ -100,7 +102,7 @@ export default function StatementPage() {
       <header className="flex flex-wrap justify-between gap-4">
         <div>
           <p className="mb-1 text-sm text-slate-500">
-            {statusLabels[statement.status]} ·{' '}
+            <StatementBadge status={statement.status} /> ·{' '}
             {statement.direction === 'PAYABLE' ? '운송사 지급명세' : '원청 청구명세'}
           </p>
           <h1 className="break-all text-2xl font-bold">{statement.statement_no ?? '작성 중 명세'}</h1>
@@ -172,8 +174,10 @@ export default function StatementPage() {
                           version: statement.version,
                           confirmation_token: confirmingToken,
                         })
-                      )
+                      ) {
                         setConfirmingToken(null);
+                        setNotice('명세를 확정했습니다.');
+                      }
                     }}
                   >
                     {busy ? '처리 중…' : '확정'}
@@ -285,7 +289,9 @@ export default function StatementPage() {
                 <select name="charge_line_id" className={inputClass} required>
                   {included.map((i) => (
                     <option key={i.id} value={i.charge_line_id}>
-                      {String(i.snapshot?.use_no)} · {money(i.supply_amount)}
+                      {String(i.snapshot?.use_no)} ·{' '}
+                      {chargeTypeLabel(i.snapshot?.charge_type as string | undefined)} ·{' '}
+                      {money(i.supply_amount)}
                     </option>
                   ))}
                 </select>

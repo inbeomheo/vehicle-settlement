@@ -25,6 +25,7 @@ type AuditRow = {
   entity_type: string;
   entity_id: string | null;
   entity_no?: string | null;
+  entity_label?: string;
   before: unknown;
   after: unknown;
   reason: string | null;
@@ -113,8 +114,8 @@ const fieldLabels: Record<string, string> = {
   entered_as: '입력 구분',
   driver_confirmed_at: '기사 확인 시각',
   seq: '회차',
-  origin: '출발지',
-  destination: '도착지',
+  origin: '출발(상차지)',
+  destination: '도착(하차지)',
   via: '경유지',
   depart_at: '출발 시각',
   arrive_at: '도착 시각',
@@ -293,7 +294,13 @@ export function auditChanges(before: unknown, after: unknown, path: string[] = [
       key: path.join('.'),
       title:
         path
-          .map((key) => (/^\d+$/.test(key) ? `${Number(key) + 1}번째` : (fieldLabels[key] ?? '기타 항목')))
+          .map((key) =>
+            /^\d+$/.test(key)
+              ? `${Number(key) + 1}번째`
+              : key === 'cargo_desc' && path.includes('trips')
+                ? '화물'
+                : (fieldLabels[key] ?? '기타 항목'),
+          )
           .join(' · ') || '내용',
       before,
       after,
@@ -379,6 +386,7 @@ export function AuditChanges({
 export function AuditPanel({ useId }: { useId?: string }) {
   const [query, setQuery] = useState<Search>({ page: '1', ...(useId ? { use_id: useId } : {}) });
   const [draft, setDraft] = useState<Search>({});
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const { data, error, loading } = useRemote<Result>(`/api/audit?${queryString(query)}`);
   const change = (key: string, value: string) => setDraft((previous) => ({ ...previous, [key]: value }));
   return (
@@ -389,11 +397,22 @@ export function AuditPanel({ useId }: { useId?: string }) {
           description="담당자는 접근 가능한 사용 건·비용·증빙의 이력만 조회할 수 있습니다."
         />
       )}
+      <button
+        type="button"
+        className={`${buttonClass} mb-3 md:hidden`}
+        aria-expanded={filtersOpen}
+        aria-controls={useId ? `audit-filters-${useId}` : 'audit-filters'}
+        onClick={() => setFiltersOpen(!filtersOpen)}
+      >
+        필터 {filtersOpen ? '접기 −' : '펼치기 +'}
+      </button>
       <form
-        className={`${panelClass} mb-4 grid items-end gap-3 sm:grid-cols-2 lg:grid-cols-5`}
+        id={useId ? `audit-filters-${useId}` : 'audit-filters'}
+        className={`${panelClass} mb-4 ${filtersOpen ? 'grid' : 'hidden'} md:grid items-end gap-3 sm:grid-cols-2 lg:grid-cols-5`}
         onSubmit={(e) => {
           e.preventDefault();
           setQuery({ ...draft, page: '1', ...(useId ? { use_id: useId } : {}) });
+          setFiltersOpen(false);
         }}
       >
         <Field title="대상 유형">
@@ -462,6 +481,14 @@ export function AuditPanel({ useId }: { useId?: string }) {
           />
         </Field>
         <button className={buttonClass}>이력 조회</button>
+        <label className="flex min-h-11 items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={draft.include_sessions === 'true'}
+            onChange={(event) => change('include_sessions', event.target.checked ? 'true' : '')}
+          />
+          로그인·로그아웃 포함
+        </label>
         {!useId && (
           <Field title="사용번호·명세번호 검색">
             <input
@@ -507,6 +534,7 @@ export function AuditPanel({ useId }: { useId?: string }) {
                   {dateTime(row.at)} · {row.user_name ?? '시스템'} · {auditLabel(row.entity_type)}
                 </span>
               </div>
+              {row.entity_label && <p className="mt-2 font-semibold">{row.entity_label}</p>}
               {row.entity_no && <p className="mt-2 text-sm font-semibold">{row.entity_no}</p>}
               {row.reason && <p className="mt-2 text-sm">사유: {row.reason}</p>}
               <AuditChanges before={row.before} after={row.after} entityType={row.entity_type} />

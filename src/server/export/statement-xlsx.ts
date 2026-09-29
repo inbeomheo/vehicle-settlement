@@ -19,7 +19,7 @@ export async function renderStatementXlsx(model: StatementExportModel) {
       oddFooter: '&R&P / &N',
     },
   });
-  sheet.columns = [15, 22, 20, 18, 14, 26, 9, 12, 12, 16, 18, 15, 34, 18].map((width) => ({ width }));
+  sheet.columns = [15, 22, 20, 18, 14, 26, 18, 9, 12, 12, 16, 18, 15, 34].map((width) => ({ width }));
   const mergeRow = (row: number, text: string) => {
     sheet.mergeCells(row, 1, row, exportHeaders.length);
     sheet.getCell(row, 1).value = text;
@@ -50,13 +50,13 @@ export async function renderStatementXlsx(model: StatementExportModel) {
   });
   for (const source of model.rows) {
     const values = rowValues(source);
-    if (source.quantity !== null) values[8] = Number(source.quantity);
+    if (source.quantity !== null) values[9] = Number(source.quantity);
     const row = sheet.addRow(values);
     row.height = Math.max(
       32,
       Math.min(
         409,
-        16 * Math.ceil(Math.max(String(values[5] ?? '').length / 18, String(values[12] ?? '').length / 25)),
+        16 * Math.ceil(Math.max(String(values[5] ?? '').length / 18, String(values[13] ?? '').length / 25)),
       ),
     );
     row.eachCell({ includeEmpty: true }, (cell, col) => {
@@ -64,11 +64,11 @@ export async function renderStatementXlsx(model: StatementExportModel) {
       cell.alignment = {
         vertical: 'middle',
         wrapText: true,
-        horizontal: col >= 7 && col <= 12 ? 'right' : 'left',
+        horizontal: col >= 8 && col <= 13 ? 'right' : 'left',
       };
       cell.border = { bottom: { style: 'hair', color: { argb: 'FFDDE4EB' } } };
-      if (col >= 10 && col <= 12) cell.numFmt = '#,##0"원"';
-      if (col === 9) {
+      if (col >= 11 && col <= 13) cell.numFmt = '#,##0"원"';
+      if (col === 10) {
         const places = new Decimal(source.quantity ?? 0).decimalPlaces();
         cell.numFmt = '#,##0' + (places ? '.' + '0'.repeat(places) : '');
       }
@@ -81,11 +81,11 @@ export async function renderStatementXlsx(model: StatementExportModel) {
     ['총액', model.grand_total],
   ] as const) {
     const row = sheet.addRow([]);
-    sheet.mergeCells(row.number, 1, row.number, 10);
+    sheet.mergeCells(row.number, 1, row.number, 11);
     row.getCell(1).value = label;
-    sheet.mergeCells(row.number, 11, row.number, exportHeaders.length);
-    row.getCell(11).value = amount;
-    row.getCell(11).numFmt = '#,##0"원"';
+    sheet.mergeCells(row.number, 12, row.number, exportHeaders.length);
+    row.getCell(12).value = amount;
+    row.getCell(12).numFmt = '#,##0"원"';
     row.height = 30;
     row.font = { name: '맑은 고딕', bold: true, size: label === '총액' ? 14 : 11 };
   }

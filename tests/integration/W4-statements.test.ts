@@ -369,7 +369,7 @@ describe('W4 월 정산과 확정 잠금', () => {
       use.charge_lines.map((l) => l.id),
     );
     const listed = await listStatements(s.adminCtx, { counterpartyId: s.payee.id, pageSize: 1 });
-    expect(listed).toMatchObject({ total: 2, totals: { pageSum: 300000, filteredSum: 600000 } });
+    expect(listed).toMatchObject({ total: 2, totals: { pageSum: 0, filteredSum: 0 } });
     const logs = await database().db.select().from(auditLogs).where(eq(auditLogs.entity_id, first.id));
     expect(logs.map((l) => l.action)).toEqual(['STATEMENT_CREATE', 'STATEMENT_UPDATE']);
     const unlocked = await database()

@@ -60,9 +60,15 @@ export function PaymentPanel({ statement, onChange }: { statement: StatementDeta
       <h2 className="text-lg font-bold">
         {word} 기록{' '}
         <span
-          className={`ml-2 rounded-full px-3 py-1 text-sm ${statement.payment_status === 'PAID' ? 'bg-emerald-100 text-emerald-900' : 'bg-amber-100 text-amber-900'}`}
+          className={`ml-2 rounded-full px-3 py-1 text-sm ${statement.status === 'CANCELED' ? 'bg-red-100 text-red-800' : statement.payment_status === 'PAID' ? 'bg-emerald-100 text-emerald-900' : 'bg-amber-100 text-amber-900'}`}
         >
-          {statement.payment_status === 'PAID' ? `${word} 완료` : `미${word}`}
+          {statement.status === 'CANCELED'
+            ? '—(취소됨)'
+            : statement.status === 'DRAFT'
+              ? '—(작성 중)'
+              : statement.payment_status === 'PAID'
+                ? `${word} 완료`
+                : `미${word}`}
         </span>
       </h2>
       <ErrorMessage error={error} />

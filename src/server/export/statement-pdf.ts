@@ -20,7 +20,7 @@ export async function renderStatementPdf(model: StatementExportModel): Promise<B
     doc.on('error', reject);
   });
   doc.font(path.join(process.cwd(), 'assets/fonts/NotoSansKR-Regular.ttf'));
-  const widths = [57, 73, 57, 60, 43, 68, 30, 40, 35, 60, 62, 49, 91, 60];
+  const widths = [57, 73, 57, 60, 43, 68, 60, 30, 40, 35, 60, 62, 49, 91];
   const totalWidth = widths.reduce((a, b) => a + b, 0);
   const left = 28;
   let y = 28;
@@ -86,7 +86,7 @@ export async function renderStatementPdf(model: StatementExportModel): Promise<B
       wrap(
         value === null
           ? '-'
-          : typeof value === 'number' && i >= 9
+          : typeof value === 'number' && i >= 10
             ? value.toLocaleString('ko-KR')
             : String(value),
         widths[i] - 8,
@@ -106,7 +106,7 @@ export async function renderStatementPdf(model: StatementExportModel): Promise<B
           doc.text(text, x + 4, y + 5 + j * 11, {
             width: widths[i] - 8,
             lineBreak: false,
-            align: i >= 6 && i <= 11 ? 'right' : 'left',
+            align: i >= 7 && i <= 12 ? 'right' : 'left',
           }),
         );
         x += widths[i];

@@ -11,6 +11,7 @@ import {
   panelClass,
   secondaryClass,
   statusLabels,
+  StatementBadge,
   useResource,
   type StatementList,
 } from './ui';
@@ -84,6 +85,7 @@ export default function StatementsPage() {
                 전체 검색 합계 <strong>{money(result.data.totals.filteredSum)}</strong>
               </p>
             </div>
+            <p className="text-sm text-slate-600">확정 명세만 합산 · 작성 중·취소 제외</p>
             {!result.data.rows.length ? (
               <p className="py-8 text-center text-slate-500">
                 작성된 명세가 없습니다. 새 정산에서 시작하세요.
@@ -124,15 +126,21 @@ export default function StatementsPage() {
                           <span className="block text-xs text-slate-500 md:hidden">합계</span>
                           {money(row.grand_total)}
                         </td>
-                        <td className="p-3">{statusLabels[row.status]}</td>
                         <td className="p-3">
-                          {row.payment_status === 'PAID'
-                            ? direction === 'PAYABLE'
-                              ? '지급 완료'
-                              : '입금 완료'
-                            : direction === 'PAYABLE'
-                              ? '미지급'
-                              : '미입금'}
+                          <StatementBadge status={row.status} />
+                        </td>
+                        <td className="p-3">
+                          {row.status === 'CANCELED'
+                            ? '—(취소됨)'
+                            : row.status === 'DRAFT'
+                              ? '—(작성 중)'
+                              : row.payment_status === 'PAID'
+                                ? direction === 'PAYABLE'
+                                  ? '지급 완료'
+                                  : '입금 완료'
+                                : direction === 'PAYABLE'
+                                  ? '미지급'
+                                  : '미입금'}
                         </td>
                       </tr>
                     ))}

@@ -28,6 +28,8 @@ export function DraftEditor({
   busy: boolean;
   onSave: (changes: DraftChanges) => Promise<boolean>;
 }) {
+  const [unsubmittedCount, setUnsubmittedCount] = useState(0);
+  const [showDrafts, setShowDrafts] = useState(false);
   const [candidates, setCandidates] = useState<Candidate[] | null>(null);
   const [choices, setChoices] = useState<Record<string, Choice>>(() =>
     Object.fromEntries(
@@ -56,12 +58,13 @@ export function DraftEditor({
     ...additionalRows,
   ];
 
-  async function findCandidates() {
+  async function findCandidates(includeDrafts = false) {
     setLoading(true);
     setError('');
     try {
-      const result = await api<{ rows: Candidate[] }>(
+      const result = await api<{ rows: Candidate[]; unsubmitted_count: number }>(
         `/api/statements/candidates?${new URLSearchParams({
+          includeDrafts: String(includeDrafts),
           statementId: statement.id,
           direction: statement.direction,
           counterpartyId: statement.counterparty_id,
@@ -70,6 +73,8 @@ export function DraftEditor({
         })}`,
       );
       setCandidates(result.rows);
+      setUnsubmittedCount(result.unsubmitted_count);
+      setShowDrafts(includeDrafts);
       setChoices((previous) => ({
         ...Object.fromEntries(
           result.rows.map((row) => [row.charge_line_id, { inclusion: 'EXCLUDED' as const, hold_reason: '' }]),
@@ -108,12 +113,28 @@ export function DraftEditor({
         <input className={inputClass} name="due_date" type="date" defaultValue={statement.due_date ?? ''} />
       </Field>
       <div className="space-y-2">
-        <button type="button" className={secondaryClass} disabled={busy || loading} onClick={findCandidates}>
+        <button
+          type="button"
+          className={secondaryClass}
+          disabled={busy || loading}
+          onClick={() => void findCandidates()}
+        >
           {loading ? '후보 조회 중…' : '추가 후보 조회'}
         </button>
         <p className="text-sm text-slate-600">
           후보를 포함하거나 기존 항목을 제외한 뒤 초안 변경을 저장하세요.
         </p>
+        {unsubmittedCount > 0 && (
+          <button
+            type="button"
+            className={secondaryClass}
+            disabled={busy || loading}
+            aria-expanded={showDrafts}
+            onClick={() => void findCandidates(!showDrafts)}
+          >
+            {showDrafts ? '미제출 숨기기' : `미제출 ${unsubmittedCount}건 보기`}
+          </button>
+        )}
         {candidates && !additionalRows.length && (
           <p className="text-sm text-slate-500">추가할 미정산 후보가 없습니다.</p>
         )}

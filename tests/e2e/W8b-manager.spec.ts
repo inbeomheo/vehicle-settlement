@@ -81,11 +81,23 @@ for (const [index, width] of [1440, 390, 360].entries()) {
     if (width < 768) {
       const card = result.locator('article').first();
       for (const title of ['운송사/지급처', '기본비', '추가비', '증빙', '정산회차', '지급상태']) {
-        await expect(card.getByText(title, { exact: true })).toBeVisible();
+        await expect(card.getByText(title, { exact: true })).toBeHidden();
       }
       await expect(card.getByText('공종', { exact: true })).toBeHidden();
       await card.getByText('더 보기', { exact: true }).click();
-      for (const title of ['공종', '요청자', '작업내용', '계약단위', '실적']) {
+      for (const title of [
+        '운송사/지급처',
+        '기본비',
+        '추가비',
+        '증빙',
+        '정산회차',
+        '지급상태',
+        '공종',
+        '요청자',
+        '운반 내용',
+        '계약단위',
+        '실적',
+      ]) {
         await expect(card.getByText(title, { exact: true })).toBeVisible();
       }
       await page.getByText('표시 열 선택', { exact: true }).click();

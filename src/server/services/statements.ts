@@ -137,6 +137,8 @@ export async function eligibilityReasons(
 ) {
   const reasons: string[] = [];
   if (missingChargeQuantity(line)) reasons.push(chargeQuantityMessage(line));
+  if (use.operation_status === 'CANCELED') reasons.push('취소된 사용 건');
+  if (use.review_status === 'DRAFT' || use.current_revision_no === 0) reasons.push('미제출 사용 건');
   if (use.review_status !== 'APPROVED') reasons.push('사용 건 미승인');
   if (line.line_review_status !== 'APPROVED')
     reasons.push(line.line_review_status === 'HELD' ? '라인 보류' : '비용 라인 미승인');
@@ -175,13 +177,20 @@ export async function statementCandidates(ctx: Context, input: z.input<typeof ca
         eq(chargeLines.counterparty_id, query.counterpartyId),
         isNull(chargeLines.locked_statement_id),
         isNull(chargeLines.deleted_at),
+        ne(vehicleUses.operation_status, 'CANCELED'),
         lte(vehicleUses.use_date, query.periodEnd),
         sql`(${chargeLines.charge_type} <> 'ADJUSTMENT' OR ${chargeLines.rate_basis_date} <= ${query.periodEnd})`,
       ),
     )
     .orderBy(asc(vehicleUses.use_date), asc(vehicleUses.use_no), asc(chargeLines.id));
   const candidates = [];
+  const unsubmitted = new Set<string>();
   for (const { line, use } of rows) {
+    const isUnsubmitted = use.review_status === 'DRAFT' || use.current_revision_no === 0;
+    if (isUnsubmitted) {
+      unsubmitted.add(use.id);
+      if (query.includeDrafts !== 'true') continue;
+    }
     const reasons = await eligibilityReasons(ctx, line, use, {
       direction: query.direction,
       counterparty_id: query.counterpartyId,
@@ -207,7 +216,7 @@ export async function statementCandidates(ctx: Context, input: z.input<typeof ca
       reasons,
     });
   }
-  return { rows: candidates, total: candidates.length };
+  return { rows: candidates, total: candidates.length, unsubmitted_count: unsubmitted.size };
 }
 async function headerSnapshots(ctx: Context, statement: Pick<Statement, 'counterparty_id'>) {
   const [party] = await ctx.db
@@ -256,7 +265,7 @@ async function liveItems(ctx: Context, statement: Statement) {
     .innerJoin(chargeLines, eq(chargeLines.id, statementItems.charge_line_id))
     .innerJoin(vehicleUses, eq(vehicleUses.id, chargeLines.vehicle_use_id))
     .where(eq(statementItems.statement_id, statement.id))
-    .orderBy(asc(vehicleUses.use_date), asc(chargeLines.id));
+    .orderBy(asc(vehicleUses.use_date), asc(vehicleUses.use_no), asc(chargeLines.id));
   const result: StatementItem[] = [];
   for (const { item, line, use } of rows) {
     const reasons = await eligibilityReasons(ctx, line, use, statement);
@@ -297,7 +306,11 @@ export async function getStatement(ctx: Context, id: string) {
           .select()
           .from(statementItems)
           .where(eq(statementItems.statement_id, id))
-          .orderBy(asc(statementItems.created_at), asc(statementItems.id));
+          .orderBy(
+            asc(sql`${statementItems.snapshot}->>'use_date'`),
+            asc(sql`${statementItems.snapshot}->>'use_no'`),
+            asc(statementItems.charge_line_id),
+          );
   if (statement.status === 'DRAFT')
     statement = { ...statement, ...(await headerSnapshots(ctx, statement)), ...itemTotals(items) };
   const payments = await ctx.db
@@ -320,8 +333,15 @@ export async function getStatement(ctx: Context, id: string) {
     ).length,
     payments,
     replacements,
-    payment_status: paid ? ('PAID' as const) : ('UNPAID' as const),
-    collection_status: paid ? 'RECEIVED' : statement.status === 'CONFIRMED' ? 'BILLED' : 'UNBILLED',
+    payment_status: statement.status === 'CANCELED' ? null : paid ? ('PAID' as const) : ('UNPAID' as const),
+    collection_status:
+      statement.status === 'CANCELED'
+        ? null
+        : paid
+          ? 'RECEIVED'
+          : statement.status === 'CONFIRMED'
+            ? 'BILLED'
+            : 'UNBILLED',
   };
 }
 async function replaceItems(
@@ -694,8 +714,8 @@ export async function listStatements(ctx: Context, input: z.input<typeof stateme
     pageSize: query.pageSize,
     total: summaries.length,
     totals: {
-      pageSum: sumMoney(rows.map((s) => s.grand_total)),
-      filteredSum: sumMoney(summaries.map((s) => s.grand_total)),
+      pageSum: sumMoney(rows.filter((s) => s.status === 'CONFIRMED').map((s) => s.grand_total)),
+      filteredSum: sumMoney(summaries.filter((s) => s.status === 'CONFIRMED').map((s) => s.grand_total)),
     },
   };
 }

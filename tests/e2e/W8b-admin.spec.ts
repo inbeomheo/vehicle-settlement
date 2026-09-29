@@ -56,6 +56,7 @@ for (const width of [360, 390, 1440]) {
     await expect(page.locator('form')).toHaveCount(0);
 
     await page.goto('/m/audit');
+    if (width < 768) await page.getByRole('button', { name: '필터 펼치기 +', exact: true }).click();
     await page.getByLabel('대상 유형').selectOption('drivers');
     await expect(page.getByRole('combobox', { name: /^사용자/ })).toHaveJSProperty('tagName', 'SELECT');
     await expect(page.getByLabel('사용번호·명세번호 검색')).toBeVisible();

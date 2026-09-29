@@ -119,9 +119,11 @@ export const label = (value: string | null | undefined) => (value ? (labels[valu
 export function Badge({ value }: { value: string }) {
   const color = ['APPROVED', 'PAID', 'SETTLED', 'ACTIVE', 'COMPLETED'].includes(value)
     ? 'bg-emerald-50 text-emerald-800'
-    : ['NEEDS_FIX', 'HELD', 'FAILED', 'DISABLED'].includes(value)
-      ? 'bg-amber-50 text-amber-900'
-      : 'bg-slate-100 text-slate-700';
+    : value === 'CANCELED'
+      ? 'bg-red-100 text-red-800'
+      : ['NEEDS_FIX', 'HELD', 'FAILED', 'DISABLED'].includes(value)
+        ? 'bg-amber-50 text-amber-900'
+        : 'bg-slate-100 text-slate-700';
   return (
     <span className={`inline-block whitespace-nowrap rounded-md px-2 py-1 text-xs font-semibold ${color}`}>
       {label(value)}

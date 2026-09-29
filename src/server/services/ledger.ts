@@ -76,6 +76,7 @@ export type LedgerRow = {
   evidence_count: number;
   evidence_missing: boolean;
   review_status: string;
+  operation_status: string;
   entered_as: string;
   settlement_status: string;
   payment_status: string;
@@ -163,7 +164,7 @@ export async function getLedger(ctx: Context, raw: unknown, exportAll = false): 
   if (q.to) clauses.push(sql`use_date<=${q.to}::date`);
   if (q.evidence_missing)
     clauses.push(sql`evidence_missing=${q.evidence_missing === 'true'} AND operation_status<>'CANCELED'`);
-  if (q.unsettled_approved) clauses.push(sql`unsettled_approved=true`);
+  if (q.unsettled_approved) clauses.push(sql`unsettled_approved=true AND operation_status<>'CANCELED'`);
   if (q.period)
     clauses.push(sql`EXISTS (SELECT 1 FROM statement_items si JOIN statements s ON s.id=si.statement_id JOIN charge_lines cl ON cl.id=si.charge_line_id
     WHERE cl.vehicle_use_id=enriched.id AND si.inclusion='INCLUDED' AND s.status<>'CANCELED'
@@ -178,8 +179,8 @@ export async function getLedger(ctx: Context, raw: unknown, exportAll = false): 
     paged AS (SELECT * FROM filtered ORDER BY ${order} ${exportAll ? sql`` : sql`LIMIT ${q.pageSize} OFFSET ${(q.page - 1) * q.pageSize}`})
     SELECT COALESCE((SELECT jsonb_agg(to_jsonb(paged) ORDER BY ${order}) FROM paged),'[]'::jsonb) AS rows,
       (SELECT count(*)::int FROM filtered) AS total,
-      (SELECT COALESCE(sum(total_amount),0)::text FROM paged) AS page_sum,
-      (SELECT COALESCE(sum(total_amount),0)::text FROM filtered) AS filtered_sum`);
+      (SELECT COALESCE(sum(total_amount) FILTER (WHERE operation_status<>'CANCELED'),0)::text FROM paged) AS page_sum,
+      (SELECT COALESCE(sum(total_amount) FILTER (WHERE operation_status<>'CANCELED'),0)::text FROM filtered) AS filtered_sum`);
   const resultRow = result.rows[0];
   const safeMoney = (value: unknown) => {
     const number = Number(value);

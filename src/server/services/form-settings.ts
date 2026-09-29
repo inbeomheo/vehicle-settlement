@@ -191,6 +191,10 @@ export async function saveFormSettings(ctx: Context, raw: unknown) {
           current: await resolveAdmin(tx, input.project_id),
         },
       );
+    const [project] = input.project_id
+      ? await db.select({ name: projects.name }).from(projects).where(eq(projects.id, input.project_id))
+      : [];
+    const project_name = project?.name ?? '회사 기본값';
     for (const field of input.fields) {
       const before = previous.get(field.field_key);
       const values = {
@@ -208,7 +212,14 @@ export async function saveFormSettings(ctx: Context, raw: unknown) {
             .where(eq(formFieldSettings.id, before.id))
             .returning()
         : await db.insert(formFieldSettings).values(values).returning();
-      await audit(tx, 'FORM_FIELDS_UPDATE', 'form_field_setting', after.id, before ?? null, after);
+      await audit(
+        tx,
+        'FORM_FIELDS_UPDATE',
+        'form_field_setting',
+        after.id,
+        before ? { ...before, project_name } : null,
+        { ...after, project_name },
+      );
     }
     return resolveAdmin(tx, input.project_id);
   });
