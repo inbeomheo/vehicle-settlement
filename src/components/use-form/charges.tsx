@@ -1,0 +1,270 @@
+'use client';
+import { useEffect, useState } from 'react';
+import Decimal from 'decimal.js';
+import { api, ApiError } from '@/client/api';
+import { cachedValue, cacheValue } from '@/client/offline/store';
+import { units, chargeKinds, money, type RateResult, type UseDetail } from '@/client/types';
+import { button, control, Field, Section } from './fields';
+import { newCharge, type FormCharge, type FormValues } from './model';
+function RateFields({
+  charge,
+  form,
+  onChange,
+  userId,
+  saved,
+}: {
+  charge: FormCharge;
+  form: FormValues;
+  onChange: (patch: Partial<FormCharge>) => void;
+  userId: string;
+  saved?: UseDetail;
+}) {
+  const [result, setResult] = useState<RateResult>();
+  const [error, setError] = useState('');
+  const party =
+    charge.direction === 'RECEIVABLE' ? form.customer_counterparty_id : form.payee_counterparty_id;
+  const query = new URLSearchParams({
+    project_id: form.project_id,
+    counterparty_id: party,
+    vehicle_id: form.vehicle_id,
+    use_date: form.use_date,
+    direction: charge.direction ?? 'PAYABLE',
+    ...(charge.billing_unit ? { billing_unit: charge.billing_unit } : {}),
+  }).toString();
+  const previous = saved?.charge_lines.find((c) => c.id === charge.id);
+  const preserved =
+    previous?.rate_agreement_id &&
+    saved?.use_date === form.use_date &&
+    saved?.project_id === form.project_id &&
+    saved?.vehicle_id === form.vehicle_id &&
+    previous.counterparty_id === party &&
+    previous.billing_unit === charge.billing_unit;
+  useEffect(() => {
+    let alive = true;
+    setResult(undefined);
+    setError('');
+    if (!party || !form.project_id || !form.vehicle_id || !form.use_date || preserved) return;
+    void api<RateResult>(`/api/rates/lookup?${query}`)
+      .then(async (data) => {
+        await cacheValue(userId, `rate:${query}`, data);
+        if (alive) setResult(data);
+      })
+      .catch(async (error: unknown) => {
+        if (error instanceof ApiError && [401, 403, 404].includes(error.status)) {
+          if (alive) {
+            setResult(undefined);
+            setError(error.message);
+          }
+          return;
+        }
+        const cached = await cachedValue<RateResult>(userId, `rate:${query}`);
+        if (alive) {
+          setResult(cached);
+          setError(
+            cached
+              ? '오프라인: 마지막으로 확인한 계약입니다. 저장 시 다시 확인합니다.'
+              : '계약을 확인할 수 없습니다. 연결 후 서버에서 확정합니다.',
+          );
+        }
+      });
+    return () => {
+      alive = false;
+    };
+  }, [query, userId, party, form.project_id, form.vehicle_id, form.use_date, preserved]);
+  const rate = preserved ? (previous?.agreement_snapshot as RateResult['rate']) : result?.rate;
+  useEffect(() => {
+    if (result?.rate && !charge.billing_unit)
+      onChange({
+        billing_unit: result.rate.billing_unit,
+        ...(!charge.quantity &&
+        ['PER_DAY', 'HALF_DAY', 'MONTHLY', 'LUMP_SUM'].includes(result.rate.billing_unit)
+          ? { quantity: '1' }
+          : {}),
+      });
+  }, [result, charge.billing_unit, charge.quantity, onChange]);
+  let estimate: number | null = null;
+  if (rate && /^\d{1,9}(\.\d{1,3})?$/.test(charge.quantity)) {
+    const rounding = { HALF_UP: Decimal.ROUND_HALF_UP, DOWN: Decimal.ROUND_DOWN, UP: Decimal.ROUND_UP }[
+      rate.rounding
+    ];
+    estimate = Decimal.max(
+      new Decimal(charge.quantity).mul(rate.unit_price).toDecimalPlaces(0, rounding),
+      rate.min_charge ?? 0,
+    ).toNumber();
+  }
+  return (
+    <div className="grid gap-4">
+      <div className="rounded-xl bg-slate-50 p-4">
+        <p className="font-bold">{rate?.name ?? '단가 미확정'}</p>
+        <p className="mt-1 text-sm">
+          {rate
+            ? `${units[rate.billing_unit]} · 단가 ${money(rate.unit_price)}`
+            : '계약 단가가 없거나 아직 조회되지 않았습니다.'}
+        </p>
+        <p className="mt-3 text-xl font-bold text-blue-800">기본운임 {money(estimate)}</p>
+        <p className="mt-1 text-xs text-slate-500">
+          {preserved ? '저장 당시 계약' : '예상 금액'} · 저장 시 서버 계산 결과 적용
+        </p>
+        {error && <p className="mt-2 text-sm text-amber-800">{error}</p>}
+      </div>
+      <Field label="과금 단위">
+        <select
+          className={control}
+          value={charge.billing_unit}
+          onChange={(e) => {
+            const unit = e.target.value as FormCharge['billing_unit'];
+            onChange({
+              billing_unit: unit,
+              ...(!charge.quantity && ['PER_DAY', 'HALF_DAY', 'MONTHLY', 'LUMP_SUM'].includes(unit)
+                ? { quantity: '1' }
+                : {}),
+            });
+          }}
+        >
+          <option value="">계약 자동 조회</option>
+          {Object.entries(units).map(([v, n]) => (
+            <option key={v} value={v}>
+              {n}
+            </option>
+          ))}
+        </select>
+      </Field>
+      <Field label="청구수량">
+        <input
+          className={control}
+          inputMode="decimal"
+          value={charge.quantity}
+          onChange={(e) => onChange({ quantity: e.target.value })}
+        />
+      </Field>
+      {charge.billing_unit === 'PER_TRIP' && (
+        <button
+          type="button"
+          className={button}
+          onClick={() =>
+            onChange({ quantity: String(form.trips.filter((t) => t.status === 'COMPLETED').length) })
+          }
+        >
+          완료 운행 {form.trips.filter((t) => t.status === 'COMPLETED').length}회 제안 적용
+        </button>
+      )}
+    </div>
+  );
+}
+export function ChargeFields({
+  form,
+  mode,
+  onChange,
+  userId,
+  saved,
+}: {
+  form: FormValues;
+  mode: 'driver' | 'manager';
+  onChange: (charges: FormCharge[]) => void;
+  userId: string;
+  saved?: UseDetail;
+}) {
+  const patch = (key: string, change: Partial<FormCharge>) =>
+    onChange(form.charges.map((c) => (c.key === key ? { ...c, ...change } : c)));
+  return (
+    <Section title="과금·추가 비용" target="charges">
+      <div className="grid gap-6">
+        {form.charges
+          .filter((c) => mode === 'manager' || c.direction === 'PAYABLE')
+          .map((c, i) => (
+            <div
+              key={c.key}
+              data-fix-target={`charge:${c.id ?? c.key}`}
+              className="scroll-mt-6 rounded-xl border border-slate-200 p-4"
+            >
+              <Section
+                title={`${c.direction === 'RECEIVABLE' ? '고객 청구' : '지급'} · ${chargeKinds[c.charge_type]}`}
+                target={`charge:${c.id ?? c.key}`}
+              >
+                {c.charge_type === 'BASE' ? (
+                  <RateFields
+                    charge={c}
+                    form={form}
+                    onChange={(change) => patch(c.key, change)}
+                    userId={userId}
+                    saved={saved}
+                  />
+                ) : (
+                  <div className="grid gap-4">
+                    <Field label={`추가비 ${i} 종류`}>
+                      <select
+                        className={control}
+                        value={c.charge_type}
+                        disabled={!!c.id}
+                        onChange={(e) =>
+                          patch(c.key, { charge_type: e.target.value as FormCharge['charge_type'] })
+                        }
+                      >
+                        {Object.entries(chargeKinds)
+                          .filter(([v]) => v !== 'BASE')
+                          .map(([v, n]) => (
+                            <option key={v} value={v}>
+                              {n}
+                            </option>
+                          ))}
+                      </select>
+                    </Field>
+                    <Field label={`추가비 ${i} 요청액 (원)`}>
+                      <input
+                        className={control}
+                        inputMode="numeric"
+                        value={c.requested_amount}
+                        onChange={(e) => patch(c.key, { requested_amount: e.target.value })}
+                      />
+                    </Field>
+                    <Field label={`추가비 ${i} 사유`}>
+                      <input
+                        className={control}
+                        value={c.reason ?? ''}
+                        onChange={(e) => patch(c.key, { reason: e.target.value })}
+                      />
+                    </Field>
+                    <label className="flex items-center gap-3">
+                      <input
+                        type="checkbox"
+                        checked={c.included_in_base}
+                        onChange={(e) => patch(c.key, { included_in_base: e.target.checked })}
+                      />
+                      기본운임에 포함 (0원)
+                    </label>
+                  </div>
+                )}
+                {c.charge_type !== 'BASE' && (
+                  <button
+                    type="button"
+                    className={`${button} mt-4 text-red-700`}
+                    onClick={() => onChange(form.charges.filter((row) => row.key !== c.key))}
+                  >
+                    추가 비용 삭제
+                  </button>
+                )}
+              </Section>
+            </div>
+          ))}
+      </div>
+      <div className="mt-4 flex flex-wrap gap-2">
+        <button
+          type="button"
+          className={button}
+          onClick={() => onChange([...form.charges, newCharge('PAYABLE', false)])}
+        >
+          + 추가 비용
+        </button>
+        {mode === 'manager' && form.customer_counterparty_id && (
+          <button
+            type="button"
+            className={button}
+            onClick={() => onChange([...form.charges, newCharge('RECEIVABLE', false)])}
+          >
+            + 고객 청구 추가비
+          </button>
+        )}
+      </div>
+    </Section>
+  );
+}
