@@ -91,3 +91,25 @@
 사용 건 변경은 부모 vehicle_uses를 FOR UPDATE한 뒤 비용 전체를 id 순으로 FOR UPDATE하고 locked_statement_id를 검사한다. 명세 작업에서도 부모를 잠근다면 **부모 사용 건(id 순) → 비용(id 순)** 순서를 지킨다. 비용 잠금만 취하는 확정은 비용을 잠근 뒤 승인 상태를 재검사해야 한다. W1의 확정 잠금 경쟁 통합 테스트가 이 경계를 검증한다.
 
 정산 확정에서 `assertEvidenceSatisfied(ctx, use)`를 재사용하되 SUBMIT_BLOCKED를 명세의 CONFIRM_BLOCKED 사유 목록으로 변환한다. 필수 증빙 검사와 합계 계산은 서비스 트랜잭션 안에서 수행한다. `rawUse`, `rawDetail`은 내부 업무용 전체 필드이므로 기사 응답에는 반드시 `getUse` 또는 `redactForDriver`를 사용한다.
+
+## W5 가져오기
+
+담당자 역할만 사용한다. 작업·프리셋은 작성자에게만 보이며, 등록된 사용 건의 현장 권한은 다시 검사한다. 응답은 기존 `{ data }`/`{ error }` 형식이다.
+
+| 요청 | 입력 / 결과 |
+| --- | --- |
+| `POST /api/import/upload` | multipart `file`: xlsx 또는 UTF-8 csv. 10MB/20시트/총 2,000행/100열. 시트별 rows·추천 header_row·mapping 반환 |
+| `GET /api/import` | 본인의 최근 100개 작업(파일명·작성자명·일시·상태·summary) |
+| `GET /api/import/:id` | 원본 셀·선택 매핑·미리보기·집계 |
+| `POST /api/import/:id/preview` | `{ sheet: 0기반 인덱스, header_row: 1기반 행번호, mapping: { field: 0기반 열번호 } }` |
+| `POST /api/import/:id/commit` | `{}`. 저장한 매핑을 서버에서 재검증하여 유효 행만 DRAFT/PROXY 생성. 완료 작업 재요청은 기존 결과 반환 |
+| `GET /api/import/:id/errors.xlsx` | 원본 행번호·각 원본 셀·오류 사유가 있는 Excel |
+| `GET /api/import/presets` | 본인 매핑 목록 |
+| `POST /api/import/presets` | `{ name, mapping }`. 같은 작성자·이름이면 갱신, 감사로그 기록 |
+
+필드 키: `use_date`, `project`, `driver`, `vehicle`, `payee`, `origin`, `destination`, `cargo_desc`, `trips`, `billing_unit`, `quantity`, `unit_price`, `extra`, `reason`, `notes`.
+미지정 열은 mapping에서 생략한다. 동일 열 중복 매핑은 거부한다. 상세 규칙은 [ASSUMPTIONS](ASSUMPTIONS.md).
+
+행 결과는 `VALID | ERROR | SKIPPED`, `errors`, `warnings`, `source_row_hash`, 등록 후 `use_id`다. summary의 `valid/errors/skipped`는 현재 작업 행 분류, `success`는 이 작업에서 생성된 건수다. 같은 완료 작업 재요청의 success는 최초 성공 건수이며, **새 업로드 작업**으로 동일 파일을 가져오면 success=0이다.
+
+commit은 generic 응답 캐시를 사용하지 않는다. job 행 잠금 + 파일 단위 advisory lock + source_row_hash unique로 멱등성을 제공하며 매 요청에서 현재 권한을 검사한다. 프리셋 저장은 공용 Idempotency-Key 래퍼를 쓴다. upload/preview는 새 파일 및 재검증 요청으로 취급한다. 예상하지 못한 commit 실패는 전체 rollback하여 PREVIEW에서 재시도할 수 있다.

@@ -282,6 +282,7 @@ export const vehicleUses = pgTable(
     entered_as: enteredAsEnum('entered_as').notNull(),
     driver_confirmed_at: time('driver_confirmed_at'),
     source_row_hash: text('source_row_hash').unique(),
+    import_job_id: uuid('import_job_id').references(() => importJobs.id),
     version: version(),
     created_at: created(),
     updated_at: updated(),
@@ -545,6 +546,19 @@ export const importJobs = pgTable('import_jobs', {
   created_at: created(),
   updated_at: updated(),
 });
+export const importPresets = pgTable(
+  'import_presets',
+  {
+    id: id(),
+    name: text('name').notNull(),
+    mapping: jsonb('mapping').notNull(),
+    created_by: uuid('created_by')
+      .notNull()
+      .references(() => users.id),
+    created_at: created(),
+  },
+  (t) => [uniqueIndex('import_presets_owner_name').on(t.created_by, t.name)],
+);
 export const companySettings = pgTable(
   'company_settings',
   {
