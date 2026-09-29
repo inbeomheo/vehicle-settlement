@@ -679,6 +679,12 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
       ? defaultPayee(lookups, form.driver_id, form.use_date)
       : form.payee_counterparty_id || defaultPayee(lookups, form.driver_id, form.use_date);
   const displayForm = { ...form, payee_counterparty_id: payee };
+  // 기사가 무언가 해야 하는 상태는 주황으로 눈에 띄게 한다.
+  const statusWarning =
+    draft.phase === 'blocked' ||
+    draft.phase === 'conflict' ||
+    !!draft.inputError ||
+    (draft.phase === 'saved' && draft.server?.review_status === 'NEEDS_FIX');
   const status =
     draft.phase === 'queued' && draft.intent === 'submit' && !online
       ? '제출 대기 · 연결되면 자동 제출'
@@ -1000,7 +1006,7 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
             </h1>
             <p
               role="status"
-              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm font-semibold before:h-2 before:w-2 before:rounded-full ${online ? 'border-slate-300 bg-white text-slate-700 before:bg-blue-700' : 'border-orange-300 bg-orange-50 text-orange-900 before:bg-orange-600'}`}
+              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm font-semibold before:h-2 before:w-2 before:rounded-full ${online && !statusWarning ? 'border-slate-300 bg-white text-slate-700 before:bg-blue-700' : 'border-orange-300 bg-orange-50 text-orange-900 before:bg-orange-600'}`}
             >
               {status}
               {!online && ' · 오프라인'}
@@ -1452,7 +1458,7 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
               )}
             </fieldset>
             <div
-              className={`sticky z-10 -mx-4 border-t border-slate-200 bg-concrete/95 px-4 pt-3 backdrop-blur ${mode === 'driver' ? 'bottom-[calc(3.8rem+env(safe-area-inset-bottom))] pb-8' : 'bottom-0 pb-[max(0.75rem,env(safe-area-inset-bottom))]'}`}
+              className={`sticky z-10 -mx-4 border-t border-slate-200 bg-concrete/95 px-4 pt-3 backdrop-blur ${mode === 'driver' ? 'bottom-[calc(3.8rem+env(safe-area-inset-bottom))] pb-3' : 'bottom-0 pb-[max(0.75rem,env(safe-area-inset-bottom))]'}`}
             >
               <div className="flex gap-2">
                 <button
@@ -1474,9 +1480,11 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
                 >
                   {draft.server?.review_status === 'NEEDS_FIX'
                     ? '고쳐서 다시 보내기'
-                    : mode === 'manager'
-                      ? '검수 대기로 제출'
-                      : '담당자에게 보내기'}
+                    : draft.server?.review_status === 'SUBMITTED' && mode === 'driver'
+                      ? '수정해서 다시 보내기'
+                      : mode === 'manager'
+                        ? '검수 대기로 제출'
+                        : '담당자에게 보내기'}
                 </button>
               </div>
             </div>

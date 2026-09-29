@@ -42,7 +42,7 @@ it('12. 명세 상세 수량 2.500을 2.5로 표시', () => {
     supply_total: 0,
   };
   const html = renderToStaticMarkup(createElement(StatementPage));
-  expect(html).toContain('>2.5</td>');
+  expect(html).toContain('수량 2.5');
   expect(html).not.toContain('2.500');
 });
 it('13. 검수함 고유 경로/운행 수 및 검수 전 기본·추가 금액과 요청비 표시', () => {

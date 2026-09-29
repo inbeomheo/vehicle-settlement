@@ -28,6 +28,8 @@ function Icon({ path, size = 22 }: { path: string; size?: number }) {
 export function DriverNav() {
   const [pathname, setPathname] = useState('');
   useEffect(() => setPathname(location.pathname), []);
+  // 입력 화면에서는 아래에 보내기 막대가 있으므로 가운데 버튼을 띄우지 않는다(막대를 가리지 않게).
+  const onForm = pathname === '/d/new' || pathname.startsWith('/d/uses/');
   return (
     <nav
       aria-label="주 메뉴"
@@ -37,7 +39,7 @@ export function DriverNav() {
         const active =
           tab.href === '/d' ? pathname === '/d' || pathname.startsWith('/d/uses/') : pathname === tab.href;
         if (tab.primary) {
-          // 가장 자주 하는 일: 탭 막대 위로 올라온 노란 원형 버튼.
+          // 가장 자주 하는 일: 탭 막대 위로 올라온 노란 원형 버튼(입력 화면에서는 막대 안에 둔다).
           return (
             <a
               key={tab.href}
@@ -45,8 +47,10 @@ export function DriverNav() {
               aria-current={active ? 'page' : undefined}
               className="flex min-h-14 flex-col items-center justify-end gap-1 px-2 pb-1.5 font-bold text-ink"
             >
-              <span className="-mt-6 flex h-14 w-14 items-center justify-center rounded-full border-4 border-white bg-signal shadow-[0_2px_6px_rgb(0_0_0/0.18)]">
-                <Icon path={tab.path} size={28} />
+              <span
+                className={`${onForm ? 'mt-1 h-9 w-9 border-0 shadow-none' : '-mt-6 h-14 w-14 border-4 shadow-[0_2px_6px_rgb(0_0_0/0.18)]'} flex items-center justify-center rounded-full border-white bg-signal`}
+              >
+                <Icon path={tab.path} size={onForm ? 22 : 28} />
               </span>
               {tab.label}
             </a>

@@ -294,19 +294,18 @@ export function DriverDashboard() {
                     </span>
                     <span aria-hidden="true" className="slip-perforation w-2 shrink-0" />
                     <span className="min-w-0 flex-1 py-3 pr-3 pl-2">
-                      <span className="flex items-start justify-between gap-2">
-                        <span className="min-w-0 truncate text-[1.0625rem] font-bold">
-                          {String(row.snapshot.project_name)}
-                          {row.entered_as === 'PROXY' && (
-                            <span className="ml-1.5 text-sm font-medium text-slate-700">대리 입력</span>
-                          )}
-                        </span>
+                      {/* 현장 이름은 한 줄을 온전히 쓰고, 상태는 번호판 옆에 둔다(긴 상태 문구가 이름을 가리지 않게). */}
+                      <span className="block truncate text-[1.0625rem] font-bold">
+                        {String(row.snapshot.project_name)}
+                        {row.entered_as === 'PROXY' && (
+                          <span className="ml-1.5 text-sm font-medium text-slate-700">대리 입력</span>
+                        )}
+                      </span>
+                      <span className="mt-1.5 flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+                        <Plate value={String(row.snapshot.plate_no)} size="sm" />
                         <StatusBadge warning={fix}>
                           {canceled ? '취소' : reviewLabels[row.review_status]}
                         </StatusBadge>
-                      </span>
-                      <span className="mt-1.5 block">
-                        <Plate value={String(row.snapshot.plate_no)} size="sm" />
                       </span>
                       {!canceled && (
                         <span className="mt-2 flex items-end justify-between gap-2 text-sm">

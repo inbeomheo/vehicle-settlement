@@ -11,9 +11,7 @@ export function StatementItems({ items }: { items: StatementDetail['items'] }) {
     '차량 / 기사',
     '비용 종류',
     '운반 내용',
-    '운행수',
-    '과금단위',
-    '수량',
+    '과금 / 운행수',
     '단가',
     '공급가',
     '세액',
@@ -21,10 +19,10 @@ export function StatementItems({ items }: { items: StatementDetail['items'] }) {
   ];
   // 현장·운반 내용·비고만 줄바꿈하고, 번호·이름·금액은 한 줄로 둔다.
   const wrapping = new Set(['현장', '운반 내용', '비고']);
-  const numeric = new Set(['운행수', '수량', '단가', '공급가', '세액']);
+  const numeric = new Set(['단가', '공급가', '세액']);
   const cellClass = (header: string) =>
     wrapping.has(header)
-      ? 'min-w-0 break-keep whitespace-pre-wrap md:min-w-32 md:max-w-64'
+      ? 'min-w-0 break-keep whitespace-pre-wrap md:min-w-24 md:max-w-56'
       : `min-w-0 break-words md:whitespace-nowrap ${numeric.has(header) ? 'num md:text-right' : ''}`;
   return (
     <div className="md:overflow-x-auto">
@@ -34,7 +32,7 @@ export function StatementItems({ items }: { items: StatementDetail['items'] }) {
             {headers.map((header) => (
               <th
                 key={header}
-                className={`p-3 whitespace-nowrap ${numeric.has(header) ? 'md:text-right' : ''}`}
+                className={`px-2.5 py-3 whitespace-nowrap ${numeric.has(header) ? 'md:text-right' : ''}`}
               >
                 {header}
               </th>
@@ -58,9 +56,13 @@ export function StatementItems({ items }: { items: StatementDetail['items'] }) {
               </>,
               chargeTypeLabel(snapshot.charge_type),
               snapshot.cargo_desc || '—',
-              snapshot.trip_count,
-              chargeUnitLabel(snapshot.charge_type, snapshot.billing_unit),
-              formatQuantity(snapshot.quantity),
+              <>
+                <span className="block">
+                  {chargeUnitLabel(snapshot.charge_type, snapshot.billing_unit)} · 수량{' '}
+                  {formatQuantity(snapshot.quantity)}
+                </span>
+                <span className="text-slate-600">운행 {snapshot.trip_count}건</span>
+              </>,
               snapshot.unit_price === null && snapshot.charge_type && snapshot.charge_type !== 'BASE'
                 ? '—'
                 : money(snapshot.unit_price),
@@ -79,7 +81,7 @@ export function StatementItems({ items }: { items: StatementDetail['items'] }) {
                 className="grid grid-cols-2 rounded-lg border border-slate-200 p-2 align-top md:table-row md:rounded-none md:border-0 md:border-b md:p-0"
               >
                 {values.map((value, index) => (
-                  <td key={headers[index]} className={`p-3 align-top ${cellClass(headers[index])}`}>
+                  <td key={headers[index]} className={`px-2.5 py-3 align-top ${cellClass(headers[index])}`}>
                     <span className="mb-1 block text-xs text-slate-600 md:hidden">{headers[index]}</span>
                     {value}
                   </td>
