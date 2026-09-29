@@ -121,6 +121,10 @@ npm run db:migrate  # 구버전 백업의 적용 이력 보정·후속 마이그
 
 복구는 기존 데이터가 있는 대상에 덮어쓰지 않습니다. `npm run db:reset`은 **로컬 vehicle_app 전체를 삭제**하므로 복구 리허설 전용 환경에서만 사용하세요. 복구 후 검증·파일 이동이 실패하면 복구된 업무 DB를 비우고 승격한 파일을 제거합니다. 실제 리허설·주기·담당·실패 대응은 [OPERATIONS](docs/OPERATIONS.md)에 있습니다.
 
+## 테스트용 클라우드 배포
+
+Vercel + 기존 Supabase의 전용 `vehicle` 스키마 배포는 [DEPLOY](docs/DEPLOY.md)를 참고하세요. DB 파일 저장과 배포 환경을 설정하며 로컬 기본 실행은 그대로 유지합니다.
+
 ## 인계 자료
 
 - [설계](docs/DESIGN.md), [API 계약](docs/API.md), [업무 가정·미확정 규칙](docs/ASSUMPTIONS.md)
