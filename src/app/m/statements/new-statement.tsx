@@ -33,26 +33,31 @@ export function NewStatement({
   const [start, setStart] = useState(replaces?.period_start ?? initial.start);
   const [end, setEnd] = useState(replaces?.period_end ?? initial.end);
   const [due, setDue] = useState('');
+  const [unsubmittedCount, setUnsubmittedCount] = useState(0);
+  const [showDrafts, setShowDrafts] = useState(false);
   const [rows, setRows] = useState<Candidate[] | null>(null);
   const [choices, setChoices] = useState<Record<string, Choice>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [clientId] = useState(() => crypto.randomUUID());
   const lookups = useResource<Lookup>('/api/lookups');
-  async function find(event: FormEvent) {
-    event.preventDefault();
+  async function findCandidates(includeDrafts = false, preserve = false) {
     setBusy(true);
     setError('');
     try {
-      const result = await api<{ rows: Candidate[] }>(
-        `/api/statements/candidates?${new URLSearchParams({ direction, counterpartyId: party, periodStart: start, periodEnd: end })}`,
+      const result = await api<{ rows: Candidate[]; unsubmitted_count: number }>(
+        `/api/statements/candidates?${new URLSearchParams({ direction, counterpartyId: party, periodStart: start, periodEnd: end, includeDrafts: String(includeDrafts) })}`,
       );
       setRows(result.rows);
-      setChoices(
+      setUnsubmittedCount(result.unsubmitted_count);
+      setShowDrafts(includeDrafts);
+      setChoices((previous) =>
         Object.fromEntries(
           result.rows.map((row) => [
             row.charge_line_id,
-            { inclusion: row.eligible ? 'INCLUDED' : 'EXCLUDED', hold_reason: '' },
+            preserve && previous[row.charge_line_id]
+              ? previous[row.charge_line_id]
+              : { inclusion: !preserve && row.eligible ? 'INCLUDED' : 'EXCLUDED', hold_reason: '' },
           ]),
         ),
       );
@@ -109,7 +114,13 @@ export function NewStatement({
   return (
     <section className={`${panelClass} space-y-5`}>
       <h2 className="text-xl font-bold">{replaces ? '취소 명세 재작성' : '새 정산'}</h2>
-      <form onSubmit={find} className="space-y-4">
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          void findCandidates();
+        }}
+        className="space-y-4"
+      >
         <div className="flex flex-wrap gap-2">
           {[-1, 0].map((offset) => (
             <button
@@ -190,6 +201,17 @@ export function NewStatement({
             종료일까지의 미정산 과거분을 함께 표시합니다. 보류 항목은 이번 합계에서 제외되며 다음 정산 후보로
             남습니다.
           </p>
+          {unsubmittedCount > 0 && (
+            <button
+              type="button"
+              className={secondaryClass}
+              disabled={busy}
+              aria-expanded={showDrafts}
+              onClick={() => void findCandidates(!showDrafts, true)}
+            >
+              {showDrafts ? '미제출 숨기기' : `미제출 ${unsubmittedCount}건 보기`}
+            </button>
+          )}
           {!rows.length ? (
             <p className="rounded-lg bg-slate-50 p-6">조회된 미정산 비용이 없습니다.</p>
           ) : (

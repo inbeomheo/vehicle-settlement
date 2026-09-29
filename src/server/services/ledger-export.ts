@@ -41,7 +41,7 @@ export async function exportLedger(ctx: Context, query: unknown) {
     '운송사/지급처',
     '출발',
     '도착',
-    '작업내용',
+    '운반 내용',
     '계약단위',
     '실적',
     '기본비(승인 공급가)',
@@ -81,18 +81,19 @@ export async function exportLedger(ctx: Context, query: unknown) {
       row.receivable_amount,
       row.evidence_count,
       row.evidence_missing ? '필수 증빙 누락' : '충족',
-      names[row.review_status],
+      row.operation_status === 'CANCELED' ? '취소 (합계 제외)' : names[row.review_status],
       row.statement_numbers,
       names[row.settlement_status],
       names[row.payment_status],
       row.creator_name,
       row.entered_as === 'PROXY' ? '대리 입력' : '기사 직접',
     ]);
-  const total = sheet.addRow([`전체 검색 결과 합계(${data.total}건)`]);
-  total.getCell(16).value = sumMoney(data.rows.map((row) => row.base_amount));
-  total.getCell(17).value = sumMoney(data.rows.map((row) => row.extra_amount));
+  const total = sheet.addRow([`전체 검색 결과 합계(${data.total}건 · 취소 제외)`]);
+  const validRows = data.rows.filter((row) => row.operation_status !== 'CANCELED');
+  total.getCell(16).value = sumMoney(validRows.map((row) => row.base_amount));
+  total.getCell(17).value = sumMoney(validRows.map((row) => row.extra_amount));
   total.getCell(18).value = data.totals.filteredSum;
-  total.getCell(19).value = sumMoney(data.rows.map((row) => row.receivable_amount));
+  total.getCell(19).value = sumMoney(validRows.map((row) => row.receivable_amount));
   total.font = { bold: true };
   sheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
   sheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF16364A' } };

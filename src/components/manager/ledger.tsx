@@ -37,7 +37,7 @@ const columns: { key: keyof LedgerRow; title: string; render?: (row: LedgerRow) 
     title: '경로',
     render: (row) => <span className="block max-w-64 break-words">{row.route_summary}</span>,
   },
-  { key: 'cargo_desc', title: '작업내용' },
+  { key: 'cargo_desc', title: '운반 내용' },
   {
     key: 'billing_units',
     title: '계약단위',
@@ -56,7 +56,11 @@ const columns: { key: keyof LedgerRow; title: string; render?: (row: LedgerRow) 
       </span>
     ),
   },
-  { key: 'review_status', title: '검수상태', render: (row) => <Badge value={row.review_status} /> },
+  {
+    key: 'review_status',
+    title: '검수상태',
+    render: (row) => <Badge value={row.operation_status === 'CANCELED' ? 'CANCELED' : row.review_status} />,
+  },
   { key: 'statement_numbers', title: '정산회차' },
   { key: 'settlement_status', title: '정산상태', render: (row) => label(row.settlement_status) },
   { key: 'payment_status', title: '지급상태', render: (row) => label(row.payment_status) },
@@ -75,12 +79,12 @@ const defaultColumns: (keyof LedgerRow)[] = [
   'payment_status',
 ];
 const mobileCoreColumns: (keyof LedgerRow)[] = [
-  ...defaultColumns,
-  'payee_name',
-  'base_amount',
-  'extra_amount',
-  'evidence_count',
-  'statement_numbers',
+  'use_date',
+  'project_name',
+  'driver_name',
+  'plate_no',
+  'total_amount',
+  'review_status',
 ];
 function LedgerCard({ row, visible }: { row: LedgerRow; visible: (keyof LedgerRow)[] }) {
   const selected = columns.filter((column) => column.key !== 'use_no' && visible.includes(column.key));
@@ -176,8 +180,9 @@ export function Ledger({ initial = {} }: { initial?: Search }) {
         aria-controls="ledger-filters"
         onClick={() => setFiltersOpen(!filtersOpen)}
       >
-        <span>필터{filterCount > 0 ? ` (${filterCount})` : ''}</span>
-        <span aria-hidden="true">{filtersOpen ? '접기 −' : '펼치기 +'}</span>
+        <span>
+          필터{filterCount > 0 ? ` (${filterCount})` : ''} {filtersOpen ? '접기 −' : '펼치기 +'}
+        </span>
       </button>
       <form
         id="ledger-filters"
@@ -302,7 +307,7 @@ export function Ledger({ initial = {} }: { initial?: Search }) {
       </div>
       <p className="mb-3 text-xs text-slate-600">
         기본비·추가비·합계는 지급 승인 공급가입니다. 승인액이 없는 항목은 미확정으로 표시하며 합계에서
-        제외합니다. 엑셀에는 현재 필터의 전체 행·전체 열이 포함됩니다.
+        제외합니다. 취소 건은 합계에서 제외합니다. 엑셀에는 현재 필터의 전체 행·전체 열이 포함됩니다.
       </p>
       <details className={`${panelClass} mb-3`}>
         <summary className="cursor-pointer text-sm font-semibold">표시 열 선택</summary>
@@ -441,7 +446,7 @@ export function ReviewInbox({ initialTab = 'SUBMITTED' }: { initialTab?: string 
             <article className={panelClass} key={row.id}>
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <UseLink id={row.id}>{row.use_no}</UseLink>
-                <Badge value={row.review_status} />
+                <Badge value={row.operation_status === 'CANCELED' ? 'CANCELED' : row.review_status} />
               </div>
               <p className="mt-3 font-semibold">
                 {row.use_date} · {row.project_name}

@@ -75,10 +75,10 @@ it('세액은 각 라인 5원의 1원씩 합산하며 화면·엑셀·PDF 입력
     (await renderStatementXlsx(model)) as unknown as Parameters<typeof workbook.xlsx.load>[0],
   );
   const sheet = workbook.worksheets[0];
-  expect(sheet.getCell('K11').value).toBe(5);
-  expect(sheet.getCell('K12').value).toBe(5);
-  expect(sheet.getCell('L11').value).toBe(1);
-  expect(sheet.getCell('L12').value).toBe(1);
+  expect(sheet.getCell('L11').value).toBe(5);
+  expect(sheet.getCell('L12').value).toBe(5);
+  expect(sheet.getCell('M11').value).toBe(1);
+  expect(sheet.getCell('M12').value).toBe(1);
 });
 it('거래처 변조를 확정 시 재검사하고 정상 라인까지 잠그지 않음', async () => {
   const s = await scenario(database().db);

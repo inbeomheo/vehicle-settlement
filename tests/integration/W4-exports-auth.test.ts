@@ -78,12 +78,12 @@ describe('W4 스냅샷 출력과 권한', () => {
     await workbook.xlsx.load(xlsx as unknown as Parameters<typeof workbook.xlsx.load>[0]);
     const sheet = workbook.getWorksheet('정산명세')!;
     expect(sheet.getCell('A11').value).toBe('2026-09-15');
-    expect(sheet.getCell('K11').value).toBe(300000);
-    expect(sheet.getCell('L11').value).toBe(0);
+    expect(sheet.getCell('L11').value).toBe(300000);
+    expect(sheet.getCell('M11').value).toBe(0);
     expect(sheet.getCell('A12').value).toBeNull();
     let grandTotal = -1;
     sheet.eachRow((row) => {
-      if (row.getCell(1).value === '총액') grandTotal = Number(row.getCell(11).value);
+      if (row.getCell(1).value === '총액') grandTotal = Number(row.getCell(12).value);
     });
     expect(grandTotal).toBe(model.grand_total);
     expect(model.document_no).toBe(statement.statement_no);

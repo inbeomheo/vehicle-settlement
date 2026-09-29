@@ -32,6 +32,7 @@ export const exportHeaders = [
   '차량',
   '기사',
   '운반내용',
+  '비용 종류',
   '운행수',
   '과금단위',
   '수량',
@@ -39,7 +40,6 @@ export const exportHeaders = [
   '공급가',
   '세액',
   '비고',
-  '비용 종류',
 ];
 export const formatWon = (n: number) => `${n.toLocaleString('ko-KR')}원`;
 export function seoulTime(value: Date | string | null) {
@@ -95,6 +95,7 @@ export function rowValues(row: StatementExportModel['rows'][number]): (string | 
     row.plate_no,
     row.driver_name,
     row.cargo_desc,
+    chargeLabels[row.charge_type ?? ''] ?? '—',
     row.trip_count,
     exportChargeUnit(row.charge_type, row.billing_unit),
     row.quantity === null ? null : formatQuantity(row.quantity),
@@ -104,6 +105,5 @@ export function rowValues(row: StatementExportModel['rows'][number]): (string | 
     [row.carried_forward ? '전월분' : '', row.charge_type === 'ADJUSTMENT' ? '조정' : '', row.notes]
       .filter(Boolean)
       .join(' / '),
-    chargeLabels[row.charge_type ?? ''] ?? '—',
   ];
 }

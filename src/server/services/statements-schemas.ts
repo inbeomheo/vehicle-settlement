@@ -49,6 +49,7 @@ export const candidateSchema = z
     periodStart: dateString,
     periodEnd: dateString,
     statementId: uuid.optional(),
+    includeDrafts: z.enum(['true', 'false']).default('false'),
   })
   .refine((v) => v.periodStart <= v.periodEnd, '정산 기간을 확인하세요.');
 export const statementListSchema = z.object({

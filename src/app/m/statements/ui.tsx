@@ -22,6 +22,15 @@ export const inputClass =
   'mt-1 block min-h-11 w-full min-w-0 text-base rounded-lg border border-slate-300 bg-white px-3 py-2';
 export const panelClass = 'rounded-xl border border-slate-200 bg-white p-4 sm:p-6';
 export const statusLabels = { DRAFT: '작성 중', CONFIRMED: '확정', CANCELED: '취소' };
+export function StatementBadge({ status }: { status: keyof typeof statusLabels }) {
+  return (
+    <span
+      className={`inline-block rounded-md px-2 py-1 text-sm font-semibold ${status === 'CANCELED' ? 'bg-red-100 text-red-800' : status === 'CONFIRMED' ? 'bg-emerald-50 text-emerald-800' : 'bg-slate-100 text-slate-700'}`}
+    >
+      {statusLabels[status]}
+    </span>
+  );
+}
 export const billingLabels: Record<string, string> = {
   PER_TRIP: '회당',
   PER_DAY: '일대',

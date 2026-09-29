@@ -24,11 +24,11 @@ it('12. 수량은 화면/Excel/PDF 모델에서 천 단위·소수 0 제거, sna
   );
   const model = await statementExportModel(s.adminCtx, statement.id);
   expect(model.rows[0].quantity).toBe('2.500');
-  expect(rowValues(model.rows[0])[8]).toBe('2.5');
+  expect(rowValues(model.rows[0])[9]).toBe('2.5');
   const book = new ExcelJS.Workbook();
   await book.xlsx.load((await renderStatementXlsx(model)) as unknown as ExcelJS.Buffer);
-  expect(book.worksheets[0].getCell('I11').value).toBe(2.5);
-  expect(book.worksheets[0].getCell('I11').numFmt).toContain('#,##0');
+  expect(book.worksheets[0].getCell('J11').value).toBe(2.5);
+  expect(book.worksheets[0].getCell('J11').numFmt).toContain('#,##0');
   const ledger = await getLedger(s.adminCtx, { use_id: use.id });
   expect(ledger.rows[0].performance).toContain('1,234.5톤');
   const ledgerBook = new ExcelJS.Workbook();

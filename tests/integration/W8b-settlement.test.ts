@@ -59,15 +59,15 @@ describe('W8b 비용 종류와 확정 출력', () => {
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load((await renderStatementXlsx(model)) as unknown as ExcelJS.Buffer);
     const sheet = workbook.worksheets[0];
-    expect(sheet.getCell('N10').value).toBe('비용 종류');
+    expect(sheet.getCell('G10').value).toBe('비용 종류');
     expect(model.grand_total).toBe(419100);
     for (const [index, row] of model.rows.entries()) {
       const values = rowValues(row);
       expect(values[exportHeaders.indexOf('비용 종류')]).toBe(chargeTypeLabel(row.charge_type));
-      expect(values[7]).toBe(chargeUnitLabel(row.charge_type, row.billing_unit));
-      expect(values[7]).toBe(row.charge_type === 'BASE' ? '일대' : '건');
-      expect(sheet.getCell(index + 11, 14).value).toBe(chargeTypeLabel(row.charge_type));
-      expect(sheet.getCell(index + 11, 8).value).toBe(values[7]);
+      expect(values[8]).toBe(chargeUnitLabel(row.charge_type, row.billing_unit));
+      expect(values[8]).toBe(row.charge_type === 'BASE' ? '일대' : '건');
+      expect(sheet.getCell(index + 11, 7).value).toBe(chargeTypeLabel(row.charge_type));
+      expect(sheet.getCell(index + 11, 9).value).toBe(values[8]);
       expect(markup).toContain(chargeTypeLabel(row.charge_type));
     }
     const pdf = await renderStatementPdf(model);
@@ -80,11 +80,11 @@ describe('W8b 비용 종류와 확정 출력', () => {
     const rows = text.split('\n').filter((line) => /^2026-09-15\s/.test(line));
     expect(rows).toHaveLength(7);
     const base = rows.find((line) => line.includes('기본운임'));
-    expect(base).toMatch(/일대\s+1\.25\s+300,000\s+375,000\s+37,500\s+기본운임\s*$/);
+    expect(base).toMatch(/기본운임\s+\d+\s+일대\s+1\.25\s+300,000\s+375,000\s+37,500\s*$/);
     for (const label of ['대기료', '통행료', '경유비', '취소·회차비', '실비', '기타']) {
-      const matches = rows.filter((line) => line.trimEnd().endsWith(label));
+      const matches = rows.filter((line) => line.includes(label));
       expect(matches).toHaveLength(1);
-      expect(matches[0]).toMatch(/건\s+1\s+-\s+1,000\s+100\s+현장 추가비\s+/);
+      expect(matches[0]).toMatch(/건\s+1\s+-\s+1,000\s+100\s+현장 추가비\s*$/);
     }
     if (process.env.W8B_RENDER_QA) {
       const output = await testOutputDirectory(test, 'w8b-charge-types');
@@ -108,8 +108,8 @@ describe('W8b 비용 종류와 확정 출력', () => {
       .set({ snapshot })
       .where(eq(statementItems.id, statement.items[0].id));
     const model = await statementExportModel(s.adminCtx, statement.id);
-    expect(rowValues(model.rows[0])[13]).toBe('—');
-    expect(rowValues(model.rows[0])[7]).toBe('일대');
+    expect(rowValues(model.rows[0])[6]).toBe('—');
+    expect(rowValues(model.rows[0])[8]).toBe('일대');
     expect(model.grand_total).toBe(300000);
     const current = await getStatement(s.adminCtx, statement.id);
     expect(current.items[0].snapshot).toEqual(snapshot);
@@ -149,8 +149,8 @@ describe('W8b 비용 종류와 확정 출력', () => {
       version: nextDraft.version,
     });
     const model = await statementExportModel(s.adminCtx, next.id);
-    expect(rowValues(model.rows[0])[13]).toBe('조정');
-    expect(rowValues(model.rows[0])[7]).toBe('건');
+    expect(rowValues(model.rows[0])[6]).toBe('조정');
+    expect(rowValues(model.rows[0])[8]).toBe('건');
     expect((await getStatement(s.adminCtx, original.id)).grand_total).toBe(300000);
   });
 

@@ -9,7 +9,7 @@ export function StatementItems({ items }: { items: StatementDetail['items'] }) {
     '현장',
     '차량 / 기사',
     '비용 종류',
-    '운반내용',
+    '운반 내용',
     '운행수',
     '과금단위',
     '수량',
@@ -48,7 +48,9 @@ export function StatementItems({ items }: { items: StatementDetail['items'] }) {
               snapshot.trip_count,
               chargeUnitLabel(snapshot.charge_type, snapshot.billing_unit),
               formatQuantity(snapshot.quantity),
-              money(snapshot.unit_price),
+              snapshot.unit_price === null && snapshot.charge_type && snapshot.charge_type !== 'BASE'
+                ? '—'
+                : money(snapshot.unit_price),
               money(item.supply_amount),
               money(item.tax_amount),
               <>
