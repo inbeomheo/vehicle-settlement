@@ -70,3 +70,37 @@ npm run restore:verify
 ```
 
 기존 폴더 이름이 있으면 다른 이름을 사용한다. `.data/pg`를 실행 중에 복사하는 방식은 이 백업 절차가 아니다. 백업 검증은 매니페스트 무결성 검사이며 암호화나 전자서명은 제공하지 않는다.
+
+## F9 요청 크기·시간 제한과 보안 헤더
+
+앱은 Content-Length 유무·정확성과 무관하게 스트림의 실제 바이트를 센다. JSON은 2MiB, 증빙 PUT은 20MiB를 초과하는 즉시 읽기를 취소하고 `413 PAYLOAD_TOO_LARGE`를 반환한다. 가져오기 multipart는 11MiB(파일 자체 10MiB), XLSX 전체 엔트리의 실제 해제 누적량은 32MiB다. ZIP 중앙/로컬 헤더, CRC, data descriptor를 검증하고 검증된 비압축 ZIP만 ExcelJS에 전달한다. 배정이 없는 현장 담당자·현장 제한 정산 담당자는 업로드 본문을 읽기 전에 403으로 거부한다.
+
+앞단 프록시도 제한한다. Nginx 기준 일반 API `client_max_body_size 2m`, `/api/evidence/<uuid>/content`만 `20m`, `/api/import/upload`만 `11m`으로 설정한다. 각 location의 기존 upstream 설정을 유지한다. 권장 초기값은 `client_body_timeout 15s`, `proxy_connect_timeout 5s`, `proxy_send_timeout 60s`, `proxy_read_timeout 60s`다. 느린 전송의 무한 지속을 막기 위해 LB/인그레스에도 **전체 요청 시간** 제한(일반 60초, 증빙 업로드 90초)을 설정한다. Nginx의 body/read timeout은 바이트 사이 유휴 시간 제한이므로 전체 시간 제한을 대신하지 않는다. 프록시가 먼저 거부하면 앱 JSON 대신 프록시 413/408이 올 수 있다.
+
+모든 앱·API·정적 파일 응답에 아래 헤더를 적용한다.
+
+- `Content-Security-Policy: frame-ancestors 'none'`, `X-Frame-Options: DENY`: 외부·동일 출처 iframe 삽입 차단.
+- `X-Content-Type-Options: nosniff`: 선언된 MIME 형식을 사용한다.
+- `Referrer-Policy: strict-origin-when-cross-origin`: 다른 출처에는 출처만 전달한다.
+- `Permissions-Policy: camera=(self), microphone=(), geolocation=()`: 같은 출처 기사 촬영은 허용하며 현재 사용하지 않는 마이크·위치는 차단한다.
+
+CSP는 frame-ancestors만 제한하므로 현재 Next 스크립트·PWA 서비스 워커·파일 입력·PDF 다운로드를 유지한다. PDF는 독립 다운로드/탭으로 제공하며 iframe 삽입은 허용하지 않는다. 배포 후 프록시가 이 헤더들을 덮어쓰지 않는지 확인한다.
+
+## F9 로그인 실패 제한·관리자 잠금 해제
+
+배포 전 `npm run db:migrate`로 `0400_f9_login_throttle.sql`을 적용한다. DB `login_throttles` 행 잠금으로 다중 인스턴스의 실패 횟수를 공유한다. 계정별 10분 내 5회, IP별 10분 내 20회 실패하면 각각 15분 잠근다. 잠금 중에는 올바른 비밀번호도 429이며 `Retry-After: 900`과 한국어 안내를 반환한다. 잠금 중 추가 요청으로 만료 시각을 연장하지 않는다. 잠금이 끝난 뒤 성공하면 해당 계정·현재 IP 카운터를 모두 초기화한다. 실패는 사용자 존재 여부와 무관하게 같은 응답 정책과 bcrypt 비교를 거치며 별도 `LOGIN_FAILED` 감사로그에 기록한다. 비밀번호·원문 로그인 ID·원문 IP는 이 감사로그에 저장하지 않고 SHA-256 키와 결과만 보관한다.
+
+운영에는 `TRUSTED_CLIENT_IP_HEADER=x-real-ip`처럼 **프록시가 실제 연결 IP로 덮어쓰는 단일 IP 헤더**를 지정하고, 앱 직접 외부 접근을 차단한다. 예를 들어 단일 Nginx 프록시는 `proxy_set_header X-Real-IP $remote_addr;`를 사용한다. 여러 프록시 뒤에서는 신뢰하는 프록시 CIDR만 real_ip 설정에 등록한다. 사용자 제공 `X-Forwarded-For`의 첫 항목을 그대로 신뢰하지 않는다. 설정이 없거나 헤더가 없거나 올바른 단일 주소가 아니면 `unavailable` 공용 IP 버킷으로 제한한다. 개발에는 안전한 기본값이나, 운영에서 미설정하면 서로 다른 사용자가 공용 잠금에 걸릴 수 있다. IPv6는 표준 표기로 정규화한다.
+
+신원을 확인한 시스템 관리자는 배포 서버에서 DB 관리 자격으로 다음 명령을 실행한다. 브라우저 공개 잠금 해제 API는 없다. 실제 계정과 해당 IP가 모두 잠겼다면 각각 해제한다. 명령은 지정한 카운터만 초기화하고 `LOGIN_UNLOCKED` 감사로그를 남긴다.
+
+```sh
+npx tsx scripts/unlock-login.ts --account '사용자아이디'
+npx tsx scripts/unlock-login.ts --ip '192.0.2.10'
+# 프록시 미설정으로 공용 버킷이 잠긴 경우 설정을 바로잡은 뒤 실행
+npx tsx scripts/unlock-login.ts --ip unavailable
+```
+
+카운터의 오래된 해시 행은 운영 보존정책에 따라 별도 유지보수 시간에 정리할 수 있다. 예: `DELETE FROM login_throttles WHERE updated_at < now() - interval '30 days' AND (locked_until IS NULL OR locked_until < now());`. 감사로그 보존은 별도 기존 정책을 따른다. 이 작업을 자동 예약하지는 않는다.
+
+신규 비밀번호는 기존 최소 8자를 유지하며 UTF-8 72바이트를 초과할 수 없다(한글 24자=72바이트). 로그인·가입·서버 해시/검증 경계가 동일하게 `비밀번호가 너무 깁니다`로 거부한다. bcrypt 해시는 유지한다. 과거 72바이트 초과로 생성된 비밀번호는 원문 길이를 해시에서 복구할 수 없으므로, 해당 사용자는 관리자에게 계정 복구를 요청해 제한 안의 비밀번호를 설정해야 한다. 기존 bcrypt 절단으로 만들어진 해시를 안전한 새 비밀번호로 자동 추정하지 않는다.

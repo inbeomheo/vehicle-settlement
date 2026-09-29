@@ -25,7 +25,7 @@
 - `GET /api/me`: 현재 사용자. password_hash는 반환하지 않는다.
 - `GET /api/invites`: 관리자만, 토큰 해시를 제외한 초대 목록.
 - `POST /api/invites`: `{ role, name, phone?, driver_id?, project_ids?: UUID[] }` → 초대 + `invite_url`. 기사 역할에는 driver_id 필수.
-- `POST /api/invites/:token/accept`: `{ login_id, password }` → 새 사용자 + 세션 쿠키. 비밀번호 8~72자, 토큰 1회용/7일. URL의 동적 디렉터리 이름은 Next 라우트 충돌을 피하려고 `[id]`로 통일했지만 외부 URL 의미는 token이다.
+- `POST /api/invites/:token/accept`: `{ login_id, password }` → 새 사용자 + 세션 쿠키. 비밀번호 최소 8자·UTF-8 최대 72바이트, 토큰 1회용/7일. URL의 동적 디렉터리 이름은 Next 라우트 충돌을 피하려고 `[id]`로 통일했지만 외부 URL 의미는 token이다.
 - `DELETE /api/invites/:id`: 초대 회수.
 
 ## 사용 건
@@ -154,3 +154,10 @@ commit은 generic 응답 캐시를 사용하지 않는다. job 행 잠금 + 가�
 `DELETE /api/import`는 선택적인 JSON 본문 `{ ids: string[] }`를 받는다. `ids`는 UUID 1~100개이며 빈 배열·잘못된 ID·100개 초과는 422다. 전달한 ID 중 요청자 소유이고, 여전히 PREVIEW이며, 마지막 수정 후 7일이 지난 작업만 잠금 후 삭제한다. `{ data: { deleted } }`는 실제 삭제 건수다. 본문/ids 생략 시 기존 전체 오래된 미리보기 정리 동작은 유지한다.
 
 담당자 화면은 최근 100건 중 확인창에 표시한 파일 ID만 보낸다. 목록 밖 자료나 확인 후 새로 오래된 상태가 된 자료는 이 요청으로 삭제하지 않는다. 확인 이후 다시 검증하거나 완료된 자료도 서버 조건에 따라 보존한다.
+
+## F9 보안 경계
+
+- JSON 요청은 스트리밍 2MiB, 증빙 PUT은 20MiB 제한을 초과하면 `413 PAYLOAD_TOO_LARGE`다.
+- 로그인은 계정별 10분 내 5회/IP별 20회 실패 시 15분 잠금(`429 LOGIN_THROTTLED`, `Retry-After: 900`). 성공 시 해당 계정·현재 IP 카운터를 초기화한다. 로그인·초대 수락에서 UTF-8 72바이트 초과 비밀번호는 422이며 한국어 오류를 제공한다.
+- 기사 상세의 revisions는 각 snapshot.driver_id가 본인인 것만 반환한다. 다른 기사에게 속했던 증빙은 현재 목록·자신의 새 제출본에서도 제거하며 파일 직접 접근은 404다. 이전 기사 제출본에 포함된 증빙 또는 다른 기사 계정이 올린 증빙이 대상이며 담당자는 기존 이력을 유지한다. 감사 API는 계속 담당자 전용이다.
+- 유효 배정 현장이 없는 SITE_MANAGER 및 현장 제한 SETTLEMENT_MANAGER는 가져오기 업로드 단계에서 403이다.

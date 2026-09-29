@@ -1,4 +1,6 @@
 export const errorStatuses = {
+  PAYLOAD_TOO_LARGE: 413,
+  LOGIN_THROTTLED: 429,
   UNAUTHENTICATED: 401,
   FORBIDDEN: 403,
   NOT_FOUND: 404,

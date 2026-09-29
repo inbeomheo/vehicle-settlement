@@ -1,8 +1,9 @@
 import { withRoute } from '@/server/http';
 import { invalid } from '@/server/errors';
-import { uploadImport } from '@/server/services/import';
+import { uploadImport, assertImportUploadAccess } from '@/server/services/import';
 export const POST = withRoute(
   async ({ ctx, request }) => {
+    await assertImportUploadAccess(ctx);
     if (Number(request.headers.get('content-length')) > 11 * 1024 * 1024)
       invalid('파일은 10MB 이하로 업로드하세요.');
     const reader = request.body?.getReader();
