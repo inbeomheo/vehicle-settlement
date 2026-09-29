@@ -2,7 +2,9 @@ import React, { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { eq } from 'drizzle-orm';
 import ExcelJS from 'exceljs';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { testOutputDirectory } from '../helpers/output';
 import { describe, expect, it, vi } from 'vitest';
 import { chargeLines, statementItems } from '../../src/server/db/schema';
 import { statementCandidates, getStatement, confirmStatement } from '../../src/server/services/statements';
@@ -22,7 +24,7 @@ const database = testDatabase();
 const extraTypes = ['WAITING', 'TOLL', 'EXTRA_STOP', 'CANCEL_FEE', 'EXPENSE', 'OTHER'] as const;
 
 describe('W8b 비용 종류와 확정 출력', () => {
-  it('후보·확정 snapshot·화면·Excel/PDF는 같은 비용 종류/단위를 표시하고 금액을 보존한다', async () => {
+  it('후보·확정 snapshot·화면·Excel/PDF는 같은 비용 종류/단위를 표시하고 금액을 보존한다', async (test) => {
     const s = await scenario(database().db);
     const use = await approved(
       s,
@@ -85,8 +87,8 @@ describe('W8b 비용 종류와 확정 출력', () => {
       expect(matches[0]).toMatch(/건\s+1\s+-\s+1,000\s+100\s+현장 추가비\s+/);
     }
     if (process.env.W8B_RENDER_QA) {
-      await mkdir('.data/w8b-qa', { recursive: true });
-      await writeFile('.data/w8b-qa/charge-types.pdf', pdf);
+      const output = await testOutputDirectory(test, 'w8b-charge-types');
+      await writeFile(join(output, 'charge-types.pdf'), pdf);
     }
     await database()
       .db.update(chargeLines)

@@ -1,6 +1,8 @@
 import { expect, it } from 'vitest';
 import ExcelJS from 'exceljs';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { testOutputDirectory } from '../helpers/output';
 import { testDatabase } from '../helpers/database';
 import { scenario, approved, confirmed } from './W4-fixtures';
 import { createUse } from '../../src/server/services/uses';
@@ -10,7 +12,7 @@ import { statementExportModel, rowValues } from '../../src/server/export/stateme
 import { renderStatementXlsx } from '../../src/server/export/statement-xlsx';
 import { renderStatementPdf } from '../../src/server/export/statement-pdf';
 const database = testDatabase();
-it('12. 수량은 화면/Excel/PDF 모델에서 천 단위·소수 0 제거, snapshot은 유지', async () => {
+it('12. 수량은 화면/Excel/PDF 모델에서 천 단위·소수 0 제거, snapshot은 유지', async (test) => {
   const s = await scenario(database().db);
   const use = await approved(s, {
     quantity: '2.5',
@@ -34,8 +36,8 @@ it('12. 수량은 화면/Excel/PDF 모델에서 천 단위·소수 0 제거, sna
     (await exportLedger(s.adminCtx, { use_id: use.id })) as unknown as ExcelJS.Buffer,
   );
   expect(ledgerBook.worksheets[0].getCell('O2').text).toContain('1,234.5톤');
-  await mkdir('.data/w7-qa', { recursive: true });
-  await writeFile('.data/w7-qa/quantity.pdf', await renderStatementPdf(model));
+  const output = await testOutputDirectory(test, 'w7-quantity');
+  await writeFile(join(output, 'quantity.pdf'), await renderStatementPdf(model));
 });
 it('13. 반복 경로는 짧게 요약하고 승인 전 지급 기본/추가 금액·요청비 유무 제공', async () => {
   const s = await scenario(database().db);

@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto';
-import { writeFile, mkdir } from 'node:fs/promises';
+import { writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { testOutputDirectory } from '../helpers/output';
 import { eq } from 'drizzle-orm';
 import ExcelJS from 'exceljs';
 import { describe, expect, it } from 'vitest';
@@ -29,7 +31,7 @@ import { callRoute } from '../helpers/routes';
 import { approved, confirmed, draft, scenario } from './W4-fixtures';
 const database = testDatabase();
 describe('W4 스냅샷 출력과 권한', () => {
-  it('기준정보·단가 변경 및 원자료 훼손에도 확정 화면/XLSX/PDF 모델과 금액은 고정', async () => {
+  it('기준정보·단가 변경 및 원자료 훼손에도 확정 화면/XLSX/PDF 모델과 금액은 고정', async (test) => {
     const s = await scenario(database().db);
     const company = await s.f.company({ name: '한글 회사', settlement_contact: '02-1111-2222' });
     const use = await approved(s, {
@@ -89,12 +91,12 @@ describe('W4 스냅샷 출력과 권한', () => {
     expect(pdf.subarray(0, 5).toString()).toBe('%PDF-');
     expect(pdf.length).toBeGreaterThan(10000);
     if (process.env.W4_RENDER_QA) {
-      await mkdir('.data/w4-qa', { recursive: true });
-      await writeFile('.data/w4-qa/statement.pdf', pdf);
-      await writeFile('.data/w4-qa/statement.xlsx', xlsx);
+      const output = await testOutputDirectory(test, 'w4-statement');
+      await writeFile(join(output, 'statement.pdf'), pdf);
+      await writeFile(join(output, 'statement.xlsx'), xlsx);
     }
   });
-  it('초안 출력은 초안 표기, 긴 내용과 여러 페이지 PDF 생성', async () => {
+  it('초안 출력은 초안 표기, 긴 내용과 여러 페이지 PDF 생성', async (test) => {
     const s = await scenario(database().db);
     const use = await approved(s);
     const statement = await draft(
@@ -122,7 +124,10 @@ describe('W4 스냅샷 출력과 권한', () => {
     };
     const pdf = await renderStatementPdf(long);
     expect(pdf.length).toBeGreaterThan(20000);
-    if (process.env.W4_RENDER_QA) await writeFile('.data/w4-qa/draft-multipage.pdf', pdf);
+    if (process.env.W4_RENDER_QA) {
+      const output = await testOutputDirectory(test, 'w4-multipage');
+      await writeFile(join(output, 'draft-multipage.pdf'), pdf);
+    }
   });
   it('기사 정산은 본인 PAYABLE 항목 금액만, 타 기사·전체 명세·export URL은 404', async () => {
     const s = await scenario(database().db);
