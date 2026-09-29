@@ -1,6 +1,6 @@
 import { openDB, type DBSchema } from 'idb';
 import type { CreateUseInput } from '@/server/services/schemas';
-import type { FormValues } from '@/components/use-form/model';
+import type { FormValues, FormError } from '@/components/use-form/model';
 import type { Lookups, Mode, UseDetail, UseList, User, evidenceKinds } from '../types';
 export type PendingEvidence = {
   client_upload_id: string;
@@ -22,6 +22,8 @@ export type Draft = {
   form: FormValues;
   // Local UI state only; optional for drafts created before visibility was remembered.
   revealedFields?: string[];
+  // False only for a new, untouched form. Older stored drafts remain recoverable.
+  hasUserInput?: boolean;
   uploads: PendingEvidence[];
   updatedAt: number;
   serverId?: string;
@@ -39,6 +41,7 @@ export type Draft = {
   submitRequest?: { key: string; version: number };
   error?: string;
   inputError?: boolean;
+  inputErrors?: FormError[];
   conflict?: UseDetail;
 };
 export type Bootstrap = { user: User; lookups: Lookups; recent: UseList; cachedAt: number };
@@ -105,8 +108,14 @@ export async function removeDraft(userId: string, id: string) {
   notifyChange();
 }
 
+export function shouldPersistDraft(draft: Draft) {
+  return (
+    draft.hasUserInput !== false || !!draft.serverId || !!draft.pendingCreate || draft.uploads.length > 0
+  );
+}
+
 export function isUnsent(draft: Draft) {
-  return draft.phase !== 'saved' && !draft.inputError;
+  return shouldPersistDraft(draft) && draft.phase !== 'saved' && !draft.inputError;
 }
 
 export async function flushDrafts() {

@@ -213,15 +213,17 @@ export function DriverDashboard() {
                     {String(row.snapshot.project_name)} · {String(row.snapshot.plate_no)}
                   </p>
                   <p className="mt-1 text-sm text-slate-600">{row.cargo_desc || '운반 내용 없음'}</p>
-                  <p className="mt-2 text-sm font-semibold">
-                    기본 금액 (본인 지급분){' '}
-                    {row.payable_base_amount == null
-                      ? '미확정'
-                      : `${row.payable_base_amount.toLocaleString('ko-KR')}원`}
-                    <span className="ml-2 text-xs font-normal text-slate-500">
-                      {row.payable_base_approved ? '승인 공급가' : '검수 전 계산액'}
-                    </span>
-                  </p>
+                  {row.operation_status !== 'CANCELED' && (
+                    <p className="mt-2 text-sm font-semibold">
+                      기본 금액 (본인 지급분){' '}
+                      {row.payable_base_amount == null
+                        ? '미확정'
+                        : `${row.payable_base_amount.toLocaleString('ko-KR')}원`}
+                      <span className="ml-2 text-xs font-normal text-slate-500">
+                        {row.payable_base_approved ? '승인 공급가' : '검수 전 계산액'}
+                      </span>
+                    </p>
+                  )}
                   <p className="mt-1 text-xs text-slate-400">
                     {row.use_no}
                     {row.entered_as === 'PROXY' ? ' · 대리 입력' : ''}

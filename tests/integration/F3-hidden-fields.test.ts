@@ -63,7 +63,7 @@ it('숨김으로 변경해도 미완성 추가비 행은 편집·삭제 가능�
   );
 });
 
-it('숨긴 헤더·회차 상세의 기존 값과 0·false도 표시하고 서버에 보존한다', async () => {
+it('숨긴 헤더·회차의 기존 값과 0은 표시하고 기본 false는 숨기되 서버에 보존한다', async () => {
   const s = await setupScenario(database().db);
   const use = await createUse(s.driverCtx, {
     ...s.input,
@@ -111,8 +111,8 @@ it('숨긴 헤더·회차 상세의 기존 값과 0·false도 표시하고 서�
       children: h(TripFields, { trips: form.trips, recent: [], onChange: () => {} }),
     }),
   );
-  for (const label of ['상세 입력', '경유', '수량', '시간', '공차회차', '비고'])
-    expect(markup).toContain(label);
+  for (const label of ['상세 입력', '경유', '수량', '시간', '비고']) expect(markup).toContain(label);
+  expect(markup).not.toContain('공차회차');
   expect(markup).toContain('경유지');
   expect(markup).toContain('value="0.000"');
   expect(markup).toContain('<details open=""');

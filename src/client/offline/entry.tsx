@@ -54,7 +54,10 @@ function OfflineApp() {
   return (
     <>
       <header className="flex items-center justify-between gap-3 border-b bg-white p-4">
-        <a className="font-bold" href={mode === 'driver' ? '/d' : '/m/uses/new'}>
+        <a
+          className="inline-flex min-h-11 min-w-11 items-center font-bold"
+          href={mode === 'driver' ? '/d' : '/m/uses/new'}
+        >
           차량 사용·정산
         </a>
         <LogoutButton />

@@ -2,6 +2,7 @@ import { ApiError, api, mutate, upload } from '../api';
 import type { UseDetail, User } from '../types';
 import { activeUser, listDrafts, putDraft, type Draft } from './store';
 import { fromUse, toInput } from '../../components/use-form/model';
+import { evidenceInstruction } from '../../components/use-form/evidence-policy';
 import { bindCreatedRows } from './create-recovery';
 import { reconcileServer, rememberServer } from './reconcile';
 
@@ -152,10 +153,11 @@ export async function sendDraft(
       assertOwner();
       rememberServer(draft, await io.get<UseDetail>(`/api/uses/${draft.serverId}`));
     }
-    draft.form = fromUse(draft.server!, draft.mode);
+    draft.form = fromUse(draft.server!, draft.mode, bindCreatedRows(draft.form, draft.form, draft.server!));
     draft.phase = 'saved';
     draft.error = undefined;
     draft.inputError = false;
+    draft.inputErrors = undefined;
     // The authoritative detail now contains all uploaded files. Remove queued
     // blobs/metadata so subsequent edits use authorized server thumbnails.
     draft.uploads = [];
@@ -167,6 +169,17 @@ export async function sendDraft(
       // outcomes need the original POST retained while the user corrects inputs.
       if (!draft.serverId && error.code === 'VALIDATION_FAILED') draft.pendingCreate = undefined;
       if (error.code === 'SUBMIT_BLOCKED') {
+        const details = error.details as
+          { fields?: { target: string; reason: string }[]; evidence_policy?: string } | undefined;
+        draft.inputErrors =
+          details?.fields?.filter(
+            (field) => typeof field.target === 'string' && typeof field.reason === 'string',
+          ) ?? [];
+        if (details?.evidence_policy) {
+          draft.error = evidenceInstruction(details.evidence_policy);
+          draft.inputErrors.push({ target: 'evidence', reason: draft.error });
+        }
+        if (draft.server) draft.form = bindCreatedRows(draft.form, draft.form, draft.server);
         draft.phase = 'editing';
         draft.inputError = true;
         draft.intent = undefined;

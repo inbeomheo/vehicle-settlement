@@ -1,4 +1,5 @@
 'use client';
+import { evidenceInstruction } from '@/components/use-form/evidence-policy';
 /* Authorized originals and local blob previews must bypass Next image optimization. */
 /* eslint-disable @next/next/no-img-element */
 import { useEffect, useState } from 'react';
@@ -107,11 +108,7 @@ export function EvidenceEditor({
         </p>
       )}
       <p className="mb-4 text-sm text-slate-600">
-        {policy === 'PHOTO_OR_ALTERNATIVE'
-          ? '촬영 금지 현장은 사진 대신 전표번호를 입력할 수 있습니다.'
-          : policy === 'PHOTO_REQUIRED'
-            ? '사진·인수증·계근표·확인서 파일 중 하나를 첨부해야 제출할 수 있습니다.'
-            : '필요한 사진이나 서류를 첨부하세요.'}
+        {evidenceInstruction(policy) || '필요한 사진이나 서류를 첨부하세요.'}
       </p>
       <div className="grid gap-3">
         {serverFiles.map((f) => (

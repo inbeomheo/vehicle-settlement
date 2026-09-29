@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, ApiError, mutate } from '@/client/api';
 import {
   type Mode,
@@ -16,6 +16,8 @@ import {
   cachedValue,
   getDraft,
   listDrafts,
+  isUnsent,
+  shouldPersistDraft,
   putDraft,
   removeDraft,
   OFFLINE_EVENT,
@@ -40,9 +42,51 @@ import {
   newCharge,
   resetBaseRates,
   toInput,
-  validate,
+  validateFields,
+  type FormError,
   type FormValues,
 } from './model';
+
+function navigateAfterSubmit(value: Draft) {
+  if (
+    value.mode === 'driver' &&
+    value.phase === 'saved' &&
+    value.intent === 'submit' &&
+    value.serverId &&
+    value.server &&
+    ['SUBMITTED', 'APPROVED'].includes(value.server.review_status)
+  )
+    location.assign(`/d/uses/${value.serverId}?submitted=1`);
+}
+
+function scrollTo(target: string) {
+  const normalized = target.replace(/^use\./, '');
+  const candidates = Array.from(document.querySelectorAll<HTMLElement>('[data-fix-target]'));
+  const element =
+    candidates.find((e) => e.dataset.fixTarget === normalized) ??
+    candidates.find((e) => normalized.startsWith(`${e.dataset.fixTarget}.`)) ??
+    document.getElementById('form-errors');
+  let disclosure = element?.closest('details');
+  while (disclosure) {
+    disclosure.open = true;
+    disclosure = disclosure.parentElement?.closest('details');
+  }
+  const trip = normalized.match(/^trip:(\d+)/);
+  if (trip) window.dispatchEvent(new CustomEvent('vehicle-expand-trip', { detail: Number(trip[1]) - 1 }));
+  requestAnimationFrame(() => {
+    element?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    element?.querySelector<HTMLElement>('input,select,textarea,button')?.focus({ preventScroll: true });
+  });
+}
+function scrollToFirstError(errors: FormError[]) {
+  const first = Array.from(document.querySelectorAll<HTMLElement>('[data-fix-target]')).find((element) =>
+    errors.some((error) => error.target === element.dataset.fixTarget),
+  );
+  scrollTo(first?.dataset.fixTarget ?? errors[0].target);
+}
+function normalizedInput(value: unknown) {
+  return JSON.stringify(value, (_key, item: unknown) => (typeof item === 'string' ? item.trim() : item));
+}
 
 export function UseFormPage({ mode, useId }: { mode: Mode; useId?: string }) {
   const { data, error, authRequired, retry } = useBootstrap(mode);
@@ -75,8 +119,10 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
   const current = useRef<Draft | undefined>(undefined);
   const [lookups, setLookups] = useState(boot.lookups);
   const [recent, setRecent] = useState<UseDetail[]>([]);
+  const [resumable, setResumable] = useState<Draft[]>([]);
+  const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState('');
-  const [validation, setValidation] = useState<string[]>([]);
+  const [validation, setValidation] = useState<FormError[]>([]);
   const [localSaved, setLocalSaved] = useState(false);
   const [busy, setBusy] = useState(false);
   const [evidenceBusy, setEvidenceBusy] = useState(false);
@@ -87,9 +133,33 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
   const [cancelConfirm, setCancelConfirm] = useState(false);
   const [evidenceValidation, setEvidenceValidation] = useState('');
   const persistence = useRef<Promise<void>>(Promise.resolve());
-  current.current = draft;
+  const inputErrors = draft?.inputError ? draft.inputErrors : undefined;
   useEffect(() => {
-    if (settings.ready) setDraft((value) => (value ? revealDraftFields(value, settings.modes) : value));
+    if (!inputErrors?.length) return;
+    const frame = requestAnimationFrame(() => scrollToFirstError(inputErrors));
+    return () => cancelAnimationFrame(frame);
+  }, [inputErrors]);
+  current.current = draft;
+  const persist = useCallback(
+    async (value: Draft) => {
+      await putDraft(value);
+      // Reload restores this explicitly addressed draft; a fresh /d/new remains a new form.
+      if (!useId && current.current?.id === value.id && !new URLSearchParams(location.search).has('draft')) {
+        const url = new URL(location.href);
+        url.searchParams.set('draft', value.id);
+        history.replaceState(history.state, '', url);
+      }
+    },
+    [useId],
+  );
+
+  useEffect(() => {
+    if (draft && settings.ready)
+      setDraft((value) =>
+        value && value.id === draft.id && value.form.project_id === draft.form.project_id
+          ? revealDraftFields(value, settings.modes)
+          : value,
+      );
   }, [draft, settings.ready, settings.modes]);
   useEffect(() => {
     let alive = true;
@@ -97,12 +167,16 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
       try {
         const params = new URLSearchParams(location.search);
         const localId = params.get('draft');
+        const stored = await listDrafts(boot.user.id);
+        if (alive) setResumable(stored.filter((item) => item.mode === mode && isUnsent(item)));
         let found = localId
           ? await getDraft(boot.user.id, localId)
-          : (await listDrafts(boot.user.id)).find(
-              (d) => d.mode === mode && (useId ? d.serverId === useId : !d.serverId) && d.phase !== 'saved',
-            );
-        if (found && found.mode !== mode) found = undefined;
+          : useId || mode === 'manager'
+            ? stored.find(
+                (d) => d.mode === mode && (useId ? d.serverId === useId : !d.serverId) && d.phase !== 'saved',
+              )
+            : undefined;
+        if (found && (found.mode !== mode || (useId && found.serverId !== useId))) found = undefined;
         if (!found) {
           let server: UseDetail | undefined;
           if (useId) {
@@ -120,11 +194,16 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
             userId: boot.user.id,
             mode,
             form: server
-              ? fromUse(server, mode)
+              ? fromUse(
+                  server,
+                  mode,
+                  stored.find((item) => item.serverId === server.id && item.version === server.version)?.form,
+                )
               : initialValues(boot.lookups, params.get('project') ?? boot.recent.rows[0]?.project_id),
             uploads: [],
             updatedAt: Date.now(),
             phase: server ? 'saved' : 'editing',
+            hasUserInput: !!server,
             server,
             lastSaved: server,
             serverId: server?.id,
@@ -142,7 +221,15 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
         }
         if (alive) {
           setDraft(found);
-          setLocalSaved(true);
+          setLocalSaved(shouldPersistDraft(found));
+          if (
+            params.get('submitted') === '1' &&
+            found.server &&
+            ['SUBMITTED', 'APPROVED'].includes(found.server.review_status)
+          ) {
+            setSubmitted(true);
+            window.scrollTo({ top: 0, behavior: 'instant' });
+          }
         }
         const details = await Promise.all(
           boot.recent.rows.slice(0, 5).map(async (row) => {
@@ -168,10 +255,10 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
     };
   }, [boot, mode, useId]);
   useEffect(() => {
-    if (!draft || draft.phase !== 'editing') return;
+    if (!draft || draft.phase !== 'editing' || !shouldPersistDraft(draft)) return;
     setLocalSaved(false);
     const timer = window.setTimeout(() => {
-      persistence.current = persistence.current.then(() => putDraft(draft));
+      persistence.current = persistence.current.then(() => persist(draft));
       void persistence.current
         .then(() => setLocalSaved(true))
         .catch(() =>
@@ -181,12 +268,12 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
         );
     }, 450);
     return () => clearTimeout(timer);
-  }, [draft]);
+  }, [draft, persist]);
   useEffect(() => {
     const flush = () => {
-      if (current.current?.phase === 'editing') {
+      if (current.current?.phase === 'editing' && shouldPersistDraft(current.current)) {
         const value = current.current;
-        persistence.current = persistence.current.then(() => putDraft(value));
+        persistence.current = persistence.current.then(() => persist(value));
       }
     };
     const flushRequested = (event: Event) => {
@@ -203,10 +290,13 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
           setLocalSaved(true);
           if (next.phase === 'saved') setEditApproved(false);
           setDraft(
-            next.phase === 'saved' && next.server ? { ...next, form: fromUse(next.server, mode) } : next,
+            next.phase === 'saved' && next.server
+              ? { ...next, form: fromUse(next.server, mode, next.form) }
+              : next,
           );
           if (next.phase === 'saved' && mode === 'manager' && next.serverId)
             location.assign(`/m/uses/${next.serverId}`);
+          navigateAfterSubmit(next);
         }
       });
     };
@@ -232,7 +322,7 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
       clearInterval(periodicSave);
       document.removeEventListener('visibilitychange', onHidden);
     };
-  }, [boot.user.id, mode]);
+  }, [boot.user.id, mode, persist]);
   const date = draft?.form.use_date;
   useEffect(() => {
     if (!date) return;
@@ -269,13 +359,14 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
         submitRequest: undefined,
         error: undefined,
         inputError: false,
+        inputErrors: undefined,
       };
     });
     setValidation([]);
     setEvidenceValidation('');
   }
 
-  function change(patch: Partial<FormValues>) {
+  function change(patch: Partial<FormValues>, automatic = false) {
     const rateContextChanged = [
       'driver_id',
       'vehicle_id',
@@ -285,6 +376,14 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
       'customer_counterparty_id',
     ].some((key) => key in patch && patch[key as keyof FormValues] !== draft?.form[key as keyof FormValues]);
     edit((value) => ({
+      hasUserInput:
+        value.hasUserInput !== false ||
+        (!automatic &&
+          Object.entries(patch).some(([key, next]) =>
+            typeof next === 'string'
+              ? !!next.trim() && next !== value.form[key as keyof FormValues]
+              : normalizedInput(next) !== normalizedInput(value.form[key as keyof FormValues]),
+          )),
       form: {
         ...value.form,
         ...patch,
@@ -304,7 +403,7 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
     setError('');
     try {
       const modes = intent === 'submit' ? await settings.refresh() : settings.modes;
-      const errors = validate(draft.form, intent, modes);
+      const errors = validateFields(draft.form, intent, modes);
       const missingEvidence =
         intent === 'submit'
           ? evidenceError(
@@ -314,21 +413,18 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
             )
           : '';
       setEvidenceValidation(missingEvidence);
+      if (missingEvidence) errors.push({ target: 'evidence', reason: missingEvidence });
       setValidation(errors);
-      if (missingEvidence) {
-        scrollTo('evidence');
-        return;
-      }
       if (errors.length) {
-        requestAnimationFrame(() =>
-          document.getElementById('form-errors')?.scrollIntoView({ block: 'center' }),
-        );
+        requestAnimationFrame(() => scrollToFirstError(errors));
         return;
       }
       const queued: Draft = {
         ...draft,
+        hasUserInput: true,
         intent,
         inputError: false,
+        inputErrors: undefined,
         phase: 'queued',
         updatedAt: Date.now(),
         request: {
@@ -343,7 +439,7 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
         error: undefined,
       };
       await persistence.current;
-      await putDraft(queued);
+      await persist(queued);
       setDraft(queued);
       current.current = queued;
       await syncQueue(boot.user.id);
@@ -353,10 +449,11 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
         if (result.phase === 'saved') setEditApproved(false);
         setDraft(
           result.phase === 'saved' && result.server
-            ? { ...result, form: fromUse(result.server, mode) }
+            ? { ...result, form: fromUse(result.server, mode, result.form) }
             : result,
         );
         if (result.phase === 'saved' && mode === 'manager') location.assign(`/m/uses/${result.serverId}`);
+        navigateAfterSubmit(result);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : '저장하지 못했습니다.');
@@ -476,6 +573,7 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
   }
   if (!draft) return <p role={error ? 'alert' : 'status'}>{error || '기기 초안을 확인하고 있습니다…'}</p>;
   const form = draft.form;
+  const fieldErrors = [...validation, ...(inputErrors ?? [])];
   const revealed = new Set(
     (settings.ready ? revealDraftFields(draft, settings.modes) : draft).revealedFields,
   );
@@ -513,32 +611,15 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
               : reviewLabels[draft.server.review_status]
             : draft.savedRequest
               ? '서버 저장(작성중) · 전송 처리 중'
-              : localSaved
-                ? mode === 'manager'
-                  ? '이 기기에 임시저장됨'
-                  : '휴대폰에 임시저장됨'
-                : mode === 'manager'
-                  ? '이 기기에 저장 중…'
-                  : '휴대폰에 저장 중…';
-  function scrollTo(target: string) {
-    const normalized = target.replace(/^use\./, '');
-    const candidates = Array.from(document.querySelectorAll<HTMLElement>('[data-fix-target]'));
-    const element =
-      candidates.find((e) => e.dataset.fixTarget === normalized) ??
-      candidates.find((e) => normalized.startsWith(`${e.dataset.fixTarget}.`)) ??
-      document.getElementById('form-errors');
-    let disclosure = element?.closest('details');
-    while (disclosure) {
-      disclosure.open = true;
-      disclosure = disclosure.parentElement?.closest('details');
-    }
-    const trip = normalized.match(/^trip:(\d+)/);
-    if (trip) window.dispatchEvent(new CustomEvent('vehicle-expand-trip', { detail: Number(trip[1]) - 1 }));
-    requestAnimationFrame(() => {
-      element?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      element?.querySelector<HTMLElement>('input,select,textarea,button')?.focus({ preventScroll: true });
-    });
-  }
+              : !shouldPersistDraft(draft)
+                ? '새 운행을 작성하세요'
+                : localSaved
+                  ? mode === 'manager'
+                    ? '이 기기에 임시저장됨'
+                    : '휴대폰에 임시저장됨'
+                  : mode === 'manager'
+                    ? '이 기기에 저장 중…'
+                    : '휴대폰에 저장 중…';
   const options = (
     rows: { id: string; name?: string; plate_no?: string }[],
     selected: string,
@@ -557,7 +638,7 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
     </>
   );
   return (
-    <FormContexts fixes={fixes} modes={settings.modes} revealed={revealed}>
+    <FormContexts fixes={fixes} modes={settings.modes} revealed={revealed} errors={fieldErrors}>
       <div className="mx-auto max-w-3xl space-y-5 pb-8">
         <div>
           <p className="text-sm font-semibold text-blue-700">
@@ -566,6 +647,11 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
           <h1 className="mt-1 text-2xl font-bold">
             {mode === 'manager' ? '대리 입력' : (draft.server?.use_no ?? '운행 등록')}
           </h1>
+          {submitted && (
+            <p aria-live="polite" className="mt-3 rounded-xl bg-green-50 p-3 font-semibold text-green-900">
+              담당자에게 제출했습니다
+            </p>
+          )}
           <p role="status" className="mt-3 rounded-xl bg-blue-50 p-3 font-semibold text-blue-900">
             {status}
             {!online && ' · 오프라인'}
@@ -578,6 +664,30 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
             </p>
           )}
         </div>
+        {mode === 'driver' && !useId && resumable.some((item) => item.id !== draft.id) && (
+          <details className="rounded-xl border border-blue-200 bg-blue-50 p-4">
+            <summary className="min-h-11 cursor-pointer py-2 font-semibold text-blue-900">
+              작성 중이던 운행 {resumable.filter((item) => item.id !== draft.id).length}건 이어서 쓰기
+            </summary>
+            <ul className="mt-2 grid gap-2">
+              {resumable
+                .filter((item) => item.id !== draft.id)
+                .map((item) => (
+                  <li key={item.id}>
+                    <a
+                      className={`${button} w-full justify-start`}
+                      href={`${item.serverId ? `/d/uses/${item.serverId}` : '/d/new'}?draft=${item.id}`}
+                    >
+                      {item.form.use_date} ·{' '}
+                      {lookups.projects.find((project) => project.id === item.form.project_id)?.name ??
+                        '현장 선택 전'}{' '}
+                      · {item.form.trips[0]?.origin || '출발 입력 전'}
+                    </a>
+                  </li>
+                ))}
+            </ul>
+          </details>
+        )}
         {draft.server?.entered_as === 'PROXY' && mode === 'driver' && (
           <Section title="대리 입력 내용 확인">
             <p className="mb-3 text-sm">
@@ -637,15 +747,15 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
             </ul>
           </section>
         )}
-        {(error || draft.error || validation.length > 0) && (
+        {(error || draft.error || fieldErrors.length > 0) && (
           <div
             id="form-errors"
             role="alert"
             className="scroll-mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-red-800"
           >
             <p>{error || draft.error}</p>
-            {validation.map((v, i) => (
-              <p key={i}>{v}</p>
+            {fieldErrors.map((v, i) => (
+              <p key={i}>{v.reason}</p>
             ))}
           </div>
         )}
@@ -1025,7 +1135,7 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
                   <Field
                     label="전체 운행 상태"
                     target="operation_status"
-                    hasValue={!!draft.server || form.operation_status !== 'COMPLETED'}
+                    hasValue={form.operation_status !== 'COMPLETED'}
                   >
                     <select
                       className={control}
@@ -1054,12 +1164,13 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
               <ChargeFields
                 form={displayForm}
                 mode={mode}
-                onChange={(charges) => change({ charges })}
+                onChange={(charges, automatic) => change({ charges }, automatic)}
                 userId={boot.user.id}
                 saved={draft.server}
               />
               {(settings.modes.notes !== 'HIDDEN' ||
                 revealed.has('notes') ||
+                fieldErrors.some((error) => error.target === 'notes') ||
                 form.notes ||
                 fixes.some((fix) => ['notes', 'use.notes'].includes(fix.target))) && (
                 <Section title="특이사항">
@@ -1075,7 +1186,9 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
               )}
             </fieldset>
             <EvidenceEditor
-              validationError={evidenceValidation}
+              validationError={
+                evidenceValidation || inputErrors?.find((error) => error.target === 'evidence')?.reason
+              }
               pending={draft.uploads}
               existing={draft.server?.evidence ?? []}
               policy={lookups.projects.find((p) => p.id === form.project_id)?.evidence_policy}

@@ -7,9 +7,11 @@ import {
   useId,
   type ReactElement,
   type ReactNode,
+  type CSSProperties,
 } from 'react';
 import { defaultFieldModes, fieldKeyForTarget, type FieldModes } from '@/shared/form-settings';
 import { hasFieldValue } from './visibility';
+import type { FormError } from './model';
 export { hasFieldValue } from './visibility';
 export const SettingsContext = createContext<FieldModes>(defaultFieldModes('manager'));
 export const RevealedFieldsContext = createContext<ReadonlySet<string>>(new Set());
@@ -20,22 +22,25 @@ const buttonBase =
 export const button = `${buttonBase} border-slate-300 bg-white`;
 export const primary = `${buttonBase} border-blue-700 bg-blue-700 text-white`;
 export const FixContext = createContext<{ target: string; message: string }[]>([]);
+export const ValidationContext = createContext<FormError[]>([]);
 export function FormContexts({
   fixes,
   modes,
   revealed,
+  errors = [],
   children,
 }: {
   fixes: { target: string; message: string }[];
   modes: FieldModes;
   revealed?: ReadonlySet<string>;
+  errors?: FormError[];
   children: ReactNode;
 }) {
   return (
     <SettingsContext.Provider value={modes}>
       <FixContext.Provider value={fixes}>
         <RevealedFieldsContext.Provider value={revealed ?? new Set()}>
-          {children}
+          <ValidationContext.Provider value={errors}>{children}</ValidationContext.Provider>
         </RevealedFieldsContext.Provider>
       </FixContext.Provider>
     </SettingsContext.Provider>
@@ -59,6 +64,8 @@ export function Field({
   revealTarget?: string;
 }) {
   const inputId = useId();
+  const errors = useContext(ValidationContext).filter((error) => error.target === target);
+  const errorId = `${inputId}-error`;
   const fixes = useContext(FixContext).filter(
     (f) => target && (f.target === target || f.target === `use.${target}`),
   );
@@ -69,6 +76,7 @@ export function Field({
   const input = isValidElement<{ value?: unknown; checked?: boolean }>(children) ? children : undefined;
   if (
     hidden &&
+    !errors.length &&
     !fixes.length &&
     !(revealTarget && revealed.has(revealTarget)) &&
     !(hasValue ?? hasFieldValue(input?.props.value ?? input?.props.checked))
@@ -82,11 +90,36 @@ export function Field({
         {required && <span className="ml-2 text-red-700">필수</span>}
       </label>
       {isValidElement(children)
-        ? cloneElement(children as ReactElement<{ id?: string; 'aria-required'?: boolean }>, {
-            id: inputId,
-            ...(required ? { 'aria-required': true } : {}),
-          })
+        ? cloneElement(
+            children as ReactElement<{
+              id?: string;
+              'aria-required'?: boolean;
+              'aria-invalid'?: boolean;
+              'aria-describedby'?: string;
+              style?: CSSProperties;
+            }>,
+            {
+              id: inputId,
+              ...(required ? { 'aria-required': true } : {}),
+              ...(errors.length
+                ? {
+                    'aria-invalid': true,
+                    'aria-describedby': errorId,
+                    style: {
+                      ...(children as ReactElement<{ style?: CSSProperties }>).props.style,
+                      borderColor: '#b91c1c',
+                      outlineColor: '#b91c1c',
+                    },
+                  }
+                : {}),
+            },
+          )
         : children}
+      {errors.length > 0 && (
+        <p id={errorId} className="mt-2 font-semibold text-red-700">
+          {errors.map((error) => error.reason).join(' ')}
+        </p>
+      )}
       {hidden && <HiddenFieldNotice />}
       {fixes.map((f, i) => (
         <p key={i} className="mt-2 rounded-lg bg-amber-50 p-2 text-sm font-semibold text-amber-900">
@@ -105,6 +138,9 @@ export function Section({
   children: ReactNode;
   target?: string;
 }) {
+  const errors = useContext(ValidationContext).filter(
+    (error) => error.target === target && target !== 'evidence',
+  );
   const fixes = useContext(FixContext).filter(
     (f) =>
       target &&
@@ -115,9 +151,14 @@ export function Section({
   return (
     <section
       data-fix-target={target}
-      className="scroll-mt-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6"
+      className={`scroll-mt-6 rounded-2xl border bg-white p-4 shadow-sm sm:p-6 ${errors.length ? 'border-red-700' : 'border-slate-200'}`}
     >
       <h2 className="mb-5 text-lg font-bold">{title}</h2>
+      {errors.map((error, index) => (
+        <p key={index} className="mb-4 font-semibold text-red-700">
+          {error.reason}
+        </p>
+      ))}
       {fixes.map((f, i) => (
         <p key={i} className="mb-4 rounded-xl bg-amber-50 p-3 text-amber-900">
           보완 요청: {f.message}

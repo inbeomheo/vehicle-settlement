@@ -111,7 +111,7 @@ test('증빙 필수 검사는 편집 유지·영역 강조, 서버 SUBMIT_BLOCKE
   await fillTrip(page);
   await page.getByRole('button', { name: '담당자에게 제출', exact: true }).click();
   const evidence = page.locator('[data-fix-target="evidence"]');
-  await expect(evidence.getByRole('alert')).toHaveText('사진 또는 인수증을 1개 이상 첨부하세요');
+  await expect(evidence.getByRole('alert')).toHaveText('사진·인수증·계근표·확인서 중 1개 이상을 등록하세요.');
   await expect(page.getByLabel('1회차 출발', { exact: true })).toBeEnabled();
   expect(
     await database.db.select().from(vehicleUses).where(eq(vehicleUses.driver_id, s.driver.id)),
@@ -196,6 +196,9 @@ test('PER_TRIP 청구수량 안내·필수 검사', async ({ page }) => {
   await login(page, s.driverUser.login_id);
   await fillTrip(page);
   await expect(page.getByLabel('과금 단위', { exact: true })).toHaveValue('PER_TRIP');
+  await expect(page.getByLabel('청구수량', { exact: true })).toHaveValue('1');
+  await expect(page.getByText('운행 1회 기준 자동 입력, 수정 가능', { exact: true })).toBeVisible();
+  await page.getByLabel('청구수량', { exact: true }).fill('');
   await expect(page.getByText('청구 수량을 입력하세요', { exact: true })).toBeVisible();
   await expect(page.getByText('기본운임 단가 미확정', { exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: '담당자에게 제출', exact: true }).click();
@@ -247,7 +250,7 @@ test('오프라인 제출 대기·로그아웃 N건 확인 취소/승인·정적
   expect(dismissed.message()).toBe('전송되지 않은 1건이 있습니다. 로그아웃하면 이 기기에서 볼 수 없습니다');
   await dismissed.dismiss();
   await expect(page.getByRole('button', { name: '로그아웃', exact: true })).toBeEnabled();
-  await expect(page).toHaveURL(/\/d\/new$/);
+  await expect(page).toHaveURL(/\/d\/new\?draft=[a-f0-9-]+$/);
   const secondDialog = page.waitForEvent('dialog');
   await page.getByRole('button', { name: '로그아웃', exact: true }).click();
   await (await secondDialog).accept();
