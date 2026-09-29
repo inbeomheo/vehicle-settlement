@@ -1,0 +1,8 @@
+node_modules
+.next
+.data
+storage
+drizzle
+package-lock.json
+docs
+graft

@@ -4,6 +4,7 @@
 원 기획서 `docs/spec/기획서.txt`, 구현 지시서 `docs/spec/구현지시서.md`.
 
 ## 규칙
+
 - 스택·디렉터리·API 형식·데이터 모델은 DESIGN.md 를 따른다. 벗어나야 하면 코디네이터에게 질문.
 - 서버가 권한·금액·상태를 최종 판단한다. 클라이언트 값 신뢰 금지.
 - 금액은 정수 원, 수량은 decimal.js. float 금액 계산 금지.
@@ -12,3 +13,4 @@
 - 완료 전: `npm run typecheck && npm run lint && npm test`.
 - 파일 소유 범위를 지키고, 공용 파일 변경은 최소화 후 보고.
 - 비밀값·로컬 DB 데이터(`.data/`, `storage/`)는 커밋하지 않는다.
+- 코드 스타일: Prettier(`npm run format`) 로 포맷한다. 한 줄에 여러 문장·컴포넌트를 몰아 쓰지 말고, 읽기 쉬운 함수 단위로 나눈다. 커밋 전 `npm run format:check` 통과.

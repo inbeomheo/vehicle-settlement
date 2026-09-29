@@ -1,10 +1,78 @@
 'use client';
 import { useState, type FormEvent } from 'react';
 export function AuthForm({ token }: { token?: string }) {
-  const [busy, setBusy] = useState(false); const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
   async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); setBusy(true); setError(''); const form = new FormData(event.currentTarget);
-    try { const response = await fetch(token ? `/api/invites/${encodeURIComponent(token)}/accept` : '/api/auth/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ login_id: form.get('login_id'), password: form.get('password') }) }); const result = await response.json(); if (!response.ok) { setError(result.error?.message ?? '요청을 처리하지 못했습니다.'); return; } window.location.assign(result.data.role === 'DRIVER' ? '/d' : '/m'); } catch { setError('연결 상태를 확인한 후 다시 시도하세요.'); } finally { setBusy(false); }
+    event.preventDefault();
+    setBusy(true);
+    setError('');
+    const form = new FormData(event.currentTarget);
+    try {
+      const response = await fetch(
+        token ? `/api/invites/${encodeURIComponent(token)}/accept` : '/api/auth/login',
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ login_id: form.get('login_id'), password: form.get('password') }),
+        },
+      );
+      const result = await response.json();
+      if (!response.ok) {
+        setError(result.error?.message ?? '요청을 처리하지 못했습니다.');
+        return;
+      }
+      window.location.assign(result.data.role === 'DRIVER' ? '/d' : '/m');
+    } catch {
+      setError('연결 상태를 확인한 후 다시 시도하세요.');
+    } finally {
+      setBusy(false);
+    }
   }
-  return <main className="mx-auto flex min-h-dvh max-w-md items-center px-6 py-12"><section className="w-full rounded-2xl border border-slate-200 bg-white p-8 shadow-sm"><p className="mb-2 text-sm font-semibold text-blue-700">차량 사용·정산</p><h1 className="mb-3 text-2xl font-bold">{token ? '초대 수락' : '로그인'}</h1><p className="mb-8 text-sm text-slate-600">{token ? '사용할 아이디와 비밀번호를 등록하세요.' : '배정된 현장의 사용 내역을 확인하세요.'}</p><form onSubmit={submit} className="space-y-5"><label className="block">아이디<input className="mt-2 block min-h-12 w-full rounded-lg border border-slate-300 px-3" name="login_id" autoComplete="username" required maxLength={100} /></label><label className="block">비밀번호<input className="mt-2 block min-h-12 w-full rounded-lg border border-slate-300 px-3" name="password" type="password" autoComplete={token ? 'new-password' : 'current-password'} minLength={token ? 8 : 1} maxLength={72} required /></label>{error && <p role="alert" className="text-sm text-red-700">{error}</p>}<button disabled={busy} className="min-h-12 w-full rounded-lg bg-blue-700 font-bold text-white disabled:opacity-50">{busy ? '처리 중…' : token ? '가입하고 시작하기' : '로그인'}</button></form></section></main>;
+  return (
+    <main className="mx-auto flex min-h-dvh max-w-md items-center px-6 py-12">
+      <section className="w-full rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
+        <p className="mb-2 text-sm font-semibold text-blue-700">차량 사용·정산</p>
+        <h1 className="mb-3 text-2xl font-bold">{token ? '초대 수락' : '로그인'}</h1>
+        <p className="mb-8 text-sm text-slate-600">
+          {token ? '사용할 아이디와 비밀번호를 등록하세요.' : '배정된 현장의 사용 내역을 확인하세요.'}
+        </p>
+        <form onSubmit={submit} className="space-y-5">
+          <label className="block">
+            아이디
+            <input
+              className="mt-2 block min-h-12 w-full rounded-lg border border-slate-300 px-3"
+              name="login_id"
+              autoComplete="username"
+              required
+              maxLength={100}
+            />
+          </label>
+          <label className="block">
+            비밀번호
+            <input
+              className="mt-2 block min-h-12 w-full rounded-lg border border-slate-300 px-3"
+              name="password"
+              type="password"
+              autoComplete={token ? 'new-password' : 'current-password'}
+              minLength={token ? 8 : 1}
+              maxLength={72}
+              required
+            />
+          </label>
+          {error && (
+            <p role="alert" className="text-sm text-red-700">
+              {error}
+            </p>
+          )}
+          <button
+            disabled={busy}
+            className="min-h-12 w-full rounded-lg bg-blue-700 font-bold text-white disabled:opacity-50"
+          >
+            {busy ? '처리 중…' : token ? '가입하고 시작하기' : '로그인'}
+          </button>
+        </form>
+      </section>
+    </main>
+  );
 }
