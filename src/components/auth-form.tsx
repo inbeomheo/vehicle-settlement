@@ -84,6 +84,14 @@ export function AuthForm({ token }: { token?: string }) {
             {busy ? '처리 중…' : token ? '가입하고 시작하기' : '로그인'}
           </button>
         </form>
+        <p className="mt-6 text-center">
+          <a
+            href="/manual"
+            className="inline-flex min-h-11 items-center font-semibold text-slate-700 underline underline-offset-4"
+          >
+            처음이신가요? 사용 설명서 보기
+          </a>
+        </p>
       </section>
     </main>
   );

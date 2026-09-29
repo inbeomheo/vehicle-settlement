@@ -183,7 +183,7 @@ export function DriverDashboard() {
             >
               <span className="min-w-0">
                 <span className="block font-bold text-orange-700">보완 요청</span>
-                <span className="block truncate text-[0.9375rem]">
+                <span className="line-clamp-2 block text-[0.9375rem] break-keep">
                   {koreanDate(row.use_date, false)} · {row.fix_message ?? String(row.snapshot.project_name)}
                 </span>
               </span>
@@ -347,6 +347,14 @@ export function DriverDashboard() {
           </button>
         )}
       </section>
+      <p className="pt-2 text-center">
+        <a
+          href="/manual#driver"
+          className="inline-flex min-h-12 items-center font-semibold text-slate-700 underline underline-offset-4"
+        >
+          쓰는 법이 궁금하면 사용 설명서
+        </a>
+      </p>
     </div>
   );
 }

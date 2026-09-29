@@ -155,3 +155,24 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* 사용 설명서(/manual) 인쇄·PDF: 고정 막대를 풀고 단계가 페이지 사이에서 잘리지 않게 한다. */
+@media print {
+  .manual-bar {
+    position: static;
+  }
+  .manual-bar nav,
+  .manual-bar a[href$='.pdf'] {
+    display: none;
+  }
+  .manual-step,
+  figure {
+    break-inside: avoid;
+  }
+  h1,
+  h2,
+  h3,
+  h4 {
+    break-after: avoid;
+  }
+}

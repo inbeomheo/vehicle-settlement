@@ -137,7 +137,16 @@ export function ManagerNavigation({
           </div>
           <p className="font-semibold">{userName}</p>
           <p className="mb-2 text-sm text-slate-400">{roleLabel}</p>
-          <LogoutButton tone="dark" />
+          <div className="flex flex-wrap items-center gap-1">
+            <a
+              href="/manual"
+              target="_blank"
+              className="inline-flex min-h-11 items-center rounded-md px-3 text-sm font-semibold text-slate-200 hover:bg-white/10"
+            >
+              사용 설명서
+            </a>
+            <LogoutButton tone="dark" />
+          </div>
         </div>
       </aside>
 
@@ -177,7 +186,16 @@ export function ManagerNavigation({
               <span className="text-sm text-slate-300">
                 {userName} · {roleLabel}
               </span>
-              <LogoutButton tone="dark" />
+              <span className="flex items-center gap-1">
+                <a
+                  href="/manual"
+                  target="_blank"
+                  className="inline-flex min-h-11 items-center rounded-md px-3 text-sm font-semibold text-slate-200 hover:bg-white/10"
+                >
+                  사용 설명서
+                </a>
+                <LogoutButton tone="dark" />
+              </span>
             </div>
           </nav>
         )}
