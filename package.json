@@ -26,7 +26,8 @@
     "prebuild": "npm run pwa:build",
     "backup": "tsx scripts/backup.ts",
     "restore": "tsx scripts/restore.ts",
-    "restore:verify": "tsx scripts/restore-verify.ts"
+    "restore:verify": "tsx scripts/restore-verify.ts",
+    "db:deploy": "tsx scripts/db-migrate.ts"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

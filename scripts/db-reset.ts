@@ -5,7 +5,8 @@ async function main() {
   if (
     !['localhost', '127.0.0.1'].includes(url.hostname) ||
     url.pathname !== '/vehicle_app' ||
-    process.env.NODE_ENV === 'production'
+    process.env.NODE_ENV === 'production' ||
+    Boolean(process.env.DB_SCHEMA)
   )
     throw new Error('로컬 vehicle_app 데이터베이스만 초기화할 수 있습니다.');
   const { db, pool } = createDatabase(url.toString());
