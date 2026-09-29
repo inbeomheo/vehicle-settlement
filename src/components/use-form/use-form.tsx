@@ -544,21 +544,31 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
                 ? '기사가 내용을 확인했습니다.'
                 : '담당자가 대신 입력한 운행입니다. 운행 내역을 확인해 주세요.'}
             </p>
-            {!readOnly && !draft.server.driver_confirmed_at && (
+            {!draft.server.driver_confirmed_at && (
               <button
                 type="button"
                 className={button}
-                disabled={locked || draft.phase === 'editing'}
+                disabled={
+                  busy || !online || draft.phase === 'queued' || (!readOnly && draft.phase !== 'saved')
+                }
                 onClick={async () => {
+                  setBusy(true);
                   try {
                     const server = await mutate<UseDetail>(`/api/uses/${draft.serverId}/confirm-by-driver`, {
-                      version: draft.version,
+                      version: draft.server!.version,
                     });
-                    const next = { ...draft, server, version: server.version };
+                    const next = {
+                      ...draft,
+                      server,
+                      // Confirmation must not make an older local edit safe to overwrite newer content.
+                      version: draft.version === draft.server!.version ? server.version : draft.version,
+                    };
                     await putDraft(next);
                     setDraft(next);
                   } catch (e) {
                     setError(e instanceof Error ? e.message : '확인하지 못했습니다.');
+                  } finally {
+                    setBusy(false);
                   }
                 }}
               >
@@ -1055,7 +1065,7 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
             </p>
           </form>
         )}
-        {!readOnly && draft.phase !== 'saved' && (
+        {draft.phase !== 'saved' && (
           <section className="rounded-xl border border-slate-200 p-4">
             {discardConfirm ? (
               <div role="alertdialog" aria-label="기기 초안 폐기 확인">
@@ -1091,7 +1101,7 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
                 disabled={busy}
                 onClick={() => setDiscardConfirm(true)}
               >
-                기기 초안 폐기
+                {readOnly ? '이 기기의 미전송 초안 폐기' : '기기 초안 폐기'}
               </button>
             )}
           </section>
