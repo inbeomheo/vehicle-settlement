@@ -117,16 +117,17 @@ export default function DriverSettlementsPage() {
             aria-label="이번 달 금액"
             className="overflow-hidden rounded-lg border border-slate-200 bg-white"
           >
-            <div className="grid grid-cols-2 divide-x divide-slate-200">
-              <div className="p-4">
-                <p className="font-semibold text-slate-700">받은 돈</p>
-                <p className="num mt-1 text-2xl font-bold text-emerald-700">{money(paid)}</p>
+            {/* 금액이 커져도 줄이 바뀌지 않도록 한 줄에 하나씩 둔다. */}
+            <dl className="divide-y divide-slate-200">
+              <div className="flex items-baseline justify-between gap-3 p-4">
+                <dt className="shrink-0 font-semibold text-slate-700">받은 돈</dt>
+                <dd className="num text-2xl font-bold whitespace-nowrap text-emerald-700">{money(paid)}</dd>
               </div>
-              <div className="p-4">
-                <p className="font-semibold text-slate-700">받을 돈</p>
-                <p className="num mt-1 text-2xl font-bold">{money(unpaid)}</p>
+              <div className="flex items-baseline justify-between gap-3 p-4">
+                <dt className="shrink-0 font-semibold text-slate-700">받을 돈</dt>
+                <dd className="num text-2xl font-bold whitespace-nowrap">{money(unpaid)}</dd>
               </div>
-            </div>
+            </dl>
             <p className="border-t border-slate-200 bg-slate-50 px-4 py-3 text-slate-700">
               승인됨 {summary.approved}건 · 확인 기다림 {summary.submitted}건
               {summary.needs_fix > 0 && (

@@ -106,6 +106,20 @@ export default function StatementPage() {
           <div className="min-w-0">
             <p className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
               <StatementBadge status={statement.status} />
+              {statement.status === 'CONFIRMED' && (
+                // 확정된 명세는 지급 여부를 맨 위에서 바로 알 수 있게 한다.
+                <span
+                  className={`inline-block rounded-md px-2 py-1 text-sm font-semibold ${statement.payment_status === 'PAID' ? 'bg-emerald-600 text-white' : 'bg-amber-100 text-amber-900'}`}
+                >
+                  {statement.payment_status === 'PAID'
+                    ? statement.direction === 'PAYABLE'
+                      ? '지급 완료'
+                      : '입금 완료'
+                    : statement.direction === 'PAYABLE'
+                      ? '미지급'
+                      : '미입금'}
+                </span>
+              )}
               {statement.direction === 'PAYABLE' ? '운송사 지급명세' : '원청 청구명세'}
             </p>
             <h1 className="mt-2 break-all text-[1.75rem] font-bold">
@@ -295,7 +309,13 @@ export default function StatementPage() {
         />
       )}
       <div className={panelClass}>
-        <PaymentPanel statement={statement} onChange={result.reload} />
+        <PaymentPanel
+          statement={statement}
+          onChange={() => {
+            setNotice('');
+            result.reload();
+          }}
+        />
       </div>
       {statement.payment_status === 'PAID' && (
         <section className={`${panelClass} space-y-4`}>

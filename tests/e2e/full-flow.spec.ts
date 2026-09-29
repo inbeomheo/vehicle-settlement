@@ -121,7 +121,7 @@ async function settle(page: Page, party: string, uses: Use[], total: number, pri
   await page.getByLabel('지급일', { exact: true }).fill('2026-09-29');
   await page.getByLabel('참고번호', { exact: true }).fill('W5-FULL-FLOW');
   await page.getByRole('button', { name: '지급 기록 저장' }).click();
-  await expect(page.getByText('지급 완료', { exact: true })).toBeVisible();
+  await expect(page.getByText('지급 완료', { exact: true }).first()).toBeVisible();
   return { id, no };
 }
 async function driverStatement(page: Page, no: string, state: string) {
@@ -188,7 +188,7 @@ test('기사 → 보완·재제출·보류 검수 → 전월분 정산 → 엑�
   await page.getByRole('button', { name: '오입력 취소', exact: true }).click();
   await page.getByLabel('오입력 취소 사유').fill('지급일 오입력 테스트');
   await page.getByRole('button', { name: '기록 취소 확인' }).click();
-  await expect(page.getByText('미지급', { exact: true })).toBeVisible();
+  await expect(page.getByText('미지급', { exact: true }).first()).toBeVisible();
   const after = (await (await page.request.get(`/api/statements/${firstStatement.id}`)).json()).data;
   expect(after.payments).toHaveLength(1);
   expect(after.payments[0].voided_at).toBeTruthy();

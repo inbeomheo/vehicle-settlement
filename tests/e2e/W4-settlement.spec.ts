@@ -83,7 +83,7 @@ test('정산 담당자: 새 정산 → 확정 → PDF·엑셀 200 → 지급 완
   await page.getByLabel('참고번호', { exact: true }).fill('E2E-PAY-1');
   await page.getByLabel('메모', { exact: true }).fill('브라우저 전액 지급 검증');
   await page.getByRole('button', { name: '지급 기록 저장' }).click();
-  await expect(page.getByText('지급 완료', { exact: true })).toBeVisible();
+  await expect(page.getByText('지급 완료', { exact: true }).first()).toBeVisible();
   await expect(page.getByRole('button', { name: '명세 취소', exact: true })).toBeDisabled();
   await page.getByRole('link', { name: '지급 관리', exact: true }).click();
   await page.getByLabel('조회 상태').selectOption('PAID');

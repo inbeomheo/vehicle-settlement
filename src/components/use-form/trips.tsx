@@ -231,9 +231,8 @@ export function TripFields({
             <div hidden={isCollapsed(t, i)}>
               {multiple && (
                 <div className="mb-2 flex items-center gap-1.5">
-                  <span className="mr-auto text-sm font-bold text-slate-700" aria-hidden="true">
-                    {i + 1}회차
-                  </span>
+                  {/* 회차 이름은 위 legend 에 이미 보이므로 여기서는 버튼만 오른쪽에 둔다. */}
+                  <span className="mr-auto" aria-hidden="true" />
                   <button
                     type="button"
                     className="flex h-11 w-11 items-center justify-center rounded-lg border border-slate-300 bg-white disabled:opacity-40"
