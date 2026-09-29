@@ -1,0 +1,8 @@
+.data
+storage
+node_modules
+.next
+test-results
+playwright-report
+graft
+tests
