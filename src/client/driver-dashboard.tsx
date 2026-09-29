@@ -9,6 +9,16 @@ import { isUnsent, listDrafts, OFFLINE_EVENT, type Draft } from './offline/store
 import { copyToDevice } from './copy-draft';
 import { syncQueue } from './offline/engine';
 import { button, primary, Section, StatusBadge } from '@/components/use-form/fields';
+import { Plate } from '@/components/ui/plate';
+
+const weekdays = ['일', '월', '화', '수', '목', '금', '토'];
+function weekday(date: string) {
+  return weekdays[new Date(`${date}T12:00:00Z`).getUTCDay()];
+}
+function koreanDate(date: string, withWeekday = true) {
+  const text = `${Number(date.slice(5, 7))}월 ${Number(date.slice(8, 10))}일`;
+  return withWeekday ? `${text} ${weekday(date)}요일` : text;
+}
 export function DriverDashboard() {
   const { data, error, authRequired, retry } = useBootstrap('driver');
   const [list, setList] = useState<UseList>();
@@ -17,7 +27,6 @@ export function DriverDashboard() {
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [message, setMessage] = useState('');
   const { busy, start: startAction, finish: finishAction } = useActionLock();
-  const [copyMenu, setCopyMenu] = useState<string>();
   const [refreshAttempt, setRefreshAttempt] = useState(0);
   const [listAuthRequired, setListAuthRequired] = useState(false);
   useEffect(() => {
@@ -85,70 +94,137 @@ export function DriverDashboard() {
   const projects = [
     ...new Map(data.recent.rows.map((r) => [r.project_id, String(r.snapshot.project_name)])).entries(),
   ].slice(0, 5);
+  const latest = list.rows.find((row) => row.operation_status !== 'CANCELED');
+  const today = todayCount ?? data.recent.rows.filter((r) => r.use_date === todaySeoul()).length;
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
+    <div className="space-y-6">
       <PwaRegistration />
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <p className="text-sm text-slate-600">{todaySeoul()}</p>
-          <h1 className="mt-1 text-2xl font-bold">{data.user.name}님의 운행</h1>
-        </div>
-        <a href="/d/new" className={primary}>
+      <div>
+        <p className="text-[15px] text-slate-600">{koreanDate(todaySeoul())}</p>
+        <h1 className="mt-0.5 text-[28px] font-bold">{data.user.name}님</h1>
+        <p className="mt-1 flex flex-wrap gap-x-3 text-sm text-slate-600">
+          <span>오늘 {today}건 등록</span>
+          <span className={pending.length > 0 ? 'font-semibold text-orange-800' : undefined}>
+            <span>기기 미전송</span> {pending.length}건
+          </span>
+        </p>
+      </div>
+
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-2.5">
+        <a href="/d/new" className={`${primary} min-h-16 w-full gap-2 text-xl`}>
+          <svg
+            aria-hidden="true"
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.6"
+            strokeLinecap="round"
+          >
+            <path d="M12 5v14M5 12h14" />
+          </svg>
           운행 등록
         </a>
+        {latest && (
+          <button
+            type="button"
+            className={`${button} min-h-14 w-full justify-start gap-3 text-left`}
+            disabled={busy}
+            onClick={() => void copy(latest.id)}
+          >
+            <svg
+              aria-hidden="true"
+              width="22"
+              height="22"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="shrink-0"
+            >
+              <path d="M20 11a8 8 0 0 0-14.9-4M4 4v4h4M4 13a8 8 0 0 0 14.9 4M20 20v-4h-4" />
+            </svg>
+            <span className="min-w-0 flex-1">
+              지난번과 같은 운행
+              <span className="mt-0.5 block truncate text-sm font-normal text-slate-600">
+                {String(latest.snapshot.project_name)} ·{' '}
+                {latest.route_summary ?? String(latest.snapshot.plate_no)}
+              </span>
+            </span>
+          </button>
+        )}
       </div>
-      <div className="grid grid-cols-2 gap-3">
-        <div className="rounded-2xl bg-blue-800 p-5 text-white">
-          <p className="text-sm text-blue-100">오늘 운행</p>
-          <p className="mt-2 text-3xl font-bold">
-            {todayCount ?? data.recent.rows.filter((r) => r.use_date === todaySeoul()).length}
-            <span className="ml-1 text-base">건</span>
-          </p>
-        </div>
-        <div className="rounded-2xl border border-slate-200 bg-white p-5">
-          <p className="text-sm text-slate-600">기기 미전송</p>
-          <p className="mt-2 text-3xl font-bold">
-            {pending.length}
-            <span className="ml-1 text-base">건</span>
-          </p>
-        </div>
-      </div>
+
       {message && (
-        <p role="alert" className="rounded-xl bg-red-50 p-4 text-red-800">
+        <p role="alert" className="flex flex-wrap items-center gap-2 rounded-lg bg-red-50 p-4 text-red-800">
           {message}
           {listAuthRequired ? (
             <a href="/login" className={button}>
               로그인
             </a>
           ) : (
-            <button className={`${button} ml-2`} onClick={() => setRefreshAttempt((value) => value + 1)}>
+            <button className={button} onClick={() => setRefreshAttempt((value) => value + 1)}>
               다시 시도
             </button>
           )}
         </p>
       )}
+
       {fixes.length > 0 && (
-        <Section title={`보완 요청 · ${fixes.length}건`}>
-          <ul className="grid gap-3">
-            {fixes.map((row) => (
-              <li key={row.id}>
-                <a
-                  className="block rounded-xl border border-amber-300 bg-amber-50 p-4 font-semibold text-amber-900"
-                  href={`/d/uses/${row.id}`}
-                >
-                  {row.use_date} · {String(row.snapshot.project_name)}
-                  <span className="mt-1 block text-sm">요청 항목 확인·재제출 →</span>
-                </a>
-              </li>
-            ))}
-          </ul>
-        </Section>
+        <section aria-label="보완 요청" className="grid grid-cols-[minmax(0,1fr)] gap-2">
+          {fixes.map((row) => (
+            <a
+              key={row.id}
+              href={`/d/uses/${row.id}`}
+              className="flex items-center justify-between gap-3 rounded-lg border border-l-4 border-slate-200 border-l-orange-500 bg-white px-4 py-3"
+            >
+              <span className="min-w-0">
+                <span className="block font-bold text-orange-700">보완 요청</span>
+                <span className="block truncate text-[15px]">
+                  {koreanDate(row.use_date, false)} · {row.fix_message ?? String(row.snapshot.project_name)}
+                </span>
+              </span>
+              <span className="shrink-0 rounded-lg bg-orange-50 px-3 py-2 text-sm font-bold text-orange-800">
+                고치기
+              </span>
+            </a>
+          ))}
+        </section>
       )}
+
       {pending.length > 0 && (
-        <Section title="이 휴대폰에 보관된 운행">
+        <Section title="이 휴대폰에만 있는 운행">
+          <div className="grid grid-cols-[minmax(0,1fr)] gap-2">
+            {pending.map((d) => (
+              <a
+                key={d.id}
+                href={`${d.serverId ? `/d/uses/${d.serverId}` : '/d/new'}?draft=${d.id}`}
+                className="rounded-lg border border-slate-200 bg-white p-3"
+              >
+                <p className="font-semibold">
+                  {d.form.use_date} ·{' '}
+                  {data.lookups.projects.find((p) => p.id === d.form.project_id)?.name ?? '현장 선택 전'}
+                </p>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  <StatusBadge>{d.savedRequest ? '서버 저장(작성중)' : '휴대폰 임시저장'}</StatusBadge>
+                  {d.uploads.some((f) => f.status === 'failed') ? (
+                    <StatusBadge warning>사진 업로드 실패</StatusBadge>
+                  ) : d.uploads.some((f) => f.status !== 'uploaded') ? (
+                    <StatusBadge warning>사진 업로드 대기</StatusBadge>
+                  ) : null}
+                  {d.phase === 'blocked' && <StatusBadge warning>재전송 중단</StatusBadge>}
+                  {d.phase === 'conflict' && <StatusBadge warning>최신 내용 확인 필요</StatusBadge>}
+                </div>
+                {d.error && <p className="mt-2 text-sm text-red-700">{errorMessage(d.error)}</p>}
+              </a>
+            ))}
+          </div>
           <button
             type="button"
-            className={`${button} mb-4 w-full`}
+            className={`${button} mt-3 w-full`}
             disabled={busy}
             onClick={async () => {
               if (!startAction()) return;
@@ -163,113 +239,96 @@ export function DriverDashboard() {
           >
             미전송 다시 보내기
           </button>
-          <div className="grid gap-3">
-            {pending.map((d) => (
-              <a
-                key={d.id}
-                href={`${d.serverId ? `/d/uses/${d.serverId}` : '/d/new'}?draft=${d.id}`}
-                className="rounded-xl border border-slate-200 p-4"
-              >
-                <p className="font-bold">
-                  {d.form.use_date} ·{' '}
-                  {data.lookups.projects.find((p) => p.id === d.form.project_id)?.name ?? '현장 선택 전'}
-                </p>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  <StatusBadge>{d.savedRequest ? '서버 저장(작성중)' : '휴대폰 임시저장'}</StatusBadge>
-                  {d.uploads.some((f) => f.status === 'failed') ? (
-                    <StatusBadge warning>사진 업로드 실패</StatusBadge>
-                  ) : d.uploads.some((f) => f.status !== 'uploaded') ? (
-                    <StatusBadge warning>사진 업로드 대기</StatusBadge>
-                  ) : null}
-                  {d.phase === 'blocked' && <StatusBadge warning>재전송 중단</StatusBadge>}
-                  {d.phase === 'conflict' && <StatusBadge warning>최신 내용 확인 필요</StatusBadge>}
-                </div>
-                {d.error && <p className="mt-2 text-sm text-red-700">{errorMessage(d.error)}</p>}
-              </a>
-            ))}
-          </div>
         </Section>
       )}
-      {projects.length > 0 && (
-        <Section title="최근 사용 현장">
-          <div className="flex flex-wrap gap-2">
+
+      {projects.length > 1 && (
+        <div>
+          <p className="mb-2 text-sm font-semibold text-slate-600">최근 현장으로 등록</p>
+          <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
             {projects.map(([id, name]) => (
-              <a key={id} href={`/d/new?project=${id}`} className={button}>
+              <a
+                key={id}
+                href={`/d/new?project=${id}`}
+                className="inline-flex min-h-11 shrink-0 items-center rounded-full border border-slate-300 bg-white px-4 text-[15px] font-semibold"
+              >
                 {name}
               </a>
             ))}
           </div>
-        </Section>
+        </div>
       )}
-      <Section title="내 운행 목록">
-        <p className="mb-4 text-sm text-slate-600">전체 {list.total}건 · 사용일 최신순 · 같은 날 입력순</p>
+
+      <section aria-labelledby="my-uses">
+        <div className="mb-3 flex items-baseline justify-between">
+          <h2 id="my-uses" className="text-xl font-bold">
+            내 운행
+          </h2>
+          <span className="text-sm text-slate-600">{list.total}건</span>
+        </div>
         {list.rows.length === 0 ? (
-          <p className="py-8 text-center text-slate-600">등록된 운행이 없습니다. 첫 운행을 등록해 주세요.</p>
+          <p className="rounded-lg bg-white py-10 text-center text-slate-600">
+            아직 등록한 운행이 없습니다. 위의 운행 등록을 눌러 시작하세요.
+          </p>
         ) : (
-          <ul className="grid gap-4">
-            {list.rows.map((row) => (
-              <li key={row.id} className="rounded-xl border border-slate-200 p-4">
-                <a className="block" href={`/d/uses/${row.id}`}>
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="text-sm text-slate-600">{row.use_date}</span>
-                    <StatusBadge warning={row.review_status === 'NEEDS_FIX'}>
-                      {row.operation_status === 'CANCELED' ? '취소' : reviewLabels[row.review_status]}
-                    </StatusBadge>
-                  </div>
-                  <p className="mt-3 font-bold">
-                    {String(row.snapshot.project_name)} · {String(row.snapshot.plate_no)}
-                  </p>
-                  <p className="mt-1 text-sm text-slate-600">{row.cargo_desc || '운반 내용 없음'}</p>
-                  {row.operation_status !== 'CANCELED' && (
-                    <p className="mt-2 text-sm font-semibold">
-                      기본 금액 (본인 지급분){' '}
-                      {row.payable_base_amount == null
-                        ? '미확정'
-                        : `${row.payable_base_amount.toLocaleString('ko-KR')}원`}
-                      <span className="ml-2 text-xs font-normal text-slate-600">
-                        {row.payable_base_approved ? '승인 공급가' : '검수 전 계산액'}
+          <ul className="grid grid-cols-[minmax(0,1fr)] gap-2.5">
+            {list.rows.map((row) => {
+              const canceled = row.operation_status === 'CANCELED';
+              const fix = row.review_status === 'NEEDS_FIX';
+              return (
+                <li key={row.id}>
+                  <a
+                    href={`/d/uses/${row.id}`}
+                    className={`slip relative flex rounded-lg border bg-white ${fix ? 'border-orange-300' : 'border-slate-200'} ${canceled ? 'opacity-60' : ''}`}
+                  >
+                    <span className="flex w-[4.5rem] shrink-0 flex-col items-center justify-center py-3">
+                      <span className="text-xs text-slate-500">{Number(row.use_date.slice(5, 7))}월</span>
+                      <span className="num text-[28px] leading-none font-bold">
+                        {row.use_date.slice(8, 10)}
                       </span>
-                    </p>
-                  )}
-                  <p className="mt-1 text-xs text-slate-600">
-                    {row.use_no}
-                    {row.entered_as === 'PROXY' ? ' · 대리 입력' : ''}
-                  </p>
-                </a>
-                <button
-                  type="button"
-                  className="mt-3 min-h-11 px-2 text-sm text-slate-600 underline underline-offset-4"
-                  disabled={busy}
-                  aria-haspopup="menu"
-                  aria-expanded={copyMenu === row.id}
-                  onClick={() => {
-                    setCopyMenu(copyMenu === row.id ? undefined : row.id);
-                  }}
-                >
-                  이전 운행 복사
-                </button>
-                {copyMenu === row.id && (
-                  <div role="menu" aria-label="운행 보조 메뉴" className="mt-2 rounded-xl border p-3">
-                    <button
-                      role="menuitem"
-                      className={button}
-                      disabled={busy}
-                      onClick={() => {
-                        void copy(row.id);
-                      }}
-                    >
-                      새 기기 초안으로 복사
-                    </button>
-                  </div>
-                )}
-              </li>
-            ))}
+                      <span className="mt-0.5 text-xs font-semibold text-slate-500">
+                        {weekday(row.use_date)}
+                      </span>
+                    </span>
+                    <span aria-hidden="true" className="slip-perforation w-2 shrink-0" />
+                    <span className="min-w-0 flex-1 py-3 pr-3 pl-2">
+                      <span className="flex items-start justify-between gap-2">
+                        <span className="min-w-0 truncate text-[17px] font-bold">
+                          {String(row.snapshot.project_name)}
+                          {row.entered_as === 'PROXY' && (
+                            <span className="ml-1.5 text-xs font-medium text-slate-500">대리 입력</span>
+                          )}
+                        </span>
+                        <StatusBadge warning={fix}>
+                          {canceled ? '취소' : reviewLabels[row.review_status]}
+                        </StatusBadge>
+                      </span>
+                      <span className="mt-1.5 block">
+                        <Plate value={String(row.snapshot.plate_no)} size="sm" />
+                      </span>
+                      {!canceled && (
+                        <span className="mt-2 flex items-end justify-between gap-2 text-sm">
+                          <span className="min-w-0 truncate text-slate-600">
+                            {row.route_summary ?? row.cargo_desc ?? ''}
+                          </span>
+                          <span className="num shrink-0 text-lg font-bold">
+                            {row.payable_base_amount == null
+                              ? '미확정'
+                              : `${row.payable_base_amount.toLocaleString('ko-KR')}원`}
+                          </span>
+                        </span>
+                      )}
+                    </span>
+                  </a>
+                </li>
+              );
+            })}
           </ul>
         )}
         {list.rows.length < list.total && (
           <button
             type="button"
-            className={`${button} mt-4 w-full`}
+            className={`${button} mt-3 w-full`}
             disabled={busy}
             onClick={async () => {
               if (!startAction()) return;
@@ -286,7 +345,7 @@ export function DriverDashboard() {
             더 보기
           </button>
         )}
-      </Section>
+      </section>
     </div>
   );
 }

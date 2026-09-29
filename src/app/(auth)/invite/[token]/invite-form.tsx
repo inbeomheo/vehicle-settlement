@@ -67,7 +67,7 @@ export function InviteForm({ token }: { token: string }) {
       )}
       <button
         disabled={busy || !ready}
-        className="min-h-12 w-full rounded-lg bg-blue-700 font-bold text-white disabled:opacity-50"
+        className="min-h-12 w-full rounded-lg bg-signal font-bold text-ink shadow-[0_2px_0_#c99500] hover:bg-signal-strong active:translate-y-px active:shadow-none disabled:opacity-50"
       >
         {busy ? '처리 중…' : '가입하고 시작하기'}
       </button>

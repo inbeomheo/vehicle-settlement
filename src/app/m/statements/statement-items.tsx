@@ -1,3 +1,4 @@
+import { Plate } from '@/components/ui/plate';
 import { formatQuantity } from '@/shared/quantity';
 import { chargeTypeLabel, chargeUnitLabel } from '@/components/manager/charge-display';
 import type { ItemSnapshot } from '@/server/services/statements';
@@ -40,7 +41,9 @@ export function StatementItems({ items }: { items: StatementDetail['items'] }) {
               </>,
               snapshot.project_name,
               <>
-                <span className="block">{snapshot.plate_no}</span>
+                <span className="block">
+                  <Plate value={String(snapshot.plate_no ?? '')} size="sm" />
+                </span>
                 {snapshot.driver_name}
               </>,
               chargeTypeLabel(snapshot.charge_type),

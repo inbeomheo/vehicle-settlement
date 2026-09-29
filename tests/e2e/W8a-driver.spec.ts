@@ -227,7 +227,7 @@ test('홈 API 500 재시도, 401일 때만 로그인', async ({ page }) => {
   await expect(page.getByRole('link', { name: '로그인', exact: true })).toHaveCount(0);
   status = 0;
   await page.getByRole('button', { name: '다시 시도', exact: true }).click();
-  await expect(page.getByRole('heading', { name: '내 운행 목록' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '내 운행', exact: true })).toBeVisible();
   status = 401;
   await page.reload();
   await expect(page.getByRole('link', { name: '로그인', exact: true })).toBeVisible();

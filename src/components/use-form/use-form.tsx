@@ -36,7 +36,8 @@ import { revealDraftFields } from './visibility';
 import { ReadOnlyUse } from './read-only';
 import { evidenceError } from './evidence-policy';
 import { EvidenceEditor } from '@/components/evidence/editor';
-import { button, control, primary, Field, Section, FormContexts, StatusBadge } from './fields';
+import { button, control, primary, Field, Section, FormContexts, StatusBadge, ChoiceChips } from './fields';
+import { Plate } from '@/components/ui/plate';
 import { ChargeFields } from './charges';
 import { TripFields } from './trips';
 import {
@@ -704,25 +705,51 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
       ))}
     </>
   );
+  const recentProjectIds = boot.recent.rows.map((r) => r.project_id);
+  const sortedProjects = [...lookups.projects].sort(
+    (a, b) =>
+      (recentProjectIds.includes(a.id) ? recentProjectIds.indexOf(a.id) : 999) -
+      (recentProjectIds.includes(b.id) ? recentProjectIds.indexOf(b.id) : 999),
+  );
+  // 기사 화면은 고를 것이 몇 개뿐이면 드롭다운 대신 한 번 누르는 칩으로 보여 준다.
+  const chipProjects =
+    mode === 'driver' &&
+    sortedProjects.length > 0 &&
+    sortedProjects.length <= 4 &&
+    (!form.project_id || sortedProjects.some((p) => p.id === form.project_id));
+  const defaultVehicle = lookups.drivers.find((d) => d.id === form.driver_id)?.default_vehicle_id;
+  const vehicleChoices = [...lookups.vehicles].sort(
+    (a, b) => Number(b.id === defaultVehicle) - Number(a.id === defaultVehicle),
+  );
+  const chipVehicles =
+    mode === 'driver' &&
+    vehicleChoices.length > 0 &&
+    vehicleChoices.length <= 4 &&
+    (!form.vehicle_id || vehicleChoices.some((v) => v.id === form.vehicle_id));
   return (
     <FormContexts fixes={fixes} modes={settings.modes} revealed={revealed} errors={fieldErrors}>
       <div className="mx-auto max-w-3xl space-y-5 pb-8">
         <div>
-          <p className="text-sm font-semibold text-blue-700">
-            {mode === 'manager' ? '담당자 대리 입력' : '내 운행'}
-          </p>
-          <h1 className="mt-1 text-2xl font-bold">
-            {mode === 'manager' ? '대리 입력' : (draft.server?.use_no ?? '운행 등록')}
-          </h1>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h1 className="text-[26px] font-bold">
+              {mode === 'manager' ? '대리 입력' : (draft.server?.use_no ?? '운행 등록')}
+            </h1>
+            <p
+              role="status"
+              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm font-semibold before:h-2 before:w-2 before:rounded-full ${online ? 'border-slate-300 bg-white text-slate-700 before:bg-blue-700' : 'border-orange-300 bg-orange-50 text-orange-900 before:bg-orange-600'}`}
+            >
+              {status}
+              {!online && ' · 오프라인'}
+            </p>
+          </div>
           {submitted && (
-            <p aria-live="polite" className="mt-3 rounded-xl bg-green-50 p-3 font-semibold text-green-900">
+            <p
+              aria-live="polite"
+              className="mt-3 rounded-lg border-l-4 border-emerald-600 bg-emerald-50 px-4 py-3 font-semibold text-emerald-900"
+            >
               담당자에게 제출했습니다
             </p>
           )}
-          <p role="status" className="mt-3 rounded-xl bg-blue-50 p-3 font-semibold text-blue-900">
-            {status}
-            {!online && ' · 오프라인'}
-          </p>
           {draft.server && (
             <p className="mt-3 text-sm">
               작성자: {draft.server.created_by_name ?? draft.server.created_by_user_id} · 실제 기사:{' '}
@@ -732,7 +759,7 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
           )}
         </div>
         {mode === 'driver' && !useId && resumable.some((item) => item.id !== draft.id) && (
-          <details className="rounded-xl border border-blue-200 bg-blue-50 p-4">
+          <details className="rounded-lg border border-blue-200 bg-blue-50 p-4">
             <summary className="min-h-11 cursor-pointer py-2 font-semibold text-blue-900">
               작성 중이던 운행 {resumable.filter((item) => item.id !== draft.id).length}건 이어서 쓰기
             </summary>
@@ -798,14 +825,14 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
           </Section>
         )}
         {fixes.length > 0 && (
-          <section className="rounded-2xl border border-amber-300 bg-amber-50 p-4">
-            <h2 className="font-bold text-amber-900">보완 요청 · 해당 항목으로 이동</h2>
+          <section className="rounded-lg border border-l-4 border-orange-300 border-l-orange-500 bg-orange-50 p-4">
+            <h2 className="font-bold text-orange-900">보완 요청 · 해당 항목으로 이동</h2>
             <ul className="mt-3 grid gap-2">
               {fixes.map((f, i) => (
                 <li key={i}>
                   <button
                     type="button"
-                    className="min-h-11 text-left font-semibold text-amber-900 underline"
+                    className="min-h-11 text-left font-semibold text-orange-900 underline"
                     onClick={() => scrollTo(f.target)}
                   >
                     {f.message} →
@@ -820,7 +847,7 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
             id="form-errors"
             role="alert"
             tabIndex={-1}
-            className="scroll-mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-red-800"
+            className="scroll-mt-6 rounded-lg border border-red-200 bg-red-50 p-4 text-red-800"
           >
             {(error || draft.error) && <p>{errorMessage(error || draft.error)}</p>}
             {localFailed && (
@@ -849,7 +876,7 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
           </div>
         )}
         {draft.phase === 'blocked' && !readOnly && (
-          <p className="rounded-xl bg-amber-50 p-4">
+          <p className="rounded-lg bg-amber-50 p-4">
             자동 재전송이 중단되었습니다.{' '}
             {draft.error?.includes('증빙')
               ? '아래 버튼으로 입력을 다시 확인하세요.'
@@ -876,7 +903,7 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
             <p>내 입력을 보관했습니다. 최신 서버 값을 확인한 뒤 다시 저장하세요.</p>
             {draft.conflict ? (
               <>
-                <div className="my-4 rounded-xl bg-slate-50 p-4">
+                <div className="my-4 rounded-lg bg-slate-50 p-4">
                   <p>
                     최신 버전 {draft.conflict.version} · {reviewLabels[draft.conflict.review_status]}
                   </p>
@@ -962,14 +989,14 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
           </button>
         )}
         {draft.server?.duplicate_hint && (
-          <p className="rounded-xl bg-amber-50 p-4 text-sm text-amber-900">
+          <p className="rounded-lg bg-amber-50 p-4 text-sm text-amber-900">
             중복 의심 경고: 같은 출발·도착 운행이 있습니다. 실제 반복 운행이면 그대로 제출할 수 있습니다.
           </p>
         )}
         {mode === 'driver' && draft.server && (
           <div className="space-y-3">
             {statementLocked && (
-              <p className="rounded-xl bg-amber-50 p-4">
+              <p className="rounded-lg bg-amber-50 p-4">
                 정산 확정된 운행입니다. 수정이 필요하면 담당자에게 문의하세요
               </p>
             )}
@@ -981,7 +1008,7 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
                   {...approvalConfirmation.dialog}
                   role="alertdialog"
                   aria-label="승인 운행 수정 확인"
-                  className="rounded-xl bg-amber-50 p-4"
+                  className="rounded-lg bg-amber-50 p-4"
                 >
                   <p>수정하면 승인이 해제되고 다시 검수를 받아야 합니다</p>
                   <div className="mt-3 flex gap-2">
@@ -1034,7 +1061,7 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
                   {...cancelConfirmation.dialog}
                   role="alertdialog"
                   aria-label="작성중 운행 취소 확인"
-                  className="rounded-xl bg-amber-50 p-4"
+                  className="rounded-lg bg-amber-50 p-4"
                 >
                   <p>서버에 저장된 작성중 운행을 취소할까요? 운행과 취소 이력은 보존됩니다.</p>
                   <div className="mt-3 flex gap-2">
@@ -1081,7 +1108,7 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
           </div>
         )}
         {!readOnly && settings.notice && (
-          <p className="rounded-xl bg-slate-50 p-3 text-sm">
+          <p className="rounded-lg bg-slate-50 p-3 text-sm">
             {settings.notice}
             {!settings.ready && (
               <button type="button" className={`${button} ml-2`} onClick={settings.retry}>
@@ -1101,7 +1128,7 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
             className="space-y-5"
           >
             <fieldset disabled={locked} className="min-w-0 space-y-5">
-              <Section title="사용 정보" target="use">
+              <Section title="운행 정보" target="use">
                 <div className="grid gap-4 sm:grid-cols-2">
                   <Field label="사용일" target="use_date">
                     <input
@@ -1124,24 +1151,23 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
                       onChange={(e) => change({ end_date: e.target.value })}
                     />
                   </Field>
-                  <Field label="현장" target="project_id">
-                    <select
-                      className={control}
-                      value={form.project_id}
-                      onChange={(e) => change({ project_id: e.target.value })}
-                    >
-                      {options(
-                        [...lookups.projects].sort((a, b) => {
-                          const ids = boot.recent.rows.map((r) => r.project_id);
-                          return (
-                            (ids.includes(a.id) ? ids.indexOf(a.id) : 999) -
-                            (ids.includes(b.id) ? ids.indexOf(b.id) : 999)
-                          );
-                        }),
-                        form.project_id,
-                        draft.server?.snapshot.project_name,
-                      )}
-                    </select>
+                  <Field label="현장" target="project_id" group={chipProjects}>
+                    {chipProjects ? (
+                      <ChoiceChips
+                        name="project_id"
+                        value={form.project_id}
+                        onChange={(project_id) => change({ project_id })}
+                        choices={sortedProjects.map((p) => ({ value: p.id, name: p.name, label: p.name }))}
+                      />
+                    ) : (
+                      <select
+                        className={control}
+                        value={form.project_id}
+                        onChange={(e) => change({ project_id: e.target.value })}
+                      >
+                        {options(sortedProjects, form.project_id, draft.server?.snapshot.project_name)}
+                      </select>
+                    )}
                   </Field>
                   {mode === 'manager' && (
                     <Field label="실제 기사" target="driver_id">
@@ -1161,14 +1187,27 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
                       </select>
                     </Field>
                   )}
-                  <Field label="차량" target="vehicle_id">
-                    <select
-                      className={control}
-                      value={form.vehicle_id}
-                      onChange={(e) => change({ vehicle_id: e.target.value })}
-                    >
-                      {options(lookups.vehicles, form.vehicle_id, draft.server?.snapshot.plate_no)}
-                    </select>
+                  <Field label="차량" target="vehicle_id" group={chipVehicles}>
+                    {chipVehicles ? (
+                      <ChoiceChips
+                        name="vehicle_id"
+                        value={form.vehicle_id}
+                        onChange={(vehicle_id) => change({ vehicle_id })}
+                        choices={vehicleChoices.map((v) => ({
+                          value: v.id,
+                          name: v.plate_no,
+                          label: <Plate value={v.plate_no} size="sm" />,
+                        }))}
+                      />
+                    ) : (
+                      <select
+                        className={control}
+                        value={form.vehicle_id}
+                        onChange={(e) => change({ vehicle_id: e.target.value })}
+                      >
+                        {options(lookups.vehicles, form.vehicle_id, draft.server?.snapshot.plate_no)}
+                      </select>
+                    )}
                   </Field>
                   <Field label="지급처" target="payee_counterparty_id">
                     {mode === 'manager' ? (
@@ -1186,7 +1225,7 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
                         )}
                       </select>
                     ) : (
-                      <span className="flex min-h-12 items-center rounded-xl bg-slate-50 px-3">
+                      <span className="flex min-h-12 items-center rounded-lg bg-slate-50 px-3 text-slate-700">
                         {lookups.counterparties.find((c) => c.id === payee)?.name ??
                           String(draft.server?.snapshot.payee_name ?? '사용일의 기사 소속으로 자동 지정')}
                       </span>
@@ -1268,6 +1307,29 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
                   .filter((charge) => charge.charge_type === 'BASE')
                   .map((charge) => charge.billing_unit)}
               />
+            </fieldset>
+            <RestrictedEvidenceNotice count={draft.server?.restricted_evidence_count} />
+            <EvidenceEditor
+              validationError={
+                evidenceValidation || inputErrors?.find((error) => error.target === 'evidence')?.reason
+              }
+              pending={draft.uploads}
+              existing={draft.server?.evidence ?? []}
+              policy={lookups.projects.find((p) => p.id === form.project_id)?.evidence_policy}
+              onChange={(uploads) => edit({ uploads })}
+              locked={locked}
+              canRemovePending={!busy}
+              canRetry={draft.phase === 'queued' && !busy}
+              onRemovePending={(id) => {
+                void removePending(id);
+              }}
+              onProcessingChange={setEvidenceBusy}
+              onRetry={() => {
+                void retryQueue();
+              }}
+              onDelete={deleteStoredEvidence}
+            />
+            <fieldset disabled={locked} className="min-w-0 space-y-5">
               <ChargeFields
                 form={displayForm}
                 mode={mode}
@@ -1292,54 +1354,38 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
                 </Section>
               )}
             </fieldset>
-            <RestrictedEvidenceNotice count={draft.server?.restricted_evidence_count} />
-            <EvidenceEditor
-              validationError={
-                evidenceValidation || inputErrors?.find((error) => error.target === 'evidence')?.reason
-              }
-              pending={draft.uploads}
-              existing={draft.server?.evidence ?? []}
-              policy={lookups.projects.find((p) => p.id === form.project_id)?.evidence_policy}
-              onChange={(uploads) => edit({ uploads })}
-              locked={locked}
-              canRemovePending={!busy}
-              canRetry={draft.phase === 'queued' && !busy}
-              onRemovePending={(id) => {
-                void removePending(id);
-              }}
-              onProcessingChange={setEvidenceBusy}
-              onRetry={() => {
-                void retryQueue();
-              }}
-              onDelete={deleteStoredEvidence}
-            />
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                className={button}
-                disabled={locked || evidenceBusy}
-                onClick={() => {
-                  void enqueue('save');
-                }}
-              >
-                서버 저장
-              </button>
-              <button type="submit" className={primary} disabled={locked || evidenceBusy}>
-                {draft.server?.review_status === 'NEEDS_FIX'
-                  ? '보완 후 재제출'
-                  : mode === 'manager'
-                    ? '검수 대기로 제출'
-                    : '담당자에게 제출'}
-              </button>
+            <div
+              className={`sticky z-10 -mx-4 border-t border-slate-200 bg-concrete/95 px-4 pt-3 backdrop-blur ${mode === 'driver' ? 'bottom-[calc(3.8rem+env(safe-area-inset-bottom))] pb-8' : 'bottom-0 pb-[max(0.75rem,env(safe-area-inset-bottom))]'}`}
+            >
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  aria-label="서버 저장"
+                  className={`${button} min-h-14 shrink-0 px-5`}
+                  disabled={locked || evidenceBusy}
+                  onClick={() => {
+                    void enqueue('save');
+                  }}
+                >
+                  저장
+                </button>
+                <button
+                  type="submit"
+                  className={`${primary} min-h-14 flex-1 text-lg`}
+                  disabled={locked || evidenceBusy}
+                >
+                  {draft.server?.review_status === 'NEEDS_FIX'
+                    ? '보완 후 재제출'
+                    : mode === 'manager'
+                      ? '검수 대기로 제출'
+                      : '담당자에게 제출'}
+                </button>
+              </div>
             </div>
-            <p className="text-sm text-slate-600">
-              서버 저장은 작성 중 상태입니다. 제출 버튼을 눌러야 담당자에게 전달됩니다. 오프라인 전송 요청은
-              연결되면 자동으로 보냅니다.
-            </p>
           </form>
         )}
         {draft.phase !== 'saved' && (
-          <section className="rounded-xl border border-slate-200 p-4">
+          <section className="rounded-lg border border-slate-200 p-4">
             {discardConfirm ? (
               <div {...discardConfirmation.dialog} role="alertdialog" aria-label="기기 초안 폐기 확인">
                 <p className="font-semibold">이 기기의 초안과 미전송 첨부를 폐기할까요?</p>

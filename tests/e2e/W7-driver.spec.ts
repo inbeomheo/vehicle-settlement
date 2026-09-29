@@ -38,17 +38,19 @@ test('14. 모바일 내 운행 사용일 순서·본인 기본 금액·보조 �
   await page.setViewportSize({ width: 360, height: 800 });
   await page.request.post('/api/auth/login', { data: { login_id: 'driver1', password: 'demo1234' } });
   await page.goto('/d');
-  await expect(page.getByText('사용일 최신순', { exact: false })).toBeVisible();
-  const list = page.locator('section').filter({ has: page.getByRole('heading', { name: '내 운행 목록' }) });
+  const list = page
+    .locator('section')
+    .filter({ has: page.getByRole('heading', { name: '내 운행', exact: true }) });
   await expect(list.locator(`a[href="/d/uses/${first!}"]`)).toBeVisible();
   const links = await list
     .locator('a')
     .evaluateAll((nodes) => nodes.map((node) => node.getAttribute('href')));
   expect(links.indexOf(`/d/uses/${first!}`)).toBeLessThan(links.indexOf(`/d/uses/${second!}`));
   const card = list.locator('li').filter({ hasText: 'W7 먼저 입력' });
-  await expect(card.getByText('기본 금액 (본인 지급분) 123,456원', { exact: false })).toBeVisible();
-  const copy = await card.getByRole('button', { name: '이전 운행 복사' }).boundingBox();
-  expect(copy!.width).toBeLessThan(200);
+  await expect(card.getByText('123,456원', { exact: false })).toBeVisible();
+  // 복사는 목록 카드 대신 상단 "지난번과 같은 운행"과 상세 화면에서 한다.
+  await expect(page.getByRole('button', { name: /지난번과 같은 운행/ })).toBeVisible();
+  await expect(card.getByRole('button', { name: '이전 운행 복사' })).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(360);
   await page.screenshot({ path: 'test-results/W7-driver-360px.png', fullPage: true });
 });

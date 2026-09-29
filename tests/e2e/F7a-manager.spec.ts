@@ -127,7 +127,7 @@ test('6. 명세 단가·확정 성공·행 순서·조정 대상 비용 종류·
   await page.getByRole('button', { name: '명세 확정', exact: true }).click();
   await page.getByRole('button', { name: '확정', exact: true }).click();
   await expect(page.getByRole('status')).toHaveText('명세를 확정했습니다.');
-  await expect(page.getByRole('heading', { name: /^PAY-202609-/ })).toBeVisible();
+  await expect(page.getByText(/^PAY-202609-\d+$/)).toBeVisible();
   await expect(page.locator('tbody tr td:first-child')).toHaveText(before);
   await page.goto(`/m/statements/${fixture.paidStatement}`);
   await expect(page.getByLabel('원명세 항목').locator('option')).toHaveText(/U-2609-\d+ · 통행료 · 6,600원/);
@@ -175,9 +175,11 @@ test('9. 설정 그룹 접기·현장 URL 유지', async ({ page }) => {
   await expect(page.getByLabel('설정할 현장')).toHaveValue(fixture.project);
   const group = page.getByRole('button', { name: /사용 정보.*펼치기/ });
   await expect(group).toBeVisible();
-  await expect(page.getByLabel('요청자 · 기사', { exact: true })).not.toBeVisible();
+  await expect(page.getByRole('radiogroup', { name: '요청자 · 기사', exact: true })).not.toBeVisible();
   await group.click();
-  await expect(page.getByLabel('요청자 · 기사', { exact: true })).toHaveValue('HIDDEN');
+  await expect(
+    page.getByRole('radiogroup', { name: '요청자 · 기사', exact: true }).getByRole('radio', { name: '숨김' }),
+  ).toBeChecked();
   await page.getByLabel('설정할 현장').selectOption('');
   await expect(page).not.toHaveURL(/project=/);
   await page.getByLabel('설정할 현장').selectOption(fixture.project);

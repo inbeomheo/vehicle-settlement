@@ -34,28 +34,36 @@ export function AuthForm({ token }: { token?: string }) {
     }
   }
   return (
-    <main className="mx-auto flex min-h-dvh max-w-md items-center px-6 py-12">
-      <section className="w-full rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
-        <p className="mb-2 text-sm font-semibold text-blue-700">차량 사용·정산</p>
-        <h1 className="mb-3 text-2xl font-bold">{token ? '초대 수락' : '로그인'}</h1>
-        <p className="mb-8 text-sm text-slate-600">
-          {token ? '사용할 아이디와 비밀번호를 등록하세요.' : '배정된 현장의 사용 내역을 확인하세요.'}
+    <main className="flex min-h-dvh flex-col bg-ink md:items-center md:justify-center md:py-12">
+      <div className="px-6 pt-[max(2.5rem,env(safe-area-inset-top))] pb-8 text-white md:w-full md:max-w-md md:px-0 md:pt-0">
+        <p className="inline-flex items-center gap-2 text-lg font-bold">
+          <span aria-hidden="true" className="h-6 w-1.5 rounded-sm bg-signal" />
+          차량 사용·정산
+        </p>
+        <p className="mt-3 text-[15px] leading-relaxed text-slate-300">
+          운행 등록부터 검수·월 정산·지급까지 한곳에서.
+        </p>
+      </div>
+      <section className="flex-1 rounded-t-2xl bg-white px-6 pt-8 pb-10 md:w-full md:max-w-md md:flex-none md:rounded-2xl md:p-8">
+        <h1 className="mb-1 text-2xl font-bold">{token ? '초대 수락' : '로그인'}</h1>
+        <p className="mb-7 text-sm text-slate-600">
+          {token ? '사용할 아이디와 비밀번호를 정하세요.' : '담당자에게 받은 아이디로 로그인하세요.'}
         </p>
         <form method="post" onSubmit={submit} className="space-y-5">
-          <label className="block">
+          <label className="block text-sm font-semibold">
             아이디
             <input
-              className="mt-2 block min-h-12 w-full rounded-lg border border-slate-300 px-3"
+              className="mt-1.5 block min-h-12 w-full rounded-lg border border-slate-300 px-3 text-base focus:border-blue-700 focus:outline-none focus:ring-3 focus:ring-blue-100"
               name="login_id"
               autoComplete="username"
               required
               maxLength={100}
             />
           </label>
-          <label className="block">
+          <label className="block text-sm font-semibold">
             비밀번호
             <input
-              className="mt-2 block min-h-12 w-full rounded-lg border border-slate-300 px-3"
+              className="mt-1.5 block min-h-12 w-full rounded-lg border border-slate-300 px-3 text-base focus:border-blue-700 focus:outline-none focus:ring-3 focus:ring-blue-100"
               name="password"
               type="password"
               autoComplete={token ? 'new-password' : 'current-password'}
@@ -71,7 +79,7 @@ export function AuthForm({ token }: { token?: string }) {
           )}
           <button
             disabled={busy || !ready}
-            className="min-h-12 w-full rounded-lg bg-blue-700 font-bold text-white disabled:opacity-50"
+            className="min-h-12 w-full rounded-lg bg-signal font-bold text-ink shadow-[0_2px_0_#c99500] hover:bg-signal-strong active:translate-y-px active:shadow-none disabled:opacity-50"
           >
             {busy ? '처리 중…' : token ? '가입하고 시작하기' : '로그인'}
           </button>

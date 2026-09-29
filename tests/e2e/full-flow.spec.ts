@@ -28,7 +28,9 @@ async function inputUse(
   await expect(page.getByLabel('1회차 출발', { exact: true })).toBeVisible();
   if (options.manager) await page.getByLabel('실제 기사', { exact: true }).selectOption({ label: '김기사' });
   await page.getByLabel('사용일', { exact: true }).fill(options.date);
-  await page.getByLabel('현장', { exact: true }).selectOption({ label: '서울 현장' });
+  // 기사 화면은 현장이 적으면 한 번 누르는 선택 칩, 대리 입력은 드롭다운이다.
+  if (options.manager) await page.getByLabel('현장', { exact: true }).selectOption({ label: '서울 현장' });
+  else await page.getByRole('radio', { name: '서울 현장', exact: true }).check();
   await page.getByLabel('운반 내용', { exact: true }).fill(options.tag);
   for (let i = 1; i <= options.trips; i++) {
     if (i > 1) await page.getByRole('button', { name: '+ 운행 추가', exact: true }).click();
@@ -86,7 +88,7 @@ async function settle(page: Page, party: string, uses: Use[], total: number, pri
   await expect(page).toHaveURL(/\/m\/statements\/[a-f0-9-]+$/);
   await page.getByRole('button', { name: '명세 확정', exact: true }).click();
   await page.getByRole('button', { name: '확정', exact: true }).click();
-  const heading = page.getByRole('heading', { name: /^PAY-202609-/ });
+  const heading = page.getByText(/^PAY-202609-\d+$/);
   await expect(heading).toBeVisible();
   const no = (await heading.textContent())!;
   const id = page.url().split('/').pop()!;

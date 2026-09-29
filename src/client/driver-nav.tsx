@@ -3,40 +3,66 @@ import { useEffect, useState } from 'react';
 
 const tabs = [
   { href: '/d', label: '내 운행', path: 'M3 10 12 3l9 7v11h-6v-7H9v7H3Z' },
-  { href: '/d/new', label: '운행 등록', path: 'M12 5v14M5 12h14' },
+  { href: '/d/new', label: '운행 등록', path: 'M12 5v14M5 12h14', primary: true },
   { href: '/d/settlements', label: '내 정산', path: 'M5 3h14v18l-3-2-4 2-4-2-3 2ZM9 8h6M9 12h6' },
 ];
+
+function Icon({ path, size = 22 }: { path: string; size?: number }) {
+  return (
+    <svg
+      aria-hidden="true"
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d={path} />
+    </svg>
+  );
+}
+
 export function DriverNav() {
   const [pathname, setPathname] = useState('');
   useEffect(() => setPathname(location.pathname), []);
   return (
     <nav
       aria-label="주 메뉴"
-      className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-3 border-t border-slate-200 bg-white px-2 pt-1 pb-[max(0.25rem,env(safe-area-inset-bottom))] text-center text-sm"
+      className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-3 items-end border-t border-slate-200 bg-white px-2 pb-[max(0.25rem,env(safe-area-inset-bottom))] text-center text-sm"
     >
       {tabs.map((tab) => {
         const active =
           tab.href === '/d' ? pathname === '/d' || pathname.startsWith('/d/uses/') : pathname === tab.href;
+        if (tab.primary) {
+          // 가장 자주 하는 일: 탭 막대 위로 올라온 노란 원형 버튼.
+          return (
+            <a
+              key={tab.href}
+              href={tab.href}
+              aria-current={active ? 'page' : undefined}
+              className="flex min-h-14 flex-col items-center justify-end gap-1 px-2 pb-1.5 font-bold text-ink"
+            >
+              <span className="-mt-6 flex h-14 w-14 items-center justify-center rounded-full border-4 border-white bg-signal shadow-[0_2px_6px_rgb(0_0_0/0.18)]">
+                <Icon path={tab.path} size={28} />
+              </span>
+              {tab.label}
+            </a>
+          );
+        }
         return (
           <a
             key={tab.href}
             href={tab.href}
             aria-current={active ? 'page' : undefined}
-            className={`flex min-h-14 flex-col items-center justify-center gap-1 rounded-lg px-3 py-2 ${active ? 'bg-blue-50 font-bold text-blue-800' : 'font-medium text-slate-500 hover:bg-slate-50'}`}
+            className={`relative flex min-h-14 flex-col items-center justify-center gap-1 px-3 pt-2 pb-1.5 ${active ? 'font-bold text-ink' : 'font-medium text-slate-500'}`}
           >
-            <svg
-              aria-hidden="true"
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d={tab.path} />
-            </svg>
+            {active && (
+              <span aria-hidden="true" className="absolute inset-x-6 top-0 h-1 rounded-b bg-signal" />
+            )}
+            <Icon path={tab.path} />
             {tab.label}
           </a>
         );

@@ -164,7 +164,7 @@ test('마지막 상세값 삭제·회차 이동·삭제 후 빈 숨김 입력을
     trips: [{ seq: 1, origin: '복구 창고', destination: '복구 현장', via: ['기존 경유지'] }],
   });
   await login(page, s.driverUser.login_id, `/d/new?project=${s.project.id}`);
-  await page.getByLabel('1회차 최근 경로', { exact: true }).selectOption('0');
+  await page.getByRole('group', { name: '1회차 최근 경로' }).getByRole('button').first().click();
   const via = page.getByLabel('1회차 경유 (쉼표 구분)', { exact: true });
   await expect(via).toHaveValue('기존 경유지');
   await via.fill('');

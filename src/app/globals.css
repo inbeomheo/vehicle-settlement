@@ -1,29 +1,157 @@
 @import 'tailwindcss';
-:root {
-  color-scheme: light;
+
+/*
+ * 현장 전표 디자인 토큰.
+ * 기존 화면이 쓰는 slate·blue 유틸리티를 이 앱의 색으로 다시 정의해
+ * 모든 화면이 같은 팔레트를 따르게 한다.
+ */
+@theme {
+  --font-sans:
+    'Pretendard Variable', Pretendard, -apple-system, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+
+  /* 콘크리트 → 아스팔트 중립색 */
+  --color-slate-50: #f4f6f8;
+  --color-slate-100: #e9ecef;
+  --color-slate-200: #dde1e6;
+  --color-slate-300: #c3c9d0;
+  --color-slate-400: #8a939d;
+  --color-slate-500: #6a737d;
+  --color-slate-600: #525a63;
+  --color-slate-700: #3a4149;
+  --color-slate-800: #1f2328;
+  --color-slate-900: #16191d;
+
+  /* 운송 파랑 */
+  --color-blue-50: #eef4fe;
+  --color-blue-100: #dbe7fd;
+  --color-blue-200: #b8cffb;
+  --color-blue-300: #8aaff6;
+  --color-blue-400: #5a8bee;
+  --color-blue-500: #3571e3;
+  --color-blue-600: #2463de;
+  --color-blue-700: #1d5fd6;
+  --color-blue-800: #184caa;
+  --color-blue-900: #133b83;
+
+  /* 신호 노랑: 가장 중요한 한 가지 행동에만 쓴다 */
+  --color-signal: #ffc20e;
+  --color-signal-strong: #f2b300;
+  --color-ink: #1f2328;
+  --color-concrete: #e9ecef;
 }
-body {
-  margin: 0;
-  color: #172b3a;
-  background: #f5f7fa;
-  font-family: Arial, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+
+@layer base {
+  :root {
+    color-scheme: light;
+  }
+
+  body {
+    margin: 0;
+    color: var(--color-ink);
+    background: var(--color-concrete);
+    font-family: var(--font-sans);
+    font-feature-settings: 'ss06';
+    -webkit-font-smoothing: antialiased;
+    letter-spacing: -0.01em;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+    letter-spacing: inherit;
+  }
+
+  button,
+  a,
+  input {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  button {
+    cursor: pointer;
+  }
+
+  a {
+    text-underline-offset: 4px;
+  }
+
+  :focus-visible {
+    outline: 3px solid var(--color-blue-700);
+    outline-offset: 2px;
+  }
+
+  /* 금액·수량은 자릿수가 맞는 숫자로 */
+  .num,
+  td,
+  [data-num] {
+    font-variant-numeric: tabular-nums;
+  }
+
+  h1,
+  h2,
+  h3 {
+    letter-spacing: -0.02em;
+  }
 }
-button,
-input {
-  font: inherit;
+
+@layer components {
+  /* 차량번호판 — 앱의 대표 요소 */
+  .plate {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.15em;
+    padding: 0.1em 0.5em;
+    border: 2px solid var(--color-ink);
+    border-radius: 4px;
+    background: #fff;
+    color: var(--color-ink);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+    line-height: 1.35;
+    white-space: nowrap;
+    box-shadow:
+      inset 0 0 0 1px #fff,
+      inset 0 0 0 2px #d4d8dd;
+  }
+
+  /* 전표: 절취선 위아래의 반원 홈 */
+  .slip::before,
+  .slip::after {
+    content: '';
+    position: absolute;
+    left: calc(4.5rem - 3px);
+    width: 14px;
+    height: 14px;
+    border-radius: 9999px;
+    background: var(--color-concrete);
+    border: 1px solid var(--color-slate-200);
+  }
+  .slip::before {
+    top: -8px;
+    clip-path: inset(50% 0 0 0);
+  }
+  .slip::after {
+    bottom: -8px;
+    clip-path: inset(0 0 50% 0);
+  }
+
+  /* 전표 절취선 */
+  .slip-perforation {
+    background-image: radial-gradient(circle, var(--color-slate-300) 1.5px, transparent 1.6px);
+    background-size: 2px 9px;
+    background-repeat: repeat-y;
+    background-position: center;
+  }
 }
-button,
-a,
-input {
-  -webkit-tap-highlight-color: transparent;
-}
-button {
-  cursor: pointer;
-}
-a {
-  text-underline-offset: 4px;
-}
-:focus-visible {
-  outline: 3px solid #3b82f6;
-  outline-offset: 3px;
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }

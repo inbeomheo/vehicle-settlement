@@ -16,12 +16,12 @@ export const dateTime = (value: string | Date | null) =>
       }).format(new Date(value))
     : '-';
 export const buttonClass =
-  'inline-flex min-h-11 items-center justify-center rounded-lg bg-blue-700 px-4 py-2 font-semibold text-white hover:bg-blue-800 disabled:cursor-wait disabled:opacity-50';
+  'inline-flex min-h-11 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg bg-ink px-4 py-2 font-semibold text-white hover:bg-slate-700 active:translate-y-px disabled:cursor-wait disabled:opacity-50';
 export const secondaryClass =
-  'inline-flex min-h-11 items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold hover:bg-slate-50 disabled:opacity-50';
+  'inline-flex min-h-11 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-ink hover:border-slate-400 hover:bg-slate-50 disabled:opacity-50';
 export const inputClass =
-  'mt-1 block min-h-11 w-full min-w-0 text-base rounded-lg border border-slate-300 bg-white px-3 py-2';
-export const panelClass = 'rounded-xl border border-slate-200 bg-white p-4 sm:p-6';
+  'mt-1 block w-full min-h-11 min-w-0 rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-base shadow-[inset_0_1px_0_rgb(0_0_0/0.03)] focus:border-blue-700 focus:outline-none focus:ring-3 focus:ring-blue-100 disabled:bg-slate-100 disabled:text-slate-500';
+export const panelClass = 'min-w-0 rounded-lg border border-slate-200 bg-white p-4 sm:p-6';
 export const statusLabels = { DRAFT: '작성 중', CONFIRMED: '확정', CANCELED: '취소' };
 export function StatementBadge({ status }: { status: keyof typeof statusLabels }) {
   return (
@@ -136,17 +136,19 @@ export function Totals({
   grand_total: number;
 }) {
   return (
-    <dl className="grid grid-cols-1 gap-3 rounded-xl bg-slate-50 p-4 sm:grid-cols-3">
-      {[
-        ['공급가', supply_total],
-        ['세액', tax_total],
-        ['총액', grand_total],
-      ].map(([name, value]) => (
-        <div key={name}>
-          <dt className="text-sm text-slate-600">{name}</dt>
-          <dd className="mt-1 text-xl font-bold tabular-nums">{money(Number(value))}</dd>
-        </div>
-      ))}
+    <dl className="ml-auto grid w-full max-w-sm gap-1.5 rounded-lg border border-slate-200 bg-white p-5 text-[15px]">
+      <div className="flex justify-between">
+        <dt className="text-slate-600">공급가</dt>
+        <dd className="num">{money(supply_total)}</dd>
+      </div>
+      <div className="flex justify-between">
+        <dt className="text-slate-600">세액</dt>
+        <dd className="num">{money(tax_total)}</dd>
+      </div>
+      <div className="mt-1.5 flex items-baseline justify-between border-t border-slate-200 pt-3">
+        <dt className="font-bold">총액</dt>
+        <dd className="num text-2xl font-bold">{money(grand_total)}</dd>
+      </div>
     </dl>
   );
 }

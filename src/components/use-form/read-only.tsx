@@ -1,21 +1,24 @@
 import { RestrictedEvidenceNotice } from '@/components/evidence/restricted-notice';
 import { evidenceKinds, money, operationLabels, type UseDetail } from '@/client/types';
 import { Section } from './fields';
+import { Plate } from '@/components/ui/plate';
 
 export function ReadOnlyUse({ use }: { use: UseDetail }) {
   return (
     <>
       <Section title="운행 상세">
-        <dl className="grid gap-3">
-          {[
-            ['사용일', use.use_date],
-            ['현장', String(use.snapshot.project_name)],
-            ['차량', String(use.snapshot.plate_no)],
-            ['요청자', use.requester || '—'],
-            ['운반 내용', use.cargo_desc || '—'],
-            ['특이사항', use.notes || '—'],
-            ['운행 상태', operationLabels[use.operation_status]],
-          ].map(([label, value]) => (
+        <dl className="grid gap-3 sm:grid-cols-2">
+          {(
+            [
+              ['사용일', use.use_date],
+              ['현장', String(use.snapshot.project_name)],
+              ['차량', <Plate key="plate" value={String(use.snapshot.plate_no)} />],
+              ['요청자', use.requester || '—'],
+              ['운반 내용', use.cargo_desc || '—'],
+              ['특이사항', use.notes || '—'],
+              ['운행 상태', operationLabels[use.operation_status]],
+            ] as [string, React.ReactNode][]
+          ).map(([label, value]) => (
             <div key={label}>
               <dt className="text-sm text-slate-600">{label}</dt>
               <dd className="break-words font-medium">{value}</dd>
@@ -23,10 +26,10 @@ export function ReadOnlyUse({ use }: { use: UseDetail }) {
           ))}
         </dl>
       </Section>
-      <Section title={`운행 목록 · ${use.trips.length}회`}>
+      <Section title={`운행 ${use.trips.length}회`}>
         <ul className="space-y-3">
           {use.trips.map((trip) => (
-            <li key={trip.id} className="rounded-xl bg-slate-50 p-3">
+            <li key={trip.id} className="rounded-lg bg-slate-50 p-3">
               <p className="font-semibold">
                 {trip.seq}회차 · {trip.origin} → {trip.destination}
               </p>

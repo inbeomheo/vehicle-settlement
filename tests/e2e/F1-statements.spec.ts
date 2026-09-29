@@ -45,7 +45,7 @@ test('확정 확인 중 금액 변경 시 최신 내역을 보여주고 다시 �
   expect((await rejection).status()).toBe(409);
   await expect(page.locator('main').getByRole('alert')).toContainText('명세 내용이 변경되었습니다');
   await expect(confirmation).toHaveCount(0);
-  await expect(page.getByRole('heading', { name: '작성 중 명세' })).toBeVisible();
+  await expect(page.getByText('확정 시 부여', { exact: true })).toBeVisible();
   await expect(page.locator('main')).toContainText('600,000원');
   expect((await (await page.request.get(`/api/statements/${fixture.statementId}`)).json()).data.status).toBe(
     'DRAFT',
@@ -53,5 +53,5 @@ test('확정 확인 중 금액 변경 시 최신 내역을 보여주고 다시 �
   await page.getByRole('button', { name: '명세 확정', exact: true }).click();
   await expect(confirmation).toContainText('600,000원');
   await confirmation.getByRole('button', { name: '확정', exact: true }).click();
-  await expect(page.getByRole('heading', { name: /^PAY-202609-/ })).toBeVisible();
+  await expect(page.getByText(/^PAY-202609-\d+$/)).toBeVisible();
 });

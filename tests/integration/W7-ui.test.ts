@@ -51,6 +51,8 @@ it('13. 검수함 고유 경로/운행 수 및 검수 전 기본·추가 금액�
       {
         id: 'u',
         use_no: 'U1',
+        use_date: '2026-09-02',
+        plate_no: '서울80가1001',
         origin: '인천 / 인천 / 인천',
         destination: '서울 / 서울 / 서울',
         route_summary: '인천 → 서울 외 2회',
@@ -64,8 +66,8 @@ it('13. 검수함 고유 경로/운행 수 및 검수 전 기본·추가 금액�
   };
   const html = renderToStaticMarkup(createElement(ReviewInbox));
   expect(html).toContain('인천 → 서울 외 2회');
-  expect(html).toContain('300,000원');
-  expect(html).toContain('5,000원');
-  expect(html).toContain('합계 305,000원');
-  expect(html).toContain('요청 추가비 있음');
+  expect(html).toContain('305,000원');
+  expect(html).toContain('기본 300,000원');
+  expect(html).toContain('추가비 5,000원');
+  expect(html).toContain('요청 추가비 확인 필요');
 });

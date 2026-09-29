@@ -192,7 +192,7 @@ export async function getLedger(ctx: Context, raw: unknown, exportAll = false): 
     const details = row.trip_details ?? [];
     const routes = [...new Set(details.map((trip) => `${trip.origin} → ${trip.destination}`))];
     row.route_summary = routes.length
-      ? `${routes[0]}${details.length > 1 ? ` 외 ${details.length - 1}회` : ''}${routes.length > 1 ? ` · 고유 경로 ${routes.length}개` : ''}`
+      ? `${routes[0]}${details.length > 1 ? ` 외 ${details.length - 1}회` : ''}`
       : '경로 미입력';
     row.performance =
       `${details.filter((trip) => trip.status === 'COMPLETED').length}회 운행` +

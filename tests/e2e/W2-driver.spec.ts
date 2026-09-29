@@ -17,7 +17,7 @@ async function login(page: Page, loginId: string) {
   await page.getByLabel('비밀번호', { exact: true }).fill('password1234');
   await page.getByRole('button', { name: '로그인', exact: true }).click();
   await expect(page).toHaveURL(/\/d$/);
-  await expect(page.getByRole('heading', { name: '내 운행 목록' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '내 운행', exact: true })).toBeVisible();
 }
 async function newForm(page: Page) {
   await page.goto('/d/new');
@@ -130,7 +130,7 @@ test('오프라인 작성·앱 재실행 복구·자동 전송 1건·로그아�
   await expect(page.getByText(/휴대폰에 임시저장됨/)).toBeVisible();
   await page.reload({ waitUntil: 'domcontentloaded' });
   await expect(page.getByLabel('운반 내용', { exact: true })).toHaveValue('오프라인 자재 운반');
-  await expect(page.getByText(/SLIP-OFFLINE-1/)).toBeVisible();
+  await expect(page.getByText('SLIP-OFFLINE-1', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '담당자에게 제출', exact: true }).click();
   await expect(page.getByRole('button', { name: '미전송 다시 보내기', exact: true })).toBeVisible();
   await context.setOffline(false);

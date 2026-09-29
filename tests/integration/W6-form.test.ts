@@ -46,8 +46,10 @@ it.each(['PER_DAY', 'PER_TRIP', 'PER_TON', 'PER_M3', 'PER_HOUR'] as const)(
     const detail = markup.match(/<details\b[\s\S]*?<\/details>/)?.[0];
     expect(detail).toBeTruthy();
     expect(detail).not.toMatch(/<details[^>]*\sopen(?:\s|=|>)/);
-    expect(detail).toContain('1회차 경유 (쉼표 구분)');
-    const primary = markup.replace(detail!, '');
+    // 라벨 앞 "1회차 "는 보조기기용 숨김 텍스트라 태그를 걷어 낸 텍스트로 비교한다.
+    const text = (html: string) => html.replace(/<[^>]+>/g, '');
+    expect(text(detail!)).toContain('1회차 경유 (쉼표 구분)');
+    const primary = text(markup.replace(detail!, ''));
     expect(primary).toContain('1회차 출발');
     expect(primary).toContain('1회차 도착');
     expect(primary).toContain('1회차 화물');

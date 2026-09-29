@@ -24,7 +24,8 @@ type History = {
 };
 type Preset = { id: string; name: string; mapping: ImportMapping };
 const control = 'min-h-11 w-full rounded border border-slate-300 bg-white px-3 py-2 text-base';
-const button = 'min-h-11 rounded bg-blue-700 px-4 py-2 font-semibold text-white disabled:opacity-50';
+const button =
+  'inline-flex min-h-11 items-center justify-center rounded-lg bg-ink px-4 py-2 font-semibold text-white hover:bg-slate-700 disabled:opacity-50';
 
 export default function ImportPage() {
   const [deleting, setDeleting] = useState(false);

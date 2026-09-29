@@ -111,78 +111,91 @@ function RateFields({
       rate.min_charge ?? 0,
     ).toNumber();
   }
+  const needsQuantity =
+    !!rate && !charge.quantity && ['PER_TRIP', 'PER_HOUR', 'PER_TON', 'PER_M3'].includes(rate.billing_unit);
+  const completedTrips = form.trips.filter((t) => t.status === 'COMPLETED').length;
   return (
     <div className="grid gap-4">
-      <div aria-live="polite" aria-atomic="true" className="rounded-xl bg-slate-50 p-4">
-        <p className="font-bold">{rate?.name ?? '단가 미확정'}</p>
-        <p className="mt-1 text-sm">
-          {rate
-            ? `${units[rate.billing_unit]} · 단가 ${money(rate.unit_price)}`
-            : '계약 단가가 없거나 아직 조회되지 않았습니다.'}
-        </p>
-        <p className="mt-3 text-xl font-bold text-blue-800">
-          {rate &&
-          !charge.quantity &&
-          ['PER_TRIP', 'PER_HOUR', 'PER_TON', 'PER_M3'].includes(rate.billing_unit)
-            ? '청구 수량을 입력하세요'
-            : `기본운임 ${money(estimate)}`}
-        </p>
-        <p className="mt-1 text-xs text-slate-600">
-          {preserved ? '저장 당시 계약' : '예상 금액'} · 저장 시 서버 계산 결과 적용
-        </p>
-        {error && <p className="mt-2 text-sm text-amber-800">{error}</p>}
-      </div>
-      <Field label="과금 단위">
-        <select
-          className={control}
-          value={charge.billing_unit}
-          onChange={(e) => {
-            const unit = e.target.value as FormCharge['billing_unit'];
-            onChange({
-              billing_unit: unit,
-              ...(!charge.quantity && ['PER_DAY', 'HALF_DAY', 'MONTHLY', 'LUMP_SUM'].includes(unit)
-                ? { quantity: '1', quantitySource: 'automatic' }
-                : {}),
-            });
-          }}
-        >
-          <option value="">계약 자동 조회</option>
-          {Object.entries(units).map(([v, n]) => (
-            <option key={v} value={v}>
-              {n}
-            </option>
-          ))}
-        </select>
-      </Field>
-      <Field label="청구수량" target={`charge:${charge.id ?? charge.key}.quantity`}>
-        <input
-          className={control}
-          inputMode="decimal"
-          value={charge.quantity}
-          onChange={(e) => onChange({ quantity: e.target.value, quantitySource: 'manual' })}
-        />
-      </Field>
-      {charge.billing_unit === 'PER_TRIP' && (
-        <>
-          {charge.quantitySource === 'automatic' && (
-            <p className="text-sm text-slate-600">
-              운행 {form.trips.filter((trip) => trip.status === 'COMPLETED').length}회 기준 자동 입력, 수정
-              가능
+      <div aria-live="polite" aria-atomic="true" className="grid gap-2">
+        <div className="flex min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+          <div className="min-w-0 flex-1 p-4">
+            <p className="flex flex-wrap items-center gap-1.5 text-sm text-slate-600">
+              <span className="truncate">{rate?.name ?? '단가 미확정'}</span>
+              {rate && (
+                <span className="rounded bg-slate-200 px-1.5 py-0.5 text-xs font-semibold text-slate-700">
+                  {preserved ? '저장 당시 계약' : '자동 적용'}
+                </span>
+              )}
             </p>
+            <p className="mt-1 text-2xl font-bold">{rate ? units[rate.billing_unit] : '—'}</p>
+            <p className="mt-0.5 text-sm text-slate-600">
+              {rate ? `단가 ${money(rate.unit_price)}` : '계약 단가가 없거나 아직 조회되지 않았습니다.'}
+            </p>
+          </div>
+          <div aria-hidden="true" className="slip-perforation w-2 shrink-0" />
+          <div className="flex min-w-[9.5rem] flex-col items-end justify-center p-4 text-right">
+            {needsQuantity ? (
+              <p className="text-[15px] font-bold text-orange-700">청구 수량을 입력하세요</p>
+            ) : (
+              <p className="leading-tight">
+                <span className="block text-sm text-slate-600">기본운임</span>{' '}
+                <span className="num text-[26px] font-bold">{money(estimate)}</span>
+              </p>
+            )}
+          </div>
+        </div>
+        {error && <p className="text-sm text-orange-800">{error}</p>}
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="과금 단위">
+          <select
+            className={control}
+            value={charge.billing_unit}
+            onChange={(e) => {
+              const unit = e.target.value as FormCharge['billing_unit'];
+              onChange({
+                billing_unit: unit,
+                ...(!charge.quantity && ['PER_DAY', 'HALF_DAY', 'MONTHLY', 'LUMP_SUM'].includes(unit)
+                  ? { quantity: '1', quantitySource: 'automatic' }
+                  : {}),
+              });
+            }}
+          >
+            <option value="">계약 자동 조회</option>
+            {Object.entries(units).map(([v, n]) => (
+              <option key={v} value={v}>
+                {n}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="청구수량" target={`charge:${charge.id ?? charge.key}.quantity`}>
+          <input
+            className={control}
+            inputMode="decimal"
+            value={charge.quantity}
+            onChange={(e) => onChange({ quantity: e.target.value, quantitySource: 'manual' })}
+          />
+        </Field>
+      </div>
+      {charge.billing_unit === 'PER_TRIP' && (
+        <div className="flex flex-wrap items-center gap-2">
+          {charge.quantitySource === 'automatic' && (
+            <p className="text-sm text-slate-600">운행 {completedTrips}회 기준 자동 입력, 수정 가능</p>
           )}
           <button
             type="button"
             className={button}
             onClick={() =>
               onChange({
-                quantity: String(form.trips.filter((t) => t.status === 'COMPLETED').length),
+                quantity: String(completedTrips),
                 quantitySource: 'manual',
               })
             }
           >
-            완료 운행 {form.trips.filter((t) => t.status === 'COMPLETED').length}회 제안 적용
+            완료 운행 {completedTrips}회 제안 적용
           </button>
-        </>
+        </div>
       )}
     </div>
   );
@@ -221,17 +234,23 @@ export function ChargeFields({
       automatic,
     );
   return (
-    <Section title={showExtra || hasExtra ? '과금·추가 비용' : '과금'} target="charges">
+    <Section title={showExtra || hasExtra ? '요금·추가 비용' : '요금'} target="charges">
       {extraHidden && (hasExtra || hasExtraFix) && <HiddenFieldNotice />}
-      <div className="grid gap-6">
+      <div className="grid gap-5">
         {visibleCharges.map((c, i) => (
           <div
             key={c.key}
             data-fix-target={`charge:${c.id ?? c.key}`}
-            className="scroll-mt-6 rounded-xl border border-slate-200 p-4"
+            className={`scroll-mt-24 ${c.charge_type === 'BASE' ? '' : 'rounded-lg border border-slate-200 p-3'}`}
           >
             <Section
-              title={`${c.direction === 'RECEIVABLE' ? '고객 청구' : '지급'} · ${chargeKinds[c.charge_type]}`}
+              plain
+              hideTitle={mode === 'driver' && c.charge_type === 'BASE'}
+              title={
+                mode === 'driver' && c.charge_type === 'BASE'
+                  ? '기본운임'
+                  : `${c.direction === 'RECEIVABLE' ? '고객 청구' : '지급'} · ${chargeKinds[c.charge_type]}`
+              }
               target={`charge:${c.id ?? c.key}`}
             >
               {c.charge_type === 'BASE' ? (
@@ -280,7 +299,7 @@ export function ChargeFields({
                       onChange={(e) => patch(c.key, { reason: e.target.value })}
                     />
                   </Field>
-                  <label className="flex items-center gap-3">
+                  <label className="flex min-h-11 items-center gap-3 text-[15px]">
                     <input
                       className="h-11 w-11 shrink-0 text-base"
                       type="checkbox"
@@ -294,7 +313,7 @@ export function ChargeFields({
               {c.charge_type !== 'BASE' && (
                 <button
                   type="button"
-                  className={`${button} mt-4 text-red-700`}
+                  className="mt-3 min-h-11 rounded-lg px-3 text-sm font-semibold text-red-700 hover:bg-red-50"
                   onClick={() => onChange(form.charges.filter((row) => row.key !== c.key))}
                 >
                   추가 비용 삭제

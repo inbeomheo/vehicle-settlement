@@ -223,7 +223,7 @@ test('오래된 미리보기 삭제 확인은 파일명과 건수를 표시하�
 test('정산 방향과 검수 목록은 키보드로 선택 가능한 필터 버튼이다', async ({ page }) => {
   for (const [path, first, second] of [
     ['/m/statements', '지급', '청구'],
-    ['/m/review', '제출됨', '보완 요청'],
+    ['/m/review', '검수 대기', '보완 요청'],
   ]) {
     await page.goto(path);
     const selected = page.getByRole('button', { name: first, exact: true });
@@ -278,7 +278,6 @@ test('사용자 ID·제목·보조 제목의 실제 렌더링 대비는 4.5 이�
   const targets = [
     page.getByText('사용자 ID: user-a'),
     page.getByRole('heading', { name: '사용자 관리', exact: true }),
-    page.getByText('차량 운영', { exact: true }),
   ];
   for (const target of targets) {
     const ratio = await target.evaluate((element) => {

@@ -21,27 +21,26 @@ async function fillTrip(page: Page) {
 async function mobileSize(page: Page) {
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
   expect(
-    await page
-      .locator('main input:not([type=file]),main select,main textarea')
-      .evaluateAll((elements) =>
-        elements
-          .filter(
-            (element) =>
-              element.getBoundingClientRect().height > 0 &&
-              (parseFloat(getComputedStyle(element).fontSize) < 16 ||
-                element.getBoundingClientRect().height < 44),
-          )
-          .map((element) => element.outerHTML),
-      ),
+    await page.locator('main input:not([type=file]),main select,main textarea').evaluateAll((elements) =>
+      elements
+        .filter(
+          (element) =>
+            element.getBoundingClientRect().height > 0 &&
+            (parseFloat(getComputedStyle(element).fontSize) < 16 ||
+              // 라디오·체크박스는 감싼 label 전체가 터치 영역이다.
+              (element.closest('label') ?? element).getBoundingClientRect().height < 44),
+        )
+        .map((element) => element.outerHTML),
+    ),
   ).toEqual([]);
 }
 
 test('390px 기본 기사 폼은 최소 항목과 추가비 버튼만 표시하고 증빙 첨부 후 제출', async ({ page }) => {
   const s = await setupScenario(database.db, { evidence_policy: 'PHOTO_REQUIRED' });
   await login(page, s.driverUser.login_id);
-  await page.getByLabel('현장', { exact: true }).selectOption('');
-  await expect(page.getByLabel('현장', { exact: true })).toBeEnabled();
-  await page.getByLabel('현장', { exact: true }).selectOption(s.project.id);
+  const projectChip = page.locator(`input[name="project_id"][value="${s.project.id}"]`);
+  await expect(page.getByRole('radiogroup', { name: '현장' })).toBeVisible();
+  await projectChip.check();
   await fillTrip(page);
   for (const label of [
     '공종 (선택)',
@@ -64,7 +63,12 @@ test('390px 기본 기사 폼은 최소 항목과 추가비 버튼만 표시하�
   await expect(page.getByLabel('운반 내용', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: '+ 추가 비용', exact: true })).toBeVisible();
   await expect(page.getByLabel('추가비 1 종류', { exact: true })).toHaveCount(0);
-  await expect(page.getByLabel('차량', { exact: true })).toHaveValue(s.vehicle.id);
+  // 차량이 적으면 번호판 칩(radio), 많으면 드롭다운으로 표시된다.
+  await expect(
+    page.locator(
+      `input[name="vehicle_id"][value="${s.vehicle.id}"]:checked, option[value="${s.vehicle.id}"]:checked`,
+    ),
+  ).toHaveCount(1);
   await expect(page.getByText('기본운임 300,000원', { exact: true })).toBeVisible();
   await mobileSize(page);
   await page.screenshot({ path: 'test-results/W9-minimal-390.png', fullPage: true });
@@ -88,12 +92,15 @@ test('관리자 회사 필수 변경 → 열린 기사 폼 제출 전 검사, �
   const driverPage = await driverContext.newPage();
   try {
     await login(driverPage, s.driverUser.login_id);
-    await driverPage.getByLabel('현장', { exact: true }).selectOption(b.id);
+    await driverPage.locator(`input[name="project_id"][value="${b.id}"]`).check();
     await fillTrip(driverPage);
     await login(page, s.admin.login_id, '/m/master');
     await page.getByRole('link', { name: /입력 항목 설정/ }).click();
     await page.getByRole('button', { name: /사용 정보.*펼치기/ }).click();
-    await page.getByLabel('요청자 · 기사', { exact: true }).selectOption('REQUIRED');
+    await page
+      .getByRole('radiogroup', { name: '요청자 · 기사', exact: true })
+      .getByRole('radio', { name: '필수' })
+      .check();
     await expect(page.getByRole('region', { name: '기사 폼 미리보기' })).toContainText('요청자 · 필수');
     await page.getByRole('button', { name: '설정 저장', exact: true }).click();
     await expect(page.getByText('입력 항목 설정을 저장했습니다. 변경 이력에 기록되었습니다.')).toBeVisible();
@@ -106,20 +113,20 @@ test('관리자 회사 필수 변경 → 열린 기사 폼 제출 전 검사, �
       await database.db.select().from(vehicleUses).where(eq(vehicleUses.driver_id, s.driver.id)),
     ).toHaveLength(0);
     await page.getByLabel('설정할 현장', { exact: true }).selectOption(s.project.id);
-    await expect(page.getByLabel('요청자 · 기사', { exact: true })).toHaveValue('');
-    await expect(page.getByLabel('요청자 · 기사', { exact: true }).locator('option:checked')).toContainText(
-      '회사 기본 따름 · 필수',
-    );
-    await page.getByLabel('요청자 · 기사', { exact: true }).selectOption('HIDDEN');
+    // 현장 재정의가 없으면 회사 기본값(필수)을 따른다.
+    const requesterDriver = page.getByRole('radiogroup', { name: '요청자 · 기사', exact: true });
+    await expect(requesterDriver.getByRole('radio', { name: '필수' })).toBeChecked();
+    await expect(page.getByLabel('요청자 설정').getByText('회사 기본 따름')).toHaveCount(2);
+    await requesterDriver.getByRole('radio', { name: '숨김' }).check();
     await page.getByRole('button', { name: '설정 저장', exact: true }).click();
     await expect(page.getByText('입력 항목 설정을 저장했습니다. 변경 이력에 기록되었습니다.')).toBeVisible();
-    await driverPage.getByLabel('현장', { exact: true }).selectOption(s.project.id);
+    await driverPage.locator(`input[name="project_id"][value="${s.project.id}"]`).check();
     await expect(driverPage.getByLabel('요청자', { exact: true })).toBeVisible();
     await expect(driverPage.getByLabel('요청자', { exact: true })).toHaveValue('');
     await expect(driverPage.locator('[data-fix-target="requester"]')).toContainText(
       '관리자 설정상 숨김 항목입니다',
     );
-    await driverPage.getByLabel('현장', { exact: true }).selectOption(b.id);
+    await driverPage.locator(`input[name="project_id"][value="${b.id}"]`).check();
     await expect(driverPage.getByLabel(/요청자.*필수/)).toBeVisible();
     await driverPage.getByLabel(/요청자.*필수/).fill('현장 담당자');
     await driverPage.getByRole('button', { name: '담당자에게 제출', exact: true }).click();
@@ -130,7 +137,7 @@ test('관리자 회사 필수 변경 → 열린 기사 폼 제출 전 검사, �
       .click();
     await page.getByRole('button', { name: '설정 저장', exact: true }).click();
     await expect(page.getByText('입력 항목 설정을 저장했습니다. 변경 이력에 기록되었습니다.')).toBeVisible();
-    await driverPage.getByLabel('현장', { exact: true }).selectOption(s.project.id);
+    await driverPage.locator(`input[name="project_id"][value="${s.project.id}"]`).check();
     await expect(driverPage.getByLabel(/요청자.*필수/)).toBeVisible();
     await page.getByRole('link', { name: '변경 이력', exact: true }).last().click();
     await page.getByRole('button', { name: '필터 펼치기 +', exact: true }).click();
@@ -198,7 +205,10 @@ test('관리자 동시 편집 충돌은 덮어쓰지 않고 최신 설정 불러
   await login(page, s.admin.login_id, '/m/master/form-fields');
   await page.getByRole('button', { name: /사용 정보.*펼치기/ }).click();
   await page.getByLabel('설정할 현장', { exact: true }).selectOption(s.project.id);
-  await page.getByLabel('요청자 · 기사', { exact: true }).selectOption('OPTIONAL');
+  await page
+    .getByRole('radiogroup', { name: '요청자 · 기사', exact: true })
+    .getByRole('radio', { name: '선택' })
+    .check();
   await saveFormSettings(s.adminCtx, {
     project_id: s.project.id,
     fields: [{ field_key: 'requester', driver_mode: 'REQUIRED', manager_mode: null, version: 0 }],
@@ -206,6 +216,8 @@ test('관리자 동시 편집 충돌은 덮어쓰지 않고 최신 설정 불러
   await page.getByRole('button', { name: '설정 저장', exact: true }).click();
   await expect(page.locator('main').getByRole('alert')).toContainText('입력 항목 설정이 변경되었습니다.');
   await page.getByRole('button', { name: '최신 설정 불러오기 (현재 편집 초기화)' }).click();
-  await expect(page.getByLabel('요청자 · 기사', { exact: true })).toHaveValue('REQUIRED');
+  await expect(
+    page.getByRole('radiogroup', { name: '요청자 · 기사', exact: true }).getByRole('radio', { name: '필수' }),
+  ).toBeChecked();
   await expect(page.getByRole('button', { name: '설정 저장', exact: true })).toBeDisabled();
 });

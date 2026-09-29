@@ -100,10 +100,10 @@ for (const width of widths) {
     await expect(confirmation).toContainText('포함 2건 · 총액 305,000원');
     expect((await (await page.request.get(`/api/statements/${id}`)).json()).data.status).toBe('DRAFT');
     await confirmation.getByRole('button', { name: '돌아가기', exact: true }).click();
-    await expect(page.getByRole('heading', { name: '작성 중 명세', exact: true })).toBeVisible();
+    await expect(page.getByText('확정 시 부여', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: '명세 확정', exact: true }).click();
     await confirmation.getByRole('button', { name: '확정', exact: true }).click();
-    await expect(page.getByRole('heading', { name: /^PAY-202609-/ })).toBeVisible();
+    await expect(page.getByText(/^PAY-202609-\d+$/)).toBeVisible();
     await page.getByRole('button', { name: '명세 취소', exact: true }).click();
     expect((await (await page.request.get(`/api/statements/${id}`)).json()).data.status).toBe('CONFIRMED');
     await page.getByLabel('명세 취소 사유', { exact: true }).fill('거래처 확인 후 재작성');

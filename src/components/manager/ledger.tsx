@@ -16,7 +16,11 @@ import {
   secondaryClass,
   buttonClass,
   useRemote,
+  api,
+  mutate,
+  signalClass,
 } from './common';
+import { Plate } from '@/components/ui/plate';
 type Option = { id: string; name?: string; plate_no?: string; active?: boolean };
 type Options = { projects: Option[]; drivers: Option[]; vehicles: Option[]; counterparties: Option[] };
 export type Search = Record<string, string>;
@@ -30,7 +34,7 @@ const columns: { key: keyof LedgerRow; title: string; render?: (row: LedgerRow) 
   { key: 'work_type_name', title: '공종' },
   { key: 'requester', title: '요청자' },
   { key: 'driver_name', title: '기사' },
-  { key: 'plate_no', title: '차량' },
+  { key: 'plate_no', title: '차량', render: (row) => <Plate value={row.plate_no} size="sm" /> },
   { key: 'payee_name', title: '운송사/지급처' },
   {
     key: 'route_summary',
@@ -46,7 +50,11 @@ const columns: { key: keyof LedgerRow; title: string; render?: (row: LedgerRow) 
   { key: 'performance', title: '실적' },
   { key: 'base_amount', title: '기본비', render: (row) => money(row.base_amount) },
   { key: 'extra_amount', title: '추가비', render: (row) => money(row.extra_amount) },
-  { key: 'total_amount', title: '합계', render: (row) => money(row.total_amount) },
+  {
+    key: 'total_amount',
+    title: '합계',
+    render: (row) => <strong className="num whitespace-nowrap">{money(row.total_amount)}</strong>,
+  },
   {
     key: 'evidence_count',
     title: '증빙',
@@ -125,6 +133,17 @@ export function Ledger({ initial = {} }: { initial?: Search }) {
   const filterCount = Object.entries(query).filter(
     ([key, value]) => value && !['page', 'pageSize', 'sort', 'order'].includes(key),
   ).length;
+  const advancedKeys = [
+    'period',
+    'driver_id',
+    'vehicle_id',
+    'counterparty_id',
+    'review_status',
+    'settlement_status',
+    'payment_status',
+  ];
+  const advancedCount = advancedKeys.filter((key) => query[key]).length;
+  const [moreOpen, setMoreOpen] = useState(advancedCount > 0);
   useEffect(() => {
     // Mobile cards expose all columns; desktop starts with its compact table selection.
     if (window.matchMedia('(max-width: 767px)').matches) setVisible(columns.map((column) => column.key));
@@ -194,6 +213,15 @@ export function Ledger({ initial = {} }: { initial?: Search }) {
         }}
       >
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <Field title="검색어">
+            <input
+              className={inputClass}
+              placeholder="사용번호·기사·차량·경로"
+              value={draft.search ?? ''}
+              onChange={(e) => draftValue('search', e.target.value)}
+            />
+          </Field>
+          {optionField('현장', 'project_id', lookups.data?.projects ?? [])}
           <Field title="사용일 시작">
             <input
               type="date"
@@ -210,56 +238,59 @@ export function Ledger({ initial = {} }: { initial?: Search }) {
               onChange={(e) => draftValue('to', e.target.value)}
             />
           </Field>
-          <Field title="정산월 (포함 명세 기간)">
-            <input
-              type="month"
-              className={inputClass}
-              value={draft.period ?? ''}
-              onChange={(e) => draftValue('period', e.target.value)}
-            />
-          </Field>
-          {optionField('현장', 'project_id', lookups.data?.projects ?? [])}
-          {optionField('기사', 'driver_id', lookups.data?.drivers ?? [])}
-          {optionField('차량', 'vehicle_id', lookups.data?.vehicles ?? [])}
-          {optionField('운송사/지급처', 'counterparty_id', lookups.data?.counterparties ?? [])}
-          {statusField('검수상태', 'review_status', ['DRAFT', 'SUBMITTED', 'NEEDS_FIX', 'APPROVED'])}
-          {statusField('정산상태', 'settlement_status', ['UNSETTLED', 'PARTIAL', 'SETTLED'])}
-          {statusField('지급상태', 'payment_status', ['NOT_SETTLED', 'UNPAID', 'PARTIAL', 'PAID'])}
-          <Field title="검색어">
-            <input
-              className={inputClass}
-              placeholder="사용번호·기사·차량·경로"
-              value={draft.search ?? ''}
-              onChange={(e) => draftValue('search', e.target.value)}
-            />
-          </Field>
-          <Field title="정렬">
-            <select
-              className={inputClass}
-              value={`${draft.sort}:${draft.order}`}
-              onChange={(e) => {
-                const [sort, order] = e.target.value.split(':');
-                setDraft({ ...draft, sort, order });
-              }}
-            >
-              {[
-                ['use_date:desc', '사용일 최신순'],
-                ['use_date:asc', '사용일 오래된순'],
-                ['use_no:desc', '사용번호 역순'],
-                ['total_amount:desc', '승인액 높은순'],
-                ['total_amount:asc', '승인액 낮은순'],
-                ['project_name:asc', '현장 이름순'],
-                ['driver_name:asc', '기사 이름순'],
-              ].map(([value, title]) => (
-                <option key={value} value={value}>
-                  {title}
-                </option>
-              ))}
-            </select>
-          </Field>
         </div>
+        {moreOpen && (
+          <div className="mt-3 grid gap-3 border-t border-slate-100 pt-3 sm:grid-cols-2 lg:grid-cols-4">
+            <Field title="정산월 (포함 명세 기간)">
+              <input
+                type="month"
+                className={inputClass}
+                value={draft.period ?? ''}
+                onChange={(e) => draftValue('period', e.target.value)}
+              />
+            </Field>
+            {optionField('기사', 'driver_id', lookups.data?.drivers ?? [])}
+            {optionField('차량', 'vehicle_id', lookups.data?.vehicles ?? [])}
+            {optionField('운송사/지급처', 'counterparty_id', lookups.data?.counterparties ?? [])}
+            {statusField('검수상태', 'review_status', ['DRAFT', 'SUBMITTED', 'NEEDS_FIX', 'APPROVED'])}
+            {statusField('정산상태', 'settlement_status', ['UNSETTLED', 'PARTIAL', 'SETTLED'])}
+            {statusField('지급상태', 'payment_status', ['NOT_SETTLED', 'UNPAID', 'PARTIAL', 'PAID'])}
+            <Field title="정렬">
+              <select
+                className={inputClass}
+                value={`${draft.sort}:${draft.order}`}
+                onChange={(e) => {
+                  const [sort, order] = e.target.value.split(':');
+                  setDraft({ ...draft, sort, order });
+                }}
+              >
+                {[
+                  ['use_date:desc', '사용일 최신순'],
+                  ['use_date:asc', '사용일 오래된순'],
+                  ['use_no:desc', '사용번호 역순'],
+                  ['total_amount:desc', '승인액 높은순'],
+                  ['total_amount:asc', '승인액 낮은순'],
+                  ['project_name:asc', '현장 이름순'],
+                  ['driver_name:asc', '기사 이름순'],
+                ].map(([value, title]) => (
+                  <option key={value} value={value}>
+                    {title}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          </div>
+        )}
         <div className="mt-4 flex flex-wrap items-center gap-3">
           <button className={buttonClass}>조회</button>
+          <button
+            type="button"
+            className={secondaryClass}
+            aria-expanded={moreOpen}
+            onClick={() => setMoreOpen(!moreOpen)}
+          >
+            {moreOpen ? '상세 필터 접기' : `상세 필터${advancedCount ? ` (${advancedCount})` : ''}`}
+          </button>
           <button
             type="button"
             className={secondaryClass}
@@ -402,79 +433,266 @@ export function Ledger({ initial = {} }: { initial?: Search }) {
     </>
   );
 }
+const reviewTabs = [
+  ['SUBMITTED', '검수 대기'],
+  ['NEEDS_FIX', '보완 요청'],
+  ['MISSING', '증빙 누락'],
+] as const;
+
+/** 증빙·단가·추가비 요청에 걸리는 것이 없으면 목록에서 바로 승인할 수 있다. */
+function quickApprovable(row: LedgerRow) {
+  return (
+    row.review_status === 'SUBMITTED' &&
+    row.operation_status !== 'CANCELED' &&
+    !row.evidence_missing &&
+    !row.has_requested_extra &&
+    row.review_total_amount !== null
+  );
+}
+
+async function approveUse(id: string) {
+  const detail = await api<{ version: number }>(`/api/uses/${id}`);
+  await mutate(`/api/uses/${id}/approve`, 'POST', { version: detail.version });
+}
+
+type CardResult = 'approved' | { error: string } | undefined;
+
+function ReviewCard({
+  row,
+  result,
+  selected,
+  onToggle,
+  onResult,
+}: {
+  row: LedgerRow;
+  result: CardResult;
+  selected: boolean;
+  onToggle: () => void;
+  onResult: (result: CardResult) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const approved = result === 'approved';
+  const error = typeof result === 'object' ? result.error : '';
+  const [day, month] = [row.use_date.slice(8, 10), Number(row.use_date.slice(5, 7))];
+  const quick = quickApprovable(row) && !approved;
+  const issues = [
+    row.evidence_missing && '증빙 없음',
+    row.has_requested_extra && '요청 추가비 확인 필요',
+    row.review_total_amount === null && '단가 미확정',
+    row.entered_as === 'PROXY' && `대리 입력(${row.creator_name})`,
+  ].filter(Boolean) as string[];
+  async function approve() {
+    setBusy(true);
+    try {
+      await approveUse(row.id);
+      onResult('approved');
+    } catch (reason) {
+      onResult({ error: reason instanceof Error ? reason.message : '승인하지 못했습니다.' });
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <article
+      className={`flex overflow-hidden rounded-lg border bg-white ${approved ? 'border-emerald-300 bg-emerald-50/40' : selected ? 'border-blue-400 ring-2 ring-blue-100' : 'border-slate-200'}`}
+    >
+      {quick ? (
+        <label className="flex w-10 shrink-0 cursor-pointer items-center justify-center border-r border-slate-100 sm:w-12">
+          <input
+            type="checkbox"
+            className="h-5 w-5 accent-blue-700"
+            checked={selected}
+            onChange={onToggle}
+            aria-label={`${row.use_no} 선택`}
+          />
+        </label>
+      ) : (
+        <span aria-hidden="true" className="w-10 shrink-0 border-r border-slate-100 sm:w-12" />
+      )}
+      <div className="flex w-12 shrink-0 flex-col items-center justify-center py-3 sm:w-16">
+        <span className="text-xs text-slate-500">{month}월</span>
+        <span className="num text-2xl leading-none font-bold sm:text-[28px]">{day}</span>
+      </div>
+      <div className="slip-perforation w-2 shrink-0" aria-hidden="true" />
+      <div className="grid min-w-0 flex-1 gap-3 p-3 sm:grid-cols-[1fr_auto] sm:items-center sm:p-4">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <Plate value={row.plate_no} />
+            <span className="font-semibold">{row.driver_name}</span>
+            <span className="text-sm text-slate-500">{row.project_name}</span>
+          </div>
+          <p className="mt-1.5 truncate text-[15px]">{row.route_summary}</p>
+          <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+            <UseLink id={row.id}>{row.use_no}</UseLink>
+            <span className="text-slate-600">증빙 {row.evidence_count}개</span>
+            {issues.map((issue) => (
+              <span key={issue} className="font-semibold text-orange-700">
+                {issue}
+              </span>
+            ))}
+          </p>
+          {error && (
+            <p role="alert" className="mt-2 text-sm text-red-700">
+              {error}
+            </p>
+          )}
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-2 sm:flex-col sm:flex-nowrap sm:items-end">
+          <div className="sm:text-right">
+            <p className="num text-lg font-bold whitespace-nowrap">{money(row.review_total_amount)}</p>
+            {(row.review_extra_amount ?? 0) > 0 && (
+              <p className="num text-xs text-slate-600">
+                기본 {money(row.review_base_amount)} + 추가비 {money(row.review_extra_amount)}
+              </p>
+            )}
+          </div>
+          {approved ? (
+            <span className="font-bold text-emerald-700">승인됨</span>
+          ) : quick ? (
+            <div className="ml-auto flex gap-2 sm:ml-0">
+              <a className={secondaryClass} href={`/m/uses/${row.id}`}>
+                열기
+              </a>
+              <button type="button" className={signalClass} disabled={busy} onClick={approve}>
+                {busy ? '승인 중…' : '바로 승인'}
+              </button>
+            </div>
+          ) : (
+            <a className={buttonClass} href={`/m/uses/${row.id}`}>
+              확인하기
+            </a>
+          )}
+        </div>
+      </div>
+    </article>
+  );
+}
+
 export function ReviewInbox({ initialTab = 'SUBMITTED' }: { initialTab?: string }) {
   const [tab, setTab] = useState(
     ['SUBMITTED', 'NEEDS_FIX', 'MISSING'].includes(initialTab) ? initialTab : 'SUBMITTED',
   );
   const [page, setPage] = useState(1);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [results, setResults] = useState<Record<string, CardResult>>({});
+  const [bulkBusy, setBulkBusy] = useState(false);
   const filter = tab === 'MISSING' ? 'evidence_missing=true' : `review_status=${tab}`;
   const { data, error, loading, refresh } = useRemote<LedgerResult>(
     `/api/ledger?${filter}&page=${page}&pageSize=20&sort=use_date&order=asc`,
   );
+  const quickRows = data?.rows.filter((row) => quickApprovable(row) && results[row.id] !== 'approved') ?? [];
+  const chosen = quickRows.filter((row) => selected.has(row.id));
+  const chosenTotal = chosen.reduce((sum, row) => sum + (row.review_total_amount ?? 0), 0);
+  const toggle = (id: string) =>
+    setSelected((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  async function approveSelected() {
+    setBulkBusy(true);
+    for (const row of chosen) {
+      try {
+        await approveUse(row.id);
+        setResults((current) => ({ ...current, [row.id]: 'approved' }));
+      } catch (reason) {
+        setResults((current) => ({
+          ...current,
+          [row.id]: { error: reason instanceof Error ? reason.message : '승인하지 못했습니다.' },
+        }));
+      }
+    }
+    setSelected(new Set());
+    setBulkBusy(false);
+  }
   return (
-    <>
-      <Heading title="검수함" description="실적·증빙·비용을 함께 확인하고 검수를 진행하세요." />
-      <div role="group" aria-label="검수 목록" className="mb-5 flex flex-wrap gap-2">
-        {[
-          ['SUBMITTED', '제출됨'],
-          ['NEEDS_FIX', '보완 요청'],
-          ['MISSING', '증빙 누락'],
-        ].map(([value, title]) => (
+    <div className={chosen.length ? 'pb-24' : undefined}>
+      <Heading
+        title="검수함"
+        description={
+          tab === 'SUBMITTED' && data
+            ? quickRows.length
+              ? `문제없는 ${quickRows.length}건은 바로 승인할 수 있습니다.`
+              : '확인이 필요한 건만 남았습니다.'
+            : undefined
+        }
+      />
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div
+          role="group"
+          aria-label="검수 목록"
+          className="flex gap-1 overflow-x-auto rounded-lg bg-slate-200/70 p-1"
+        >
+          {reviewTabs.map(([value, title]) => (
+            <button
+              key={value}
+              type="button"
+              aria-pressed={tab === value}
+              className={`min-h-10 whitespace-nowrap rounded-md px-4 text-sm font-semibold sm:px-5 ${tab === value ? 'bg-white text-ink shadow-sm' : 'text-slate-600 hover:text-ink'}`}
+              onClick={() => {
+                setTab(value);
+                setPage(1);
+                setSelected(new Set());
+                window.history.replaceState(null, '', `/m/review?tab=${value}`);
+              }}
+            >
+              {title}
+            </button>
+          ))}
+        </div>
+        {quickRows.length > 1 && (
           <button
-            key={value}
             type="button"
-            aria-pressed={tab === value}
-            className={tab === value ? buttonClass : secondaryClass}
-            onClick={() => {
-              setTab(value);
-              setPage(1);
-              window.history.replaceState(null, '', `/m/review?tab=${value}`);
-            }}
+            className={secondaryClass}
+            onClick={() =>
+              setSelected(
+                chosen.length === quickRows.length ? new Set() : new Set(quickRows.map((row) => row.id)),
+              )
+            }
           >
-            {title}
+            {chosen.length === quickRows.length ? '선택 해제' : `문제없는 ${quickRows.length}건 모두 선택`}
           </button>
-        ))}
+        )}
       </div>
-      <Notice error={error} />
-      {error && (
-        <button className={secondaryClass} onClick={refresh}>
-          다시 불러오기
-        </button>
-      )}
-      <div className="grid gap-3">
+      <Notice error={error} onRetry={error ? refresh : undefined} />
+      <div className="grid gap-2.5">
         {!loading &&
           data?.rows.map((row) => (
-            <article className={panelClass} key={row.id}>
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <UseLink id={row.id}>{row.use_no}</UseLink>
-                <Badge value={row.operation_status === 'CANCELED' ? 'CANCELED' : row.review_status} />
-              </div>
-              <p className="mt-3 font-semibold">
-                {row.use_date} · {row.project_name}
-              </p>
-              <p className="mt-1 text-sm text-slate-600">
-                {row.driver_name} · {row.plate_no} · {row.payee_name}
-              </p>
-              <p className="mt-2 text-sm">{row.route_summary}</p>
-              <p className="mt-2 text-sm">
-                기본운임 {money(row.review_base_amount)} · 추가비 {money(row.review_extra_amount)}
-                <strong className="mt-1 block">합계 {money(row.review_total_amount)}</strong>
-              </p>
-              <p className="mt-1 text-xs text-slate-600">
-                승인액 우선 · 미승인 항목은 계산액/요청액 ·{' '}
-                {row.has_requested_extra ? '요청 추가비 있음' : '미검수 요청 추가비 없음'}
-              </p>
-              <p className="mt-2 text-xs text-slate-600">
-                {row.evidence_missing ? '필수 증빙 누락' : `증빙 ${row.evidence_count}개`} ·{' '}
-                {row.entered_as === 'PROXY' ? `대리 입력 · 작성자 ${row.creator_name}` : '기사 직접 입력'}
-              </p>
-            </article>
+            <ReviewCard
+              key={row.id}
+              row={row}
+              result={results[row.id]}
+              selected={selected.has(row.id)}
+              onToggle={() => toggle(row.id)}
+              onResult={(result) => setResults((current) => ({ ...current, [row.id]: result }))}
+            />
           ))}
       </div>
       {(loading || (data && !data.rows.length)) && (
-        <Empty loading={loading}>검수할 사용 내역이 없습니다.</Empty>
+        <Empty loading={loading}>
+          {tab === 'SUBMITTED' ? '검수할 운행이 없습니다. 모두 처리했습니다.' : '해당하는 운행이 없습니다.'}
+        </Empty>
       )}
-      {data && <Pager page={page} pageSize={20} total={data.total} onChange={setPage} />}
-    </>
+      {data && data.total > 20 && <Pager page={page} pageSize={20} total={data.total} onChange={setPage} />}
+      {chosen.length > 0 && (
+        <div className="fixed inset-x-0 bottom-0 z-20 border-t border-slate-200 bg-white/95 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur md:left-60">
+          <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-3">
+            <p className="text-sm">
+              <span className="font-bold">{chosen.length}건 선택</span>
+              <span className="num ml-2 text-base font-bold">{money(chosenTotal)}</span>
+            </p>
+            <button
+              type="button"
+              className={`${signalClass} min-h-12 px-6 text-base`}
+              disabled={bulkBusy}
+              onClick={approveSelected}
+            >
+              {bulkBusy ? '승인 중…' : `선택 ${chosen.length}건 승인`}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

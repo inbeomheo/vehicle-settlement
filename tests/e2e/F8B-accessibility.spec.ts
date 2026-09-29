@@ -261,7 +261,7 @@ for (const confirmation of ['cancel', 'approved', 'discard'] as const) {
 test('계약·예상 금액·조회 실패는 정중한 실시간 알림 영역에서 갱신한다', async ({ page }) => {
   const s = await setupScenario(database.db);
   await login(page, s.driverUser.login_id, `/d/new?project=${s.project.id}`);
-  const region = page.locator('[aria-live="polite"]').filter({ hasText: '저장 시 서버 계산 결과 적용' });
+  const region = page.locator('[aria-live="polite"]').filter({ hasText: '기본운임' });
   await expect(region).toContainText('300,000원');
   await expect(region).toHaveAttribute('aria-atomic', 'true');
   await page.getByLabel('청구수량', { exact: true }).fill('2');
@@ -274,8 +274,11 @@ test('계약·예상 금액·조회 실패는 정중한 실시간 알림 영역�
 test('숨긴 사진 입력에 탭으로 접근하면 보이는 레이블에 포커스 테두리를 표시한다', async ({ page }) => {
   const s = await setupScenario(database.db);
   await login(page, s.driverUser.login_id, `/d/new?project=${s.project.id}`);
-  await page.getByLabel('증빙 종류').focus();
-  for (const name of ['카메라 촬영', '사진·파일 선택']) {
+  // 증빙 영역은 큰 사진 추가 영역 → 카메라 바로 촬영 순서로 탭 이동한다.
+  await expect(page.getByLabel('1회차 출발', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('사진·파일 선택', { exact: true })).toBeEnabled();
+  await page.getByRole('button', { name: '직전 회차 복사', exact: true }).focus();
+  for (const name of ['사진·파일 선택', '카메라 촬영']) {
     await page.keyboard.press('Tab');
     const input = page.getByLabel(name, { exact: true });
     await expect(input).toBeFocused();
@@ -325,7 +328,8 @@ test('기사 화면 보조 텍스트는 실제 배경에서 명암비 4.5 이상
   const s = await setupScenario(database.db);
   const use = await createUse(s.driverCtx, s.input);
   await login(page, s.driverUser.login_id, '/d');
-  expect(await textContrast(page.getByText(use.use_no, { exact: true }))).toBeGreaterThanOrEqual(4.5);
+  // 목록 카드는 사용번호 대신 현장·경로를 보여 준다. 보조 텍스트 대비는 아래에서 모두 검사한다.
+  void use.use_no;
   for (const path of ['/d', `/d/uses/${use.id}`]) {
     await page.goto(path);
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();

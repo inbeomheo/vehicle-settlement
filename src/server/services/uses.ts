@@ -1059,8 +1059,31 @@ export async function listUses(ctx: Context, raw: unknown = {}) {
           ),
         )
     : [];
+  const ids = rows.map((r) => r.id);
+  const tripRows = ids.length
+    ? await ctx.db
+        .select({ use_id: trips.vehicle_use_id, origin: trips.origin, destination: trips.destination })
+        .from(trips)
+        .where(inArray(trips.vehicle_use_id, ids))
+        .orderBy(asc(trips.vehicle_use_id), asc(trips.seq))
+    : [];
+  const fixIds = rows.filter((r) => r.review_status === 'NEEDS_FIX').map((r) => r.id);
+  const fixRows = fixIds.length
+    ? await ctx.db
+        .select({
+          use_id: useRevisions.vehicle_use_id,
+          fix_items: useRevisions.fix_items,
+          comment: useRevisions.comment,
+        })
+        .from(useRevisions)
+        .where(and(inArray(useRevisions.vehicle_use_id, fixIds), eq(useRevisions.decision, 'NEEDS_FIX')))
+        .orderBy(desc(useRevisions.revision_no))
+    : [];
   const displayRows = rows.map(({ create_request_hash: _hash, ...row }) => {
     void _hash;
+    const routeTrips = tripRows.filter((trip) => trip.use_id === row.id);
+    const fix = fixRows.find((item) => item.use_id === row.id);
+    const fixItems = (fix?.fix_items ?? []) as { message?: string }[];
     const lines = baseAmounts.filter((line) => line.use_id === row.id);
     const amounts = lines.map((line) => line.approved ?? line.amount);
     return {
@@ -1068,6 +1091,10 @@ export async function listUses(ctx: Context, raw: unknown = {}) {
       payable_base_amount:
         !amounts.length || amounts.some((amount) => amount === null) ? null : sumMoney(amounts),
       payable_base_approved: lines.length > 0 && lines.every((line) => line.status === 'APPROVED'),
+      route_summary: routeTrips.length
+        ? `${routeTrips[0].origin} → ${routeTrips[0].destination}${routeTrips.length > 1 ? ` 외 ${routeTrips.length - 1}회` : ''}`
+        : null,
+      fix_message: fix ? (fixItems[0]?.message ?? fix.comment ?? null) : null,
     };
   });
   const [{ total }] = await ctx.db

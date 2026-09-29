@@ -11,16 +11,15 @@ import {
   modeLabels,
   type AdminFieldSettings,
   type FieldSetting,
-  type FieldMode,
 } from '@/shared/form-settings';
 import {
   Field,
   Heading,
   Notice,
-  buttonClass,
   inputClass,
   panelClass,
   secondaryClass,
+  signalClass,
   useRemote,
 } from './common';
 
@@ -117,7 +116,7 @@ export function FormFieldSettings({ initialProject = '' }: { initialProject?: st
     <>
       <Heading
         title="입력 항목 설정"
-        description="기사와 담당자가 입력할 항목을 정하세요. 현장 설정이 회사 기본값보다 우선합니다."
+        description="항목마다 숨김·선택·필수를 누르고 저장하세요. 현장 설정이 회사 기본값보다 우선합니다."
       >
         <Link href="/m/master" className={secondaryClass}>
           기준정보 목록
@@ -144,12 +143,7 @@ export function FormFieldSettings({ initialProject = '' }: { initialProject?: st
           </select>
         </Field>
         <p className="mt-3 text-sm text-slate-600">
-          사용일·현장·차량·출발·도착(운행 1건 이상), 과금에 필요한 청구수량, 현장 증빙 정책은 항상 적용됩니다.
-          기사와 차량은 본인 기본값을 사용합니다.
-        </p>
-        <p className="mt-2 text-sm text-slate-600">
-          수량·시간은 운행 기록입니다. 청구수량은 별도로 입력합니다. 추가 비용을 필수로 정하면 추가비 1건
-          이상이 필요하며, 공차회차는 ‘아님’도 유효한 값입니다.
+          사용일·현장·차량·출발·도착·증빙은 항상 입력합니다. 나머지는 아래에서 숨김·선택·필수로 정하세요.
         </p>
       </div>
       <Notice error={error || projects.error} success={success} />
@@ -189,69 +183,93 @@ export function FormFieldSettings({ initialProject = '' }: { initialProject?: st
                 <h2 className="mb-3 hidden font-bold md:block">{group.label}</h2>
                 <div
                   id={`field-group-${group.key}`}
-                  className={`${openGroups[group.key] ? 'grid' : 'hidden'} min-w-0 gap-3 md:grid lg:grid-cols-2`}
+                  className={`${openGroups[group.key] ? 'grid' : 'hidden'} min-w-0 gap-3 md:grid`}
                 >
-                  {fields
-                    .filter((row) => group.fields.includes(row.field_key))
-                    .map((row) => (
-                      <section
-                        key={row.field_key}
-                        className={panelClass}
-                        aria-label={`${fieldLabels[row.field_key]} 설정`}
-                      >
-                        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                          <h3 className="font-bold">{fieldLabels[row.field_key]}</h3>
-                          {project && (row.driver_mode || row.manager_mode) && (
-                            <button
-                              type="button"
-                              className={secondaryClass}
-                              onClick={() => patch(row.field_key, { driver_mode: null, manager_mode: null })}
-                            >
-                              재정의 해제
-                            </button>
-                          )}
-                        </div>
-                        <div className="grid gap-3 sm:grid-cols-2">
-                          {(['driver', 'manager'] as const).map((role) => (
-                            <Field
-                              key={role}
-                              title={`${fieldLabels[row.field_key]} · ${role === 'driver' ? '기사' : '담당자'}`}
-                            >
-                              <select
-                                className={inputClass}
-                                aria-label={`${fieldLabels[row.field_key]} · ${role === 'driver' ? '기사' : '담당자'}`}
-                                value={row[`${role}_mode`] ?? ''}
-                                onChange={(event) =>
-                                  patch(row.field_key, {
-                                    [`${role}_mode`]: (event.target.value as FieldMode) || null,
-                                  })
+                  <div className="min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-white">
+                    <div className="hidden grid-cols-[minmax(8rem,1fr)_minmax(0,17rem)_minmax(0,17rem)] gap-4 border-b border-slate-200 bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-600 md:grid">
+                      <span>항목</span>
+                      <span>기사 화면</span>
+                      <span>담당자 화면</span>
+                    </div>
+                    {fields
+                      .filter((row) => group.fields.includes(row.field_key))
+                      .map((row) => (
+                        <section
+                          key={row.field_key}
+                          aria-label={`${fieldLabels[row.field_key]} 설정`}
+                          className="grid gap-3 border-b border-slate-100 px-4 py-3 last:border-b-0 md:grid-cols-[minmax(8rem,1fr)_minmax(0,17rem)_minmax(0,17rem)] md:items-center md:gap-4"
+                        >
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h3 className="font-semibold">{fieldLabels[row.field_key]}</h3>
+                            {(row.driver_mode || row.manager_mode) && (
+                              <button
+                                type="button"
+                                className="text-xs font-semibold text-blue-700 underline underline-offset-2"
+                                onClick={() =>
+                                  patch(row.field_key, { driver_mode: null, manager_mode: null })
                                 }
                               >
-                                <option value="">
-                                  {project ? '회사 기본 따름' : '초기 기본값'} ·{' '}
-                                  {modeLabels[inherited![role][row.field_key]]}
-                                </option>
-                                {fieldModes.map((mode) => (
-                                  <option key={mode} value={mode}>
-                                    {modeLabels[mode]}
-                                  </option>
-                                ))}
-                              </select>
-                            </Field>
-                          ))}
-                        </div>
-                        {(row.driver_mode ?? inherited!.driver[row.field_key]) === 'HIDDEN' &&
-                          !!settings.pending_fixes[row.field_key] && (
-                            <p
-                              role="alert"
-                              className="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-900"
-                            >
-                              미해결 보완요청이 {settings.pending_fixes[row.field_key]}건 있습니다. 숨김으로
-                              저장해도 해당 기사는 보완을 마칠 수 있도록 이 항목이 표시됩니다.
-                            </p>
-                          )}
-                      </section>
-                    ))}
+                                {project ? '재정의 해제' : '기본값으로'}
+                              </button>
+                            )}
+                          </div>
+                          {(['driver', 'manager'] as const).map((role) => {
+                            const name = `${fieldLabels[row.field_key]} · ${role === 'driver' ? '기사' : '담당자'}`;
+                            const explicit = row[`${role}_mode`];
+                            const effective = explicit ?? inherited![role][row.field_key];
+                            return (
+                              <div key={role} className="min-w-0">
+                                <span className="mb-1 block text-xs text-slate-500 md:hidden">
+                                  {role === 'driver' ? '기사 화면' : '담당자 화면'}
+                                  {!explicit && ` · ${project ? '회사 기본 따름' : '기본값'}`}
+                                </span>
+                                <div
+                                  role="radiogroup"
+                                  aria-label={name}
+                                  className="grid grid-cols-3 gap-1 rounded-lg bg-slate-100 p-1"
+                                >
+                                  {fieldModes.map((mode) => {
+                                    const on = effective === mode;
+                                    const tone =
+                                      mode === 'REQUIRED'
+                                        ? 'bg-ink text-white'
+                                        : mode === 'OPTIONAL'
+                                          ? 'bg-white text-blue-800 shadow-sm'
+                                          : 'bg-slate-500 text-white';
+                                    return (
+                                      <label
+                                        key={mode}
+                                        className={`relative flex min-h-11 cursor-pointer items-center justify-center rounded-md text-sm font-semibold has-[:focus-visible]:outline-3 has-[:focus-visible]:outline-blue-700 ${on ? tone : 'text-slate-500 hover:text-ink'} ${on && !explicit ? 'ring-1 ring-slate-300 ring-inset' : ''}`}
+                                      >
+                                        <input
+                                          type="radio"
+                                          className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                                          name={`${row.field_key}-${role}`}
+                                          value={mode}
+                                          checked={on}
+                                          onChange={() => patch(row.field_key, { [`${role}_mode`]: mode })}
+                                        />
+                                        {modeLabels[mode]}
+                                      </label>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            );
+                          })}
+                          {(row.driver_mode ?? inherited!.driver[row.field_key]) === 'HIDDEN' &&
+                            !!settings.pending_fixes[row.field_key] && (
+                              <p
+                                role="alert"
+                                className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900 md:col-span-3"
+                              >
+                                미해결 보완요청이 {settings.pending_fixes[row.field_key]}건 있습니다. 숨김으로
+                                저장해도 해당 기사는 보완을 마칠 수 있도록 이 항목이 표시됩니다.
+                              </p>
+                            )}
+                        </section>
+                      ))}
+                  </div>
                 </div>
               </section>
             ))}
@@ -272,8 +290,8 @@ export function FormFieldSettings({ initialProject = '' }: { initialProject?: st
               })}
             </ul>
           </section>
-          <div className="sticky bottom-0 flex flex-wrap items-center gap-3 border-t border-slate-200 bg-white p-4">
-            <button className={buttonClass} disabled={busy || !changed.length || !!conflict}>
+          <div className="sticky bottom-0 z-10 -mx-4 flex flex-wrap items-center gap-3 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur md:-mx-8 md:px-8">
+            <button className={signalClass} disabled={busy || !changed.length || !!conflict}>
               {busy ? '저장 중…' : '설정 저장'}
             </button>
             <span className="text-sm text-slate-600">

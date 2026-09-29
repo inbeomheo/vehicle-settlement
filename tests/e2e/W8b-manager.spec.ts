@@ -47,19 +47,18 @@ for (const [index, width] of [1440, 390, 360].entries()) {
     await page.goto(`/m/ledger?search=${fixture.useNo}`);
     const menu = page.getByRole('navigation', { name: '주 메뉴' });
     if (width < 768) {
-      await expect(menu.getByRole('button', { name: '메뉴', exact: true })).toHaveAttribute(
-        'aria-expanded',
-        'false',
-      );
-      expect((await menu.boundingBox())!.height).toBeLessThan(70);
-      await menu.getByRole('button', { name: '메뉴', exact: true }).click();
+      // 휴대폰: 상단 막대의 메뉴 버튼으로 펼친다. 막대는 한 줄 높이만 차지한다.
+      const toggle = page.getByRole('button', { name: '메뉴', exact: true });
+      await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+      expect((await page.locator('header').first().boundingBox())!.height).toBeLessThan(70);
+      await toggle.click();
     }
     await expect(menu.getByRole('link', { name: '차량 사용대장', exact: true })).toHaveAttribute(
       'aria-current',
       'page',
     );
-    if (width < 768) await menu.getByRole('button', { name: '메뉴', exact: true }).click();
-    const filters = page.getByRole('button', { name: /필터/ });
+    if (width < 768) await page.getByRole('button', { name: '메뉴', exact: true }).click();
+    const filters = page.getByRole('button', { name: /^필터/ });
     if (width < 768) {
       await expect(filters).toContainText('필터 (1)');
       await expect(page.getByLabel('검색어', { exact: true })).toBeHidden();
@@ -117,7 +116,8 @@ for (const [index, width] of [1440, 390, 360].entries()) {
       const lastHeader = page.getByRole('columnheader', { name: '지급상태', exact: true });
       const bounds = (await lastHeader.boundingBox())!;
       expect(bounds.x + bounds.width).toBeLessThanOrEqual(width);
-      expect((await page.locator('main').boundingBox())!.width).toBeGreaterThan(1200);
+      // 왼쪽 메뉴(240px)를 뺀 나머지 폭을 모두 쓴다.
+      expect((await page.locator('main').boundingBox())!.width).toBeGreaterThanOrEqual(1440 - 240);
     }
     await page.screenshot({ path: testInfo.outputPath(`ledger-${width}.png`), fullPage: true });
     await page.getByRole('link', { name: fixture.useNo, exact: true }).click();

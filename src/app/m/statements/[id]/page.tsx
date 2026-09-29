@@ -97,30 +97,46 @@ export default function StatementPage() {
     <div className="min-w-0 space-y-6">
       <Link
         href="/m/statements"
-        className="inline-flex min-h-11 items-center text-sm text-blue-700 underline"
+        className="inline-flex min-h-11 items-center text-sm font-semibold text-slate-600 hover:text-ink"
       >
-        ← 월 정산 목록
+        ‹ 월 정산 목록
       </Link>
-      <header className="flex flex-wrap justify-between gap-4">
-        <div>
-          <p className="mb-1 text-sm text-slate-600">
-            <StatementBadge status={statement.status} /> ·{' '}
-            {statement.direction === 'PAYABLE' ? '운송사 지급명세' : '원청 청구명세'}
-          </p>
-          <h1 className="break-all text-2xl font-bold">{statement.statement_no ?? '작성 중 명세'}</h1>
-          <p className="mt-2">
-            {String(statement.counterparty_snapshot?.name ?? '')} · {statement.period_start} ~{' '}
-            {statement.period_end}
-          </p>
+      <header className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+        <div className="flex flex-wrap items-start justify-between gap-4 p-5 sm:p-6">
+          <div className="min-w-0">
+            <p className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
+              <StatementBadge status={statement.status} />
+              {statement.direction === 'PAYABLE' ? '운송사 지급명세' : '원청 청구명세'}
+            </p>
+            <h1 className="mt-2 break-all text-[28px] font-bold">
+              {String(statement.counterparty_snapshot?.name ?? '거래처')}
+            </h1>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <a className={secondaryClass} href={`/api/statements/${id}/export.pdf`} download>
+              PDF 다운로드
+            </a>
+            <a className={secondaryClass} href={`/api/statements/${id}/export.xlsx`} download>
+              엑셀 다운로드
+            </a>
+          </div>
         </div>
-        <div className="flex flex-wrap gap-2 self-start">
-          <a className={secondaryClass} href={`/api/statements/${id}/export.xlsx`} download>
-            엑셀 다운로드
-          </a>
-          <a className={secondaryClass} href={`/api/statements/${id}/export.pdf`} download>
-            PDF 다운로드
-          </a>
-        </div>
+        <dl className="grid grid-cols-2 gap-x-6 gap-y-3 border-t border-dashed border-slate-300 bg-slate-50 px-5 py-4 text-sm sm:grid-cols-3 sm:px-6">
+          <div>
+            <dt className="text-slate-500">문서번호</dt>
+            <dd className="num mt-0.5 font-semibold break-all">{statement.statement_no ?? '확정 시 부여'}</dd>
+          </div>
+          <div>
+            <dt className="text-slate-500">정산 기간</dt>
+            <dd className="num mt-0.5 font-semibold">
+              {statement.period_start} ~ {statement.period_end}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-slate-500">포함</dt>
+            <dd className="mt-0.5 font-semibold">{included.length}건</dd>
+          </div>
+        </dl>
       </header>
       <ErrorMessage
         error={confirmingToken ? result.error : error || result.error}

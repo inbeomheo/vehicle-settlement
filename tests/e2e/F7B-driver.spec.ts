@@ -71,11 +71,11 @@ test('새 폼은 project를 반영하고 미전송 초안은 배너에서 명시
   await expect.poll(async () => (await drafts(page)).length).toBe(1);
   const [stored] = await drafts(page);
   await page.goto(`/d/new?project=${second.id}`);
-  await expect(page.getByLabel('현장', { exact: true })).toHaveValue(second.id);
+  await expect(page.locator(`input[name=\"project_id\"][value=\"${second.id}\"]`)).toBeChecked();
   await expect(page.getByLabel('1회차 출발', { exact: true })).toHaveValue('');
   await page.getByText('작성 중이던 운행 1건 이어서 쓰기', { exact: true }).click();
   await page.locator(`a[href="/d/new?draft=${stored.id}"]`).click();
-  await expect(page.getByLabel('현장', { exact: true })).toHaveValue(s.project.id);
+  await expect(page.locator(`input[name=\"project_id\"][value=\"${s.project.id}\"]`)).toBeChecked();
   await expect(page.getByLabel('1회차 출발', { exact: true })).toHaveValue('창고');
   expect(await drafts(page)).toHaveLength(1);
 });
@@ -83,10 +83,10 @@ test('새 폼은 project를 반영하고 미전송 초안은 배너에서 명시
 test('접근 불가능하거나 잘못된 project 쿼리는 신규 기본 현장으로 대체한다', async ({ page }) => {
   const s = await setupScenario(database.db);
   await login(page, s.driverUser.login_id, '/d/new?project=invalid-project');
-  await expect(page.getByLabel('현장', { exact: true })).toHaveValue(s.project.id);
+  await expect(page.locator(`input[name=\"project_id\"][value=\"${s.project.id}\"]`)).toBeChecked();
   const inaccessible = await s.f.project();
   await page.goto(`/d/new?project=${inaccessible.id}`);
-  await expect(page.getByLabel('현장', { exact: true })).toHaveValue(s.project.id);
+  await expect(page.locator(`input[name=\"project_id\"][value=\"${s.project.id}\"]`)).toBeChecked();
 });
 
 for (const state of ['saved', 'fix', 'copy'] as const) {

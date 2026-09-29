@@ -3,12 +3,15 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { requestJson } from '@/components/ui/request';
 export const inputClass =
-  'w-full min-h-11 min-w-0 rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-base disabled:bg-slate-100';
+  'w-full min-h-11 min-w-0 rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-base shadow-[inset_0_1px_0_rgb(0_0_0/0.03)] focus:border-blue-700 focus:outline-none focus:ring-3 focus:ring-blue-100 disabled:bg-slate-100 disabled:text-slate-500';
 export const buttonClass =
-  'inline-flex min-h-11 items-center justify-center whitespace-nowrap rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 disabled:cursor-wait disabled:opacity-50';
+  'inline-flex min-h-11 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg bg-ink px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 active:translate-y-px disabled:cursor-wait disabled:opacity-50';
 export const secondaryClass =
-  'inline-flex min-h-11 items-center justify-center whitespace-nowrap rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm hover:bg-slate-50 disabled:opacity-50';
-export const panelClass = 'min-w-0 rounded-xl border border-slate-200 bg-white p-4 sm:p-6';
+  'inline-flex min-h-11 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-ink hover:border-slate-400 hover:bg-slate-50 disabled:opacity-50';
+export const panelClass = 'min-w-0 rounded-lg border border-slate-200 bg-white p-4 sm:p-6';
+/** 가장 중요한 한 가지 행동(승인·확정·제출)에만 쓰는 신호 노랑 버튼 */
+export const signalClass =
+  'inline-flex min-h-11 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg bg-signal px-4 py-2 text-sm font-bold text-ink shadow-[0_2px_0_#c99500] hover:bg-signal-strong active:translate-y-px active:shadow-none disabled:cursor-wait disabled:opacity-50';
 export function money(value: number | null | undefined) {
   return value == null ? '미확정' : `${value.toLocaleString('ko-KR')}원`;
 }
@@ -118,15 +121,19 @@ export const labels: Record<string, string> = {
 };
 export const label = (value: string | null | undefined) => (value ? (labels[value] ?? value) : '—');
 export function Badge({ value }: { value: string }) {
-  const color = ['APPROVED', 'PAID', 'SETTLED', 'ACTIVE', 'COMPLETED'].includes(value)
-    ? 'bg-emerald-50 text-emerald-800'
+  const tone = ['APPROVED', 'PAID', 'SETTLED', 'ACTIVE', 'COMPLETED'].includes(value)
+    ? 'border-emerald-200 bg-emerald-50 text-emerald-800 before:bg-emerald-600'
     : value === 'CANCELED'
-      ? 'bg-red-100 text-red-800'
+      ? 'border-red-200 bg-red-50 text-red-800 before:bg-red-600'
       : ['NEEDS_FIX', 'HELD', 'FAILED', 'DISABLED'].includes(value)
-        ? 'bg-amber-50 text-amber-900'
-        : 'bg-slate-100 text-slate-700';
+        ? 'border-orange-200 bg-orange-50 text-orange-800 before:bg-orange-600'
+        : value === 'SUBMITTED'
+          ? 'border-blue-200 bg-blue-50 text-blue-800 before:bg-blue-700'
+          : 'border-slate-200 bg-slate-50 text-slate-700 before:bg-slate-400';
   return (
-    <span className={`inline-block whitespace-nowrap rounded-md px-2 py-1 text-xs font-semibold ${color}`}>
+    <span
+      className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-semibold before:h-1.5 before:w-1.5 before:rounded-full ${tone}`}
+    >
       {label(value)}
     </span>
   );
@@ -245,9 +252,8 @@ export function Heading({
   return (
     <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
       <div>
-        <p className="mb-1 text-xs font-semibold tracking-widest text-slate-600">차량 운영</p>
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">{title}</h1>
-        {description && <p className="mt-2 text-sm text-slate-600">{description}</p>}
+        <h1 className="text-2xl font-bold text-ink sm:text-[28px]">{title}</h1>
+        {description && <p className="mt-1.5 text-[15px] text-slate-600">{description}</p>}
       </div>
       {children}
     </div>
@@ -269,7 +275,7 @@ export function Empty({
   children?: React.ReactNode;
 }) {
   return (
-    <p role="status" className="p-8 text-center text-sm text-slate-600">
+    <p role="status" className="px-6 py-12 text-center text-[15px] text-slate-600">
       {loading ? '불러오는 중…' : children}
     </p>
   );

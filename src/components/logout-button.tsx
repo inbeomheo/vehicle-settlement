@@ -1,14 +1,14 @@
 'use client';
 import { useState } from 'react';
 import { activeUser, flushDrafts, isUnsent, listDrafts, markLoggedOut } from '@/client/offline/store';
-export function LogoutButton() {
+export function LogoutButton({ tone = 'light' }: { tone?: 'light' | 'dark' }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   return (
     <div>
       <button
         disabled={busy}
-        className="min-h-11 rounded-lg border border-slate-300 px-4 py-2 text-sm"
+        className={`min-h-11 rounded-lg px-3 py-2 text-sm font-medium ${tone === 'dark' ? 'text-slate-200 hover:bg-white/10' : 'border border-slate-300 hover:bg-slate-50'}`}
         onClick={async () => {
           setBusy(true);
           setError('');
@@ -40,7 +40,7 @@ export function LogoutButton() {
         로그아웃
       </button>
       {error && (
-        <p role="alert" className="text-sm text-red-700">
+        <p role="alert" className={`text-sm ${tone === 'dark' ? 'text-red-300' : 'text-red-700'}`}>
           {error}
         </p>
       )}
