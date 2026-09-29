@@ -2,10 +2,12 @@
 import { evidenceInstruction } from '@/components/use-form/evidence-policy';
 /* Authorized originals and local blob previews must bypass Next image optimization. */
 /* eslint-disable @next/next/no-img-element */
-import { useEffect, useState } from 'react';
+import { useContext, useEffect, useId, useState } from 'react';
+import { errorMessage } from '@/client/error-message';
+import { useActionLock } from '@/client/use-action-lock';
 import { evidenceKinds, type UseDetail } from '@/client/types';
 import type { PendingEvidence } from '@/client/offline/store';
-import { button, control, Field, Section } from '@/components/use-form/fields';
+import { button, control, Field, Section, FixContext } from '@/components/use-form/fields';
 import { prepareImage } from './resize';
 function Preview({ file }: { file: PendingEvidence }) {
   const [url, setUrl] = useState('');
@@ -53,7 +55,16 @@ export function EvidenceEditor({
   const [replaceId, setReplaceId] = useState('');
   const [deleteId, setDeleteId] = useState('');
   const [error, setError] = useState('');
-  const [processing, setProcessing] = useState(false);
+  const { busy: processing, start: startProcessing, finish: finishProcessing } = useActionLock();
+  const feedbackId = useId();
+  const hasFixes = useContext(FixContext).some((fix) => fix.target === 'evidence');
+  const evidenceFeedback = {
+    'aria-invalid': validationError || hasFixes ? true : undefined,
+    'aria-describedby':
+      [validationError ? `${feedbackId}-error` : '', hasFixes ? feedbackId : ''].filter(Boolean).join(' ') ||
+      undefined,
+  };
+  const fileLabel = `${button} justify-start focus-within:outline-2 focus-within:outline-offset-4 focus-within:outline-blue-700`;
   const [progress, setProgress] = useState<Record<string, number>>({});
   useEffect(() => {
     const listener = (event: Event) => {
@@ -65,8 +76,8 @@ export function EvidenceEditor({
   }, []);
   async function addFiles(files: FileList | null) {
     if (!files?.length) return;
+    if (!startProcessing()) return;
     setError('');
-    setProcessing(true);
     onProcessingChange(true);
     try {
       if (replaceId && (!reason.trim() || files.length !== 1))
@@ -88,9 +99,9 @@ export function EvidenceEditor({
       setReplaceId('');
       setReason('');
     } catch (e) {
-      setError(e instanceof Error ? e.message : '사진을 준비하지 못했습니다.');
+      setError(errorMessage(e, '사진을 준비하지 못했습니다.'));
     } finally {
-      setProcessing(false);
+      finishProcessing();
       onProcessingChange(false);
     }
   }
@@ -98,10 +109,11 @@ export function EvidenceEditor({
     (f) => !pending.some((p) => p.serverId === f.id || p.replacesId === f.id),
   );
   return (
-    <Section title="증빙" target="evidence">
+    <Section title="증빙" target="evidence" feedbackId={feedbackId}>
       {validationError && (
         <p
           role="alert"
+          id={`${feedbackId}-error`}
           className="mb-4 rounded-xl border-2 border-red-500 bg-red-50 p-4 font-semibold text-red-800"
         >
           {validationError}
@@ -196,7 +208,11 @@ export function EvidenceEditor({
                   className="w-full"
                 />
               )}
-              {file.error && <p className="mt-1 text-sm text-red-700">{file.error}</p>}
+              {file.error && (
+                <p className="mt-1 text-sm text-red-700">
+                  {errorMessage(file.error, '사진 전송에 실패했습니다. 다시 보내기를 눌러 주세요.')}
+                </p>
+              )}
               <div className="mt-2 flex flex-wrap gap-2">
                 {file.status === 'failed' && canRetry && (
                   <button type="button" className={button} onClick={onRetry}>
@@ -246,7 +262,7 @@ export function EvidenceEditor({
                       setError('삭제 사유를 입력하세요.');
                       return;
                     }
-                    setProcessing(true);
+                    if (!startProcessing()) return;
                     onProcessingChange(true);
                     try {
                       await onDelete(deleteId, reason);
@@ -254,9 +270,9 @@ export function EvidenceEditor({
                       setReason('');
                       setError('');
                     } catch (e) {
-                      setError(e instanceof Error ? e.message : '삭제하지 못했습니다.');
+                      setError(errorMessage(e, '삭제하지 못했습니다.'));
                     } finally {
-                      setProcessing(false);
+                      finishProcessing();
                       onProcessingChange(false);
                     }
                   }}
@@ -307,9 +323,10 @@ export function EvidenceEditor({
                 ))}
             </select>
           </Field>
-          <label className={`${button} justify-start`}>
+          <label className={fileLabel}>
             카메라 촬영
             <input
+              {...evidenceFeedback}
               aria-label="카메라 촬영"
               type="file"
               accept="image/*"
@@ -322,9 +339,10 @@ export function EvidenceEditor({
               }}
             />
           </label>
-          <label className={`${button} justify-start`}>
+          <label className={fileLabel}>
             사진·파일 선택
             <input
+              {...evidenceFeedback}
               aria-label="사진·파일 선택"
               type="file"
               accept="image/*,application/pdf"
@@ -340,7 +358,12 @@ export function EvidenceEditor({
           {policy === 'PHOTO_OR_ALTERNATIVE' && (
             <>
               <Field label="전표번호 (대체증빙)">
-                <input className={control} value={slip} onChange={(e) => setSlip(e.target.value)} />
+                <input
+                  {...evidenceFeedback}
+                  className={control}
+                  value={slip}
+                  onChange={(e) => setSlip(e.target.value)}
+                />
               </Field>
               <button
                 type="button"
@@ -369,7 +392,7 @@ export function EvidenceEditor({
               </button>
             </>
           )}
-          <p className="text-xs text-slate-500">사진은 긴 변 2,000px, JPEG 품질 80%로 변환됩니다.</p>
+          <p className="text-xs text-slate-600">사진은 긴 변 2,000px, JPEG 품질 80%로 변환됩니다.</p>
         </div>
       )}
       {processing && (

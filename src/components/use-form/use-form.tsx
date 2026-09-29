@@ -1,6 +1,8 @@
 'use client';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, ApiError, mutate } from '@/client/api';
+import { errorMessage } from '@/client/error-message';
+import { useActionLock } from '@/client/use-action-lock';
 import {
   type Mode,
   type UseDetail,
@@ -28,6 +30,7 @@ import { syncQueue, withQueuePaused } from '@/client/offline/engine';
 import { reconcileServer } from '@/client/offline/reconcile';
 import { copyToDevice } from '@/client/copy-draft';
 import { useFormSettings } from './settings';
+import { useInlineConfirmation } from './confirmation';
 import { revealDraftFields } from './visibility';
 import { ReadOnlyUse } from './read-only';
 import { evidenceError } from './evidence-policy';
@@ -74,13 +77,17 @@ function scrollTo(target: string) {
   const trip = normalized.match(/^trip:(\d+)/);
   if (trip) window.dispatchEvent(new CustomEvent('vehicle-expand-trip', { detail: Number(trip[1]) - 1 }));
   requestAnimationFrame(() => {
-    element?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    element?.querySelector<HTMLElement>('input,select,textarea,button')?.focus({ preventScroll: true });
+    const control = element?.querySelector<HTMLElement>(
+      'input:not(:disabled),select:not(:disabled),textarea:not(:disabled),button:not(:disabled)',
+    );
+    (control ?? element)?.focus({ preventScroll: true });
+    // Validation navigation must remain visible even after another keyboard focus jump.
+    element?.scrollIntoView({ behavior: 'instant', block: 'center' });
   });
 }
 function scrollToFirstError(errors: FormError[]) {
   const first = Array.from(document.querySelectorAll<HTMLElement>('[data-fix-target]')).find((element) =>
-    errors.some((error) => error.target === element.dataset.fixTarget),
+    errors.some((error) => error.target.replace(/^use\./, '') === element.dataset.fixTarget),
   );
   scrollTo(first?.dataset.fixTarget ?? errors[0].target);
 }
@@ -93,7 +100,7 @@ export function UseFormPage({ mode, useId }: { mode: Mode; useId?: string }) {
   if (error)
     return (
       <p role="alert">
-        {error}{' '}
+        {errorMessage(error)}{' '}
         {authRequired ? (
           <a className={button} href="/login">
             로그인
@@ -124,16 +131,27 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
   const [error, setError] = useState('');
   const [validation, setValidation] = useState<FormError[]>([]);
   const [localSaved, setLocalSaved] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const [localFailed, setLocalFailed] = useState(false);
+  const { busy, active: actionActive, start: startAction, finish: finishAction } = useActionLock();
   const [evidenceBusy, setEvidenceBusy] = useState(false);
   const [online, setOnline] = useState(true);
   const [discardConfirm, setDiscardConfirm] = useState(false);
   const [editApproved, setEditApproved] = useState(false);
   const [approvalConfirm, setApprovalConfirm] = useState(false);
   const [cancelConfirm, setCancelConfirm] = useState(false);
+  const discardConfirmation = useInlineConfirmation(discardConfirm, () => setDiscardConfirm(false), busy);
+  const approvalConfirmation = useInlineConfirmation(approvalConfirm, () => setApprovalConfirm(false), busy);
+  const cancelConfirmation = useInlineConfirmation(cancelConfirm, () => setCancelConfirm(false), busy);
   const [evidenceValidation, setEvidenceValidation] = useState('');
   const persistence = useRef<Promise<void>>(Promise.resolve());
   const inputErrors = draft?.inputError ? draft.inputErrors : undefined;
+  useEffect(() => {
+    if (!(error || draft?.error) || inputErrors?.length || validation.length) return;
+    const frame = requestAnimationFrame(() => {
+      document.getElementById('form-errors')?.focus();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [error, draft?.error, inputErrors, validation.length]);
   useEffect(() => {
     if (!inputErrors?.length) return;
     const frame = requestAnimationFrame(() => scrollToFirstError(inputErrors));
@@ -151,6 +169,28 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
       }
     },
     [useId],
+  );
+  const queuePersistence = useCallback(
+    (value: Draft) => {
+      const operation = persistence.current.then(() => persist(value));
+      // The tail always settles successfully so one failed write cannot poison later writes.
+      // Return the original operation so explicit save/flush callers still see their own failure.
+      persistence.current = operation.catch(() => {});
+      void operation.then(
+        () => {
+          if (current.current?.id === value.id && current.current.updatedAt === value.updatedAt) {
+            setLocalSaved(true);
+            setLocalFailed(false);
+          }
+        },
+        () => {
+          setLocalSaved(false);
+          setLocalFailed(true);
+        },
+      );
+      return operation;
+    },
+    [persist],
   );
 
   useEffect(() => {
@@ -246,7 +286,7 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
         );
         if (alive) setRecent(details.filter((d): d is UseDetail => !!d));
       } catch (e) {
-        if (alive) setError(e instanceof Error ? e.message : '불러오지 못했습니다.');
+        if (alive) setError(errorMessage(e, '불러오지 못했습니다.'));
       }
     }
     void load();
@@ -258,47 +298,43 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
     if (!draft || draft.phase !== 'editing' || !shouldPersistDraft(draft)) return;
     setLocalSaved(false);
     const timer = window.setTimeout(() => {
-      persistence.current = persistence.current.then(() => persist(draft));
-      void persistence.current
-        .then(() => setLocalSaved(true))
-        .catch(() =>
-          setError(
-            '휴대폰 저장 공간이 부족하거나 저장할 수 없습니다. 연결 상태를 확인하고 서버 저장을 눌러 주세요.',
-          ),
-        );
+      if (!actionActive.current && current.current?.phase === 'editing')
+        void queuePersistence(current.current);
     }, 450);
     return () => clearTimeout(timer);
-  }, [draft, persist]);
+  }, [draft, queuePersistence, actionActive]);
   useEffect(() => {
     const flush = () => {
-      if (current.current?.phase === 'editing' && shouldPersistDraft(current.current)) {
-        const value = current.current;
-        persistence.current = persistence.current.then(() => persist(value));
-      }
+      if (
+        !actionActive.current &&
+        current.current?.phase === 'editing' &&
+        shouldPersistDraft(current.current)
+      )
+        return queuePersistence(current.current);
+      return persistence.current;
     };
     const flushRequested = (event: Event) => {
-      flush();
-      (event as CustomEvent<{ waitUntil: (promise: Promise<void>) => void }>).detail.waitUntil(
-        persistence.current,
-      );
+      (event as CustomEvent<{ waitUntil: (promise: Promise<void>) => void }>).detail.waitUntil(flush());
     };
     const update = () => {
       const value = current.current;
       if (!value || value.phase !== 'queued') return;
-      void getDraft(boot.user.id, value.id).then((next) => {
-        if (next && current.current?.phase === 'queued') {
-          setLocalSaved(true);
-          if (next.phase === 'saved') setEditApproved(false);
-          setDraft(
-            next.phase === 'saved' && next.server
-              ? { ...next, form: fromUse(next.server, mode, next.form) }
-              : next,
-          );
-          if (next.phase === 'saved' && mode === 'manager' && next.serverId)
-            location.assign(`/m/uses/${next.serverId}`);
-          navigateAfterSubmit(next);
-        }
-      });
+      void getDraft(boot.user.id, value.id)
+        .then((next) => {
+          if (next && current.current?.phase === 'queued') {
+            setLocalSaved(true);
+            if (next.phase === 'saved') setEditApproved(false);
+            setDraft(
+              next.phase === 'saved' && next.server
+                ? { ...next, form: fromUse(next.server, mode, next.form) }
+                : next,
+            );
+            if (next.phase === 'saved' && mode === 'manager' && next.serverId)
+              location.assign(`/m/uses/${next.serverId}`);
+            navigateAfterSubmit(next);
+          }
+        })
+        .catch((error) => setError(errorMessage(error, '휴대폰 저장 내용을 확인하지 못했습니다.')));
     };
     const connectivity = () => setOnline(navigator.onLine);
     connectivity();
@@ -322,7 +358,7 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
       clearInterval(periodicSave);
       document.removeEventListener('visibilitychange', onHidden);
     };
-  }, [boot.user.id, mode, persist]);
+  }, [boot.user.id, mode, queuePersistence, actionActive]);
   const date = draft?.form.use_date;
   useEffect(() => {
     if (!date) return;
@@ -330,7 +366,7 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
     const key = `lookups:${date}`;
     void api<Lookups>(`/api/lookups?use_date=${date}`)
       .then(async (value) => {
-        await cacheValue(boot.user.id, key, value);
+        await cacheValue(boot.user.id, key, value).catch(() => {});
         if (alive) setLookups(value);
       })
       .catch(async (e: unknown) => {
@@ -338,7 +374,7 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
           if (alive) setError(e.message);
           return;
         }
-        const value = await cachedValue<Lookups>(boot.user.id, key);
+        const value = await cachedValue<Lookups>(boot.user.id, key).catch(() => undefined);
         if (alive && value) setLookups(value);
       });
     return () => {
@@ -346,7 +382,7 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
     };
   }, [date, boot.user.id]);
   function edit(patch: Partial<Draft> | ((value: Draft) => Partial<Draft>)) {
-    if (busy) return;
+    if (actionActive.current) return;
     setDraft((value) => {
       if (!value || ['queued', 'conflict', 'blocked'].includes(value.phase)) return value;
       return {
@@ -399,7 +435,7 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
     )
       return;
     if (!settings.ready) return;
-    setBusy(true);
+    if (!startAction()) return;
     setError('');
     try {
       const modes = intent === 'submit' ? await settings.refresh() : settings.modes;
@@ -438,8 +474,8 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
         submitRequest: undefined,
         error: undefined,
       };
-      await persistence.current;
-      await persist(queued);
+      await queuePersistence(queued);
+      setLocalFailed(false);
       setDraft(queued);
       current.current = queued;
       await syncQueue(boot.user.id);
@@ -456,9 +492,9 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
         navigateAfterSubmit(result);
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : '저장하지 못했습니다.');
+      setError(errorMessage(e, '저장하지 못했습니다.'));
     } finally {
-      setBusy(false);
+      finishAction();
     }
   }
   async function deleteStoredEvidence(id: string, reason: string) {
@@ -484,7 +520,7 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
   }
   async function removePending(uploadId: string) {
     if (!draft || busy) return;
-    setBusy(true);
+    if (!startAction()) return;
     setError('');
     try {
       await persistence.current;
@@ -509,7 +545,7 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
               return conflict;
             }
             setError(
-              `이 기기의 대기 첨부는 제거했습니다. 서버 증빙: ${e instanceof Error ? e.message : '삭제하지 못했습니다.'}`,
+              `이 기기의 대기 첨부는 제거했습니다. 서버 증빙: ${errorMessage(e, '삭제하지 못했습니다.')}`,
             );
           }
         }
@@ -549,15 +585,15 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
       });
       setDraft(next);
     } catch (e) {
-      setError(e instanceof Error ? e.message : '첨부를 제거하지 못했습니다.');
+      setError(errorMessage(e, '첨부를 제거하지 못했습니다.'));
     } finally {
-      setBusy(false);
+      finishAction();
     }
   }
   async function discard() {
     if (!draft || busy) return;
     const value = draft;
-    setBusy(true);
+    if (!startAction()) return;
     setDraft(undefined);
     current.current = undefined;
     try {
@@ -566,12 +602,40 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
       location.assign(mode === 'driver' ? '/d' : '/m/ledger');
     } catch (e) {
       setDraft(value);
-      setError(e instanceof Error ? e.message : '기기 초안을 폐기하지 못했습니다.');
+      setError(errorMessage(e, '기기 초안을 폐기하지 못했습니다.'));
     } finally {
-      setBusy(false);
+      finishAction();
     }
   }
-  if (!draft) return <p role={error ? 'alert' : 'status'}>{error || '기기 초안을 확인하고 있습니다…'}</p>;
+  async function retryLocalSave() {
+    const value = current.current;
+    if (!value || !startAction()) return;
+    setError('');
+    try {
+      await queuePersistence(value);
+    } catch (e) {
+      setError(errorMessage(e, '휴대폰에 저장하지 못했습니다. 다시 시도해 주세요.'));
+    } finally {
+      finishAction();
+    }
+  }
+  async function retryQueue() {
+    if (!startAction()) return;
+    setError('');
+    try {
+      await syncQueue(boot.user.id, true);
+    } catch (e) {
+      setError(errorMessage(e, '전송하지 못했습니다. 다시 시도해 주세요.'));
+    } finally {
+      finishAction();
+    }
+  }
+  if (!draft)
+    return (
+      <p role={error ? 'alert' : 'status'}>
+        {error ? errorMessage(error) : '기기 초안을 확인하고 있습니다…'}
+      </p>
+    );
   const form = draft.form;
   const fieldErrors = [...validation, ...(inputErrors ?? [])];
   const revealed = new Set(
@@ -703,7 +767,8 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
                   busy || !online || draft.phase === 'queued' || (!readOnly && draft.phase !== 'saved')
                 }
                 onClick={async () => {
-                  setBusy(true);
+                  if (!startAction()) return;
+                  setError('');
                   try {
                     const server = await mutate<UseDetail>(`/api/uses/${draft.serverId}/confirm-by-driver`, {
                       version: draft.server!.version,
@@ -718,9 +783,9 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
                     await putDraft(next);
                     setDraft(next);
                   } catch (e) {
-                    setError(e instanceof Error ? e.message : '확인하지 못했습니다.');
+                    setError(errorMessage(e, '확인하지 못했습니다.'));
                   } finally {
-                    setBusy(false);
+                    finishAction();
                   }
                 }}
               >
@@ -747,15 +812,36 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
             </ul>
           </section>
         )}
-        {(error || draft.error || fieldErrors.length > 0) && (
+        {(error || draft.error || localFailed || fieldErrors.length > 0) && (
           <div
             id="form-errors"
             role="alert"
+            tabIndex={-1}
             className="scroll-mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-red-800"
           >
-            <p>{error || draft.error}</p>
+            {(error || draft.error) && <p>{errorMessage(error || draft.error)}</p>}
+            {localFailed && (
+              <button
+                type="button"
+                className={`${button} mt-2`}
+                disabled={busy}
+                onClick={() => {
+                  void retryLocalSave();
+                }}
+              >
+                휴대폰 저장 실패 — 다시 시도
+              </button>
+            )}
             {fieldErrors.map((v, i) => (
-              <p key={i}>{v.reason}</p>
+              <p key={i}>
+                <button
+                  type="button"
+                  className="min-h-11 text-left underline"
+                  onClick={() => scrollTo(v.target)}
+                >
+                  {v.reason}
+                </button>
+              </p>
             ))}
           </div>
         )}
@@ -841,12 +927,17 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
               <button
                 type="button"
                 className={button}
+                disabled={busy}
                 onClick={async () => {
+                  if (!startAction()) return;
+                  setError('');
                   try {
                     const conflict = await api<UseDetail>(`/api/uses/${draft.serverId}`);
                     setDraft({ ...draft, conflict });
                   } catch (e) {
-                    setError(e instanceof Error ? e.message : '조회 실패');
+                    setError(errorMessage(e, '조회 실패'));
+                  } finally {
+                    finishAction();
                   }
                 }}
               >
@@ -861,7 +952,7 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
             className={`${button} w-full`}
             disabled={busy}
             onClick={() => {
-              void syncQueue(boot.user.id, true);
+              void retryQueue();
             }}
           >
             미전송 다시 보내기
@@ -884,6 +975,7 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
               draft.server.operation_status !== 'CANCELED' &&
               (approvalConfirm ? (
                 <div
+                  {...approvalConfirmation.dialog}
                   role="alertdialog"
                   aria-label="승인 운행 수정 확인"
                   className="rounded-xl bg-amber-50 p-4"
@@ -895,6 +987,7 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
                       onClick={() => {
                         setEditApproved(true);
                         setApprovalConfirm(false);
+                        requestAnimationFrame(() => scrollTo('use_date'));
                       }}
                     >
                       확인 후 수정
@@ -905,7 +998,12 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
                   </div>
                 </div>
               ) : (
-                <button className={button} onClick={() => setApprovalConfirm(true)}>
+                <button
+                  ref={approvalConfirmation.trigger}
+                  className={button}
+                  disabled={busy}
+                  onClick={() => setApprovalConfirm(true)}
+                >
                   수정하기
                 </button>
               ))}
@@ -913,10 +1011,13 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
               className={button}
               disabled={busy}
               onClick={async () => {
+                if (!startAction()) return;
+                setError('');
                 try {
                   location.assign(await copyToDevice(boot.user.id, draft.serverId!));
                 } catch (e) {
-                  setError(e instanceof Error ? e.message : '복사하지 못했습니다.');
+                  setError(errorMessage(e, '복사하지 못했습니다.'));
+                  finishAction();
                 }
               }}
             >
@@ -927,6 +1028,7 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
               draft.server.operation_status !== 'CANCELED' &&
               (cancelConfirm ? (
                 <div
+                  {...cancelConfirmation.dialog}
                   role="alertdialog"
                   aria-label="작성중 운행 취소 확인"
                   className="rounded-xl bg-amber-50 p-4"
@@ -937,7 +1039,8 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
                       className={button}
                       disabled={busy}
                       onClick={async () => {
-                        setBusy(true);
+                        if (!startAction()) return;
+                        setError('');
                         try {
                           await persistence.current;
                           await withQueuePaused(boot.user.id, async () => {
@@ -950,8 +1053,8 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
                           });
                           location.assign('/d');
                         } catch (e) {
-                          setError(e instanceof Error ? e.message : '취소하지 못했습니다.');
-                          setBusy(false);
+                          setError(errorMessage(e, '취소하지 못했습니다.'));
+                          finishAction();
                         }
                       }}
                     >
@@ -964,6 +1067,7 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
                 </div>
               ) : (
                 <button
+                  ref={cancelConfirmation.trigger}
                   className={`${button} ml-2 text-red-700`}
                   disabled={locked}
                   onClick={() => setCancelConfirm(true)}
@@ -1201,7 +1305,7 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
               }}
               onProcessingChange={setEvidenceBusy}
               onRetry={() => {
-                void syncQueue(boot.user.id, true);
+                void retryQueue();
               }}
               onDelete={deleteStoredEvidence}
             />
@@ -1224,7 +1328,7 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
                     : '담당자에게 제출'}
               </button>
             </div>
-            <p className="text-sm text-slate-500">
+            <p className="text-sm text-slate-600">
               서버 저장은 작성 중 상태입니다. 제출 버튼을 눌러야 담당자에게 전달됩니다. 오프라인 전송 요청은
               연결되면 자동으로 보냅니다.
             </p>
@@ -1233,7 +1337,7 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
         {draft.phase !== 'saved' && (
           <section className="rounded-xl border border-slate-200 p-4">
             {discardConfirm ? (
-              <div role="alertdialog" aria-label="기기 초안 폐기 확인">
+              <div {...discardConfirmation.dialog} role="alertdialog" aria-label="기기 초안 폐기 확인">
                 <p className="font-semibold">이 기기의 초안과 미전송 첨부를 폐기할까요?</p>
                 <p className="mt-2 text-sm text-slate-600">
                   복구할 수 없습니다. 이미 서버에 저장된 운행과 증빙은 유지됩니다.
@@ -1261,6 +1365,7 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
               </div>
             ) : (
               <button
+                ref={discardConfirmation.trigger}
                 type="button"
                 className={`${button} text-red-700`}
                 disabled={busy}

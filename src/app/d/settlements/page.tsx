@@ -1,4 +1,5 @@
 'use client';
+import { errorMessage } from '@/client/error-message';
 import { useState, type FormEvent } from 'react';
 import type { driverSettlements } from '@/server/services/statements-driver';
 import {
@@ -41,7 +42,7 @@ export default function DriverSettlementsPage() {
         </Field>
         <button className={secondaryClass}>조회</button>
       </form>
-      <ErrorMessage error={result.error} />
+      <ErrorMessage error={result.error ? errorMessage(result.error) : result.error} />
       {result.loading && <p role="status">내 정산을 불러오는 중…</p>}
       {result.data && (
         <>
@@ -60,7 +61,7 @@ export default function DriverSettlementsPage() {
           </dl>
           <section className="space-y-3">
             <h2 className="text-xl font-bold">내 사용 건</h2>
-            {!result.data.uses.length && <p className="text-slate-500">조회 기간의 사용 건이 없습니다.</p>}
+            {!result.data.uses.length && <p className="text-slate-600">조회 기간의 사용 건이 없습니다.</p>}
             {result.data.uses.map((use) => (
               <article key={use.id} className={`${panelClass} space-y-2`}>
                 <p className="font-semibold">
@@ -77,7 +78,7 @@ export default function DriverSettlementsPage() {
           <section className="space-y-3">
             <h2 className="text-xl font-bold">확정 지급명세 · 내 해당분</h2>
             {!result.data.statements.length && (
-              <p className="text-slate-500">조회 기간의 확정 지급명세가 없습니다.</p>
+              <p className="text-slate-600">조회 기간의 확정 지급명세가 없습니다.</p>
             )}
             {result.data.statements.map((s) => (
               <article key={s.id} className={`${panelClass} space-y-3`}>

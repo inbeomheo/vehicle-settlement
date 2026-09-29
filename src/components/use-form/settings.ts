@@ -1,6 +1,7 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
 import { api, ApiError } from '@/client/api';
+import { errorMessage } from '@/client/error-message';
 import { cachedValue, cacheValue } from '@/client/offline/store';
 import { defaultFieldModes, type EffectiveFieldSettings } from '@/shared/form-settings';
 
@@ -41,7 +42,7 @@ export function useFormSettings(userId: string, projectId: string | undefined, m
           if (alive)
             setFailure({
               key,
-              message: error instanceof Error ? error.message : '입력 항목 설정을 불러오지 못했습니다.',
+              message: errorMessage(error, '입력 항목 설정을 불러오지 못했습니다.'),
             });
         });
     return () => {

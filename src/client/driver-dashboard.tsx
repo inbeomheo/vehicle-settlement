@@ -1,6 +1,8 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { api, ApiError } from './api';
+import { errorMessage } from './error-message';
+import { useActionLock } from './use-action-lock';
 import { todaySeoul, reviewLabels, type UseList } from './types';
 import { useBootstrap, PwaRegistration } from './offline/runtime';
 import { isUnsent, listDrafts, OFFLINE_EVENT, type Draft } from './offline/store';
@@ -14,7 +16,7 @@ export function DriverDashboard() {
   const [fixes, setFixes] = useState<UseList['rows']>([]);
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [message, setMessage] = useState('');
-  const [busy, setBusy] = useState(false);
+  const { busy, start: startAction, finish: finishAction } = useActionLock();
   const [copyMenu, setCopyMenu] = useState<string>();
   const [refreshAttempt, setRefreshAttempt] = useState(0);
   const [listAuthRequired, setListAuthRequired] = useState(false);
@@ -24,7 +26,11 @@ export function DriverDashboard() {
     const refresh = () => {
       setMessage('');
       setListAuthRequired(false);
-      void listDrafts(data.user.id).then(setDrafts);
+      void listDrafts(data.user.id)
+        .then(setDrafts)
+        .catch((error) =>
+          setMessage(errorMessage(error, '휴대폰 저장 내용을 불러오지 못했습니다. 다시 시도해 주세요.')),
+        );
       if (navigator.onLine) {
         void api<UseList>('/api/uses?pageSize=20&sort=use_date')
           .then(setList)
@@ -50,20 +56,19 @@ export function DriverDashboard() {
   }, [data, refreshAttempt]);
   async function copy(id: string) {
     if (!data) return;
-    setBusy(true);
+    if (!startAction()) return;
     setMessage('');
     try {
       location.assign(await copyToDevice(data.user.id, id));
     } catch (e) {
-      setMessage(e instanceof Error ? e.message : '복사하지 못했습니다.');
-    } finally {
-      setBusy(false);
+      setMessage(errorMessage(e, '복사하지 못했습니다.'));
+      finishAction();
     }
   }
   if (error)
     return (
       <p role="alert">
-        {error}{' '}
+        {errorMessage(error)}{' '}
         {authRequired ? (
           <a href="/login" className={button}>
             로그인
@@ -85,7 +90,7 @@ export function DriverDashboard() {
       <PwaRegistration />
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="text-sm text-slate-500">{todaySeoul()}</p>
+          <p className="text-sm text-slate-600">{todaySeoul()}</p>
           <h1 className="mt-1 text-2xl font-bold">{data.user.name}님의 운행</h1>
         </div>
         <a href="/d/new" className={primary}>
@@ -146,11 +151,13 @@ export function DriverDashboard() {
             className={`${button} mb-4 w-full`}
             disabled={busy}
             onClick={async () => {
-              setBusy(true);
+              if (!startAction()) return;
               try {
                 await syncQueue(data.user.id, true);
+              } catch (error) {
+                setMessage(errorMessage(error, '전송하지 못했습니다. 다시 시도해 주세요.'));
               } finally {
-                setBusy(false);
+                finishAction();
               }
             }}
           >
@@ -177,7 +184,7 @@ export function DriverDashboard() {
                   {d.phase === 'blocked' && <StatusBadge warning>재전송 중단</StatusBadge>}
                   {d.phase === 'conflict' && <StatusBadge warning>최신 내용 확인 필요</StatusBadge>}
                 </div>
-                {d.error && <p className="mt-2 text-sm text-red-700">{d.error}</p>}
+                {d.error && <p className="mt-2 text-sm text-red-700">{errorMessage(d.error)}</p>}
               </a>
             ))}
           </div>
@@ -195,16 +202,16 @@ export function DriverDashboard() {
         </Section>
       )}
       <Section title="내 운행 목록">
-        <p className="mb-4 text-sm text-slate-500">전체 {list.total}건 · 사용일 최신순 · 같은 날 입력순</p>
+        <p className="mb-4 text-sm text-slate-600">전체 {list.total}건 · 사용일 최신순 · 같은 날 입력순</p>
         {list.rows.length === 0 ? (
-          <p className="py-8 text-center text-slate-500">등록된 운행이 없습니다. 첫 운행을 등록해 주세요.</p>
+          <p className="py-8 text-center text-slate-600">등록된 운행이 없습니다. 첫 운행을 등록해 주세요.</p>
         ) : (
           <ul className="grid gap-4">
             {list.rows.map((row) => (
               <li key={row.id} className="rounded-xl border border-slate-200 p-4">
                 <a className="block" href={`/d/uses/${row.id}`}>
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="text-sm text-slate-500">{row.use_date}</span>
+                    <span className="text-sm text-slate-600">{row.use_date}</span>
                     <StatusBadge warning={row.review_status === 'NEEDS_FIX'}>
                       {row.operation_status === 'CANCELED' ? '취소' : reviewLabels[row.review_status]}
                     </StatusBadge>
@@ -219,12 +226,12 @@ export function DriverDashboard() {
                       {row.payable_base_amount == null
                         ? '미확정'
                         : `${row.payable_base_amount.toLocaleString('ko-KR')}원`}
-                      <span className="ml-2 text-xs font-normal text-slate-500">
+                      <span className="ml-2 text-xs font-normal text-slate-600">
                         {row.payable_base_approved ? '승인 공급가' : '검수 전 계산액'}
                       </span>
                     </p>
                   )}
-                  <p className="mt-1 text-xs text-slate-400">
+                  <p className="mt-1 text-xs text-slate-600">
                     {row.use_no}
                     {row.entered_as === 'PROXY' ? ' · 대리 입력' : ''}
                   </p>
@@ -263,12 +270,16 @@ export function DriverDashboard() {
           <button
             type="button"
             className={`${button} mt-4 w-full`}
+            disabled={busy}
             onClick={async () => {
+              if (!startAction()) return;
               try {
                 const next = await api<UseList>(`/api/uses?pageSize=20&sort=use_date&page=${list.page + 1}`);
                 setList({ ...next, rows: [...list.rows, ...next.rows] });
               } catch (e) {
-                setMessage(e instanceof Error ? e.message : '목록 조회 실패');
+                setMessage(errorMessage(e, '목록을 불러오지 못했습니다.'));
+              } finally {
+                finishAction();
               }
             }}
           >

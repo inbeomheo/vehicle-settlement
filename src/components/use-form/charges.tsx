@@ -2,6 +2,7 @@
 import { useContext, useEffect, useState } from 'react';
 import Decimal from 'decimal.js';
 import { api, ApiError } from '@/client/api';
+import { errorMessage } from '@/client/error-message';
 import { cachedValue, cacheValue } from '@/client/offline/store';
 import { units, chargeKinds, money, type RateResult, type UseDetail } from '@/client/types';
 import {
@@ -57,18 +58,18 @@ function RateFields({
     if (!party || !form.project_id || !form.vehicle_id || !form.use_date || preserved) return;
     void api<RateResult>(`/api/rates/lookup?${query}`)
       .then(async (data) => {
-        await cacheValue(userId, `rate:${query}`, data);
+        await cacheValue(userId, `rate:${query}`, data).catch(() => {});
         if (alive) setResolved({ query, data });
       })
       .catch(async (error: unknown) => {
         if (error instanceof ApiError && [401, 403, 404].includes(error.status)) {
           if (alive) {
             setResolved(undefined);
-            setError(error.message);
+            setError(errorMessage(error, '계약을 확인할 수 없습니다. 다시 시도해 주세요.'));
           }
           return;
         }
-        const cached = await cachedValue<RateResult>(userId, `rate:${query}`);
+        const cached = await cachedValue<RateResult>(userId, `rate:${query}`).catch(() => undefined);
         if (alive) {
           setResolved(cached ? { query, data: cached } : undefined);
           setError(
@@ -112,7 +113,7 @@ function RateFields({
   }
   return (
     <div className="grid gap-4">
-      <div className="rounded-xl bg-slate-50 p-4">
+      <div aria-live="polite" aria-atomic="true" className="rounded-xl bg-slate-50 p-4">
         <p className="font-bold">{rate?.name ?? '단가 미확정'}</p>
         <p className="mt-1 text-sm">
           {rate
@@ -126,7 +127,7 @@ function RateFields({
             ? '청구 수량을 입력하세요'
             : `기본운임 ${money(estimate)}`}
         </p>
-        <p className="mt-1 text-xs text-slate-500">
+        <p className="mt-1 text-xs text-slate-600">
           {preserved ? '저장 당시 계약' : '예상 금액'} · 저장 시 서버 계산 결과 적용
         </p>
         {error && <p className="mt-2 text-sm text-amber-800">{error}</p>}
