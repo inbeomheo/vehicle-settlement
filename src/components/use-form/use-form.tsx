@@ -25,6 +25,7 @@ import {
 import { syncQueue, withQueuePaused } from '@/client/offline/engine';
 import { copyToDevice } from '@/client/copy-draft';
 import { useFormSettings } from './settings';
+import { revealDraftFields } from './visibility';
 import { ReadOnlyUse } from './read-only';
 import { evidenceError } from './evidence-policy';
 import { EvidenceEditor } from '@/components/evidence/editor';
@@ -86,6 +87,9 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
   const [evidenceValidation, setEvidenceValidation] = useState('');
   const persistence = useRef<Promise<void>>(Promise.resolve());
   current.current = draft;
+  useEffect(() => {
+    if (settings.ready) setDraft((value) => (value ? revealDraftFields(value, settings.modes) : value));
+  }, [draft, settings.ready, settings.modes]);
   useEffect(() => {
     let alive = true;
     async function load() {
@@ -254,7 +258,7 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
     setDraft((value) => {
       if (!value || ['queued', 'conflict', 'blocked'].includes(value.phase)) return value;
       return {
-        ...value,
+        ...(settings.ready ? revealDraftFields(value, settings.modes) : value),
         ...(typeof patch === 'function' ? patch(value) : patch),
         phase: 'editing',
         updatedAt: Date.now(),
@@ -438,6 +442,9 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
   }
   if (!draft) return <p role={error ? 'alert' : 'status'}>{error || '기기 초안을 확인하고 있습니다…'}</p>;
   const form = draft.form;
+  const revealed = new Set(
+    (settings.ready ? revealDraftFields(draft, settings.modes) : draft).revealedFields,
+  );
   const statementLocked =
     !!draft.server?.is_locked || !!draft.server?.charge_lines.some((line) => line.locked_statement_id);
   const readOnly =
@@ -516,7 +523,7 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
     </>
   );
   return (
-    <FormContexts fixes={fixes} modes={settings.modes}>
+    <FormContexts fixes={fixes} modes={settings.modes} revealed={revealed}>
       <div className="mx-auto max-w-3xl space-y-5 pb-8">
         <div>
           <p className="text-sm font-semibold text-blue-700">
@@ -1011,6 +1018,7 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
                 saved={draft.server}
               />
               {(settings.modes.notes !== 'HIDDEN' ||
+                revealed.has('notes') ||
                 form.notes ||
                 fixes.some((fix) => ['notes', 'use.notes'].includes(fix.target))) && (
                 <Section title="특이사항">

@@ -113,7 +113,11 @@ test('관리자 회사 필수 변경 → 열린 기사 폼 제출 전 검사, �
     await page.getByRole('button', { name: '설정 저장', exact: true }).click();
     await expect(page.getByText('입력 항목 설정을 저장했습니다. 변경 이력에 기록되었습니다.')).toBeVisible();
     await driverPage.getByLabel('현장', { exact: true }).selectOption(s.project.id);
-    await expect(driverPage.getByLabel(/요청자/)).toHaveCount(0);
+    await expect(driverPage.getByLabel('요청자', { exact: true })).toBeVisible();
+    await expect(driverPage.getByLabel('요청자', { exact: true })).toHaveValue('');
+    await expect(driverPage.locator('[data-fix-target="requester"]')).toContainText(
+      '관리자 설정상 숨김 항목입니다',
+    );
     await driverPage.getByLabel('현장', { exact: true }).selectOption(b.id);
     await expect(driverPage.getByLabel(/요청자.*필수/)).toBeVisible();
     await driverPage.getByLabel(/요청자.*필수/).fill('현장 담당자');
