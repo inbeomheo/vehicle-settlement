@@ -47,3 +47,33 @@ it('R7-2 생성 해시는 후속 PATCH와 무관하고 키 순서가 다른 원�
     code: 'IDEMPOTENCY_MISMATCH',
   });
 });
+
+it('R7-2 동시에 다른 본문을 보내도 한 건만 생성하고 나머지는 불일치로 거부한다', async () => {
+  const s = await setupScenario(database().db);
+  const input = { ...s.input, client_request_id: crypto.randomUUID() };
+  const results = await Promise.allSettled([
+    createUse(s.driverCtx, { ...input, notes: '첫 요청' }),
+    createUse(s.driverCtx, { ...input, notes: '두 번째 요청' }),
+  ]);
+  expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+  expect(results.find((result) => result.status === 'rejected')).toMatchObject({
+    reason: { code: 'IDEMPOTENCY_MISMATCH' },
+  });
+  expect(
+    await database()
+      .db.select()
+      .from(vehicleUses)
+      .where(eq(vehicleUses.client_request_id, input.client_request_id)),
+  ).toHaveLength(1);
+});
+
+it('R7-2 생성 본문 해시가 없는 과거 건은 원본을 추측하지 않고 불일치로 안내한다', async () => {
+  const s = await setupScenario(database().db);
+  const input = { ...s.input, client_request_id: crypto.randomUUID() };
+  const use = await createUse(s.driverCtx, input);
+  await database()
+    .db.update(vehicleUses)
+    .set({ create_request_hash: null })
+    .where(eq(vehicleUses.id, use.id));
+  await expect(createUse(s.driverCtx, input)).rejects.toMatchObject({ code: 'IDEMPOTENCY_MISMATCH' });
+});
