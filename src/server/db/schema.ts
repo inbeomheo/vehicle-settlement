@@ -369,6 +369,7 @@ export const evidence = pgTable(
     vehicle_use_id: uuid('vehicle_use_id')
       .notNull()
       .references(() => vehicleUses.id),
+    owner_driver_id: uuid('owner_driver_id').references(() => drivers.id),
     trip_id: uuid('trip_id').references(() => trips.id),
     kind: evidenceKindEnum('kind').notNull(),
     client_upload_id: text('client_upload_id').notNull().unique(),

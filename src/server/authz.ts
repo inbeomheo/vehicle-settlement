@@ -64,18 +64,12 @@ export async function assertCanSettle(ctx: Context, projectId?: string) {
     throw new AppError('FORBIDDEN', '정산 담당자 권한이 필요합니다.');
   if (projectId) await assertProjectAccess(ctx, projectId);
 }
-// A retained attachment may belong to a previous driver even in the current
-// revision. Preserve it for managers but do not transfer historical access.
+// Ownership is captured under the parent use lock at creation and never follows
+// later changes to the use's driver or the uploader's account.
 export function driverEvidenceFilter(ctx: Context): SQL | undefined {
   if (ctx.user.role !== 'DRIVER') return undefined;
-  return sql`NOT EXISTS (
-    SELECT 1 FROM users uploader WHERE uploader.id=${evidence.uploaded_by}
-      AND uploader.driver_id IS NOT NULL AND uploader.driver_id IS DISTINCT FROM ${ctx.user.driver_id}::uuid
-  ) AND NOT EXISTS (
-    SELECT 1 FROM use_revisions revision WHERE revision.vehicle_use_id=${evidence.vehicle_use_id}
-      AND revision.snapshot->>'driver_id' IS DISTINCT FROM ${ctx.user.driver_id}
-      AND revision.snapshot->'evidence' @> jsonb_build_array(jsonb_build_object('id', ${evidence.id}::text))
-  )`;
+  if (!ctx.user.driver_id) return sql`false`;
+  return sql`${evidence.owner_driver_id} IS NOT NULL AND ${evidence.owner_driver_id} = ${ctx.user.driver_id}::uuid`;
 }
 export async function assertDriverEvidenceAccess(ctx: Context, id: string) {
   if (ctx.user.role !== 'DRIVER') return;
@@ -92,18 +86,6 @@ export function redactForDriver<T>(
   hiddenEvidenceIds: ReadonlySet<string> = new Set(),
 ): T {
   if (canSeeReceivable(ctx)) return value;
-  const hidden = new Set(hiddenEvidenceIds);
-  const collect = (v: unknown): void => {
-    if (!v || typeof v !== 'object') return;
-    if ('revision_no' in v && 'snapshot' in v) {
-      const snapshot = v.snapshot as Record<string, unknown> | null;
-      if (snapshot?.driver_id !== ctx.user.driver_id && Array.isArray(snapshot?.evidence)) {
-        for (const file of snapshot.evidence) if (file?.id) hidden.add(file.id);
-      }
-    }
-    for (const item of Object.values(v)) collect(item);
-  };
-  collect(value);
   const visit = (v: unknown): unknown => {
     if (v instanceof Date || v === null || typeof v !== 'object') return v;
     if (Array.isArray(v))
@@ -112,7 +94,12 @@ export function redactForDriver<T>(
           if (!x || typeof x !== 'object') return true;
           if ('direction' in x && x.direction === 'RECEIVABLE') return false;
           if ('revision_no' in x && 'snapshot' in x) return x.snapshot?.driver_id === ctx.user.driver_id;
-          if ('client_upload_id' in x && hidden.has(x.id)) return false;
+          if (
+            'client_upload_id' in x &&
+            (hiddenEvidenceIds.has(x.id) ||
+              ('owner_driver_id' in x && x.owner_driver_id !== ctx.user.driver_id))
+          )
+            return false;
           return true;
         })
         .map(visit);

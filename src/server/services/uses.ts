@@ -115,11 +115,28 @@ async function publicDetail(ctx: Context, detail: Awaited<ReturnType<typeof rawD
   const hidden =
     ctx.user.role === 'DRIVER'
       ? await ctx.db
-          .select({ id: evidence.id })
+          .select()
           .from(evidence)
           .where(and(eq(evidence.vehicle_use_id, detail.id), sql`NOT (${driverEvidenceFilter(ctx)})`))
       : [];
-  return redactForDriver(ctx, detail, new Set(hidden.map((file) => file.id)));
+  const currentHidden = hidden.filter((file) => !file.deleted_at && !file.replaced_by_id);
+  const [project] = currentHidden.length
+    ? await ctx.db
+        .select({ evidence_policy: projects.evidence_policy })
+        .from(projects)
+        .where(eq(projects.id, detail.project_id))
+    : [];
+  return redactForDriver(
+    ctx,
+    {
+      ...detail,
+      restricted_evidence_count: currentHidden.length,
+      restricted_evidence_satisfies_policy: Boolean(
+        project && evidenceSatisfiesPolicy(project.evidence_policy, currentHidden),
+      ),
+    },
+    new Set(hidden.map((file) => file.id)),
+  );
 }
 export async function getUse(ctx: Context, id: string) {
   return publicDetail(ctx, await rawDetail(ctx, await rawUse(ctx, id)));
@@ -147,6 +164,16 @@ export async function assertUnlocked(ctx: Context, id: string) {
         : '확정 명세를 취소한 후 수정하세요.',
     );
 }
+function evidenceSatisfiesPolicy(policy: string, files: (typeof evidence.$inferSelect)[]) {
+  const uploaded = files.filter((file) => file.upload_status === 'UPLOADED');
+  const hasFile = uploaded.some(
+    (file) => file.storage_key && ['PHOTO', 'RECEIPT', 'WEIGH_TICKET', 'CONFIRMATION'].includes(file.kind),
+  );
+  const alternative = uploaded.some(
+    (file) => file.text_value?.trim() && ['SLIP_NO', 'CONFIRMATION'].includes(file.kind),
+  );
+  return policy === 'NONE' || hasFile || (policy === 'PHOTO_OR_ALTERNATIVE' && alternative);
+}
 export async function assertEvidenceSatisfied(ctx: Context, use: Use) {
   const [project] = await ctx.db.select().from(projects).where(eq(projects.id, use.project_id));
   if (project.evidence_policy === 'NONE') return;
@@ -161,11 +188,7 @@ export async function assertEvidenceSatisfied(ctx: Context, use: Use) {
         eq(evidence.upload_status, 'UPLOADED'),
       ),
     );
-  const hasFile = files.some(
-    (f) => f.storage_key && ['PHOTO', 'RECEIPT', 'WEIGH_TICKET', 'CONFIRMATION'].includes(f.kind),
-  );
-  const alternative = files.some((f) => f.text_value?.trim() && ['SLIP_NO', 'CONFIRMATION'].includes(f.kind));
-  if (!hasFile && !(project.evidence_policy === 'PHOTO_OR_ALTERNATIVE' && alternative))
+  if (!evidenceSatisfiesPolicy(project.evidence_policy, files))
     throw new AppError('SUBMIT_BLOCKED', '필수 증빙을 업로드하거나 대체증빙을 입력하세요.', {
       evidence_policy: project.evidence_policy,
     });
