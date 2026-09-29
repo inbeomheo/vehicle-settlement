@@ -1,4 +1,5 @@
 'use client';
+import { useBusy } from '@/components/ui/use-busy';
 import { useState } from 'react';
 import Link from 'next/link';
 import { masterConfigs, type MasterField } from './master-config';
@@ -35,12 +36,12 @@ export function MasterIndex() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <Link className={`${panelClass} hover:border-blue-400`} href="/m/master/form-fields">
           <h2 className="text-lg font-bold">입력 항목 설정</h2>
-          <p className="mt-2 text-sm text-slate-500">기사·담당자 입력 항목과 현장별 필수 설정 →</p>
+          <p className="mt-2 text-sm text-slate-600">기사·담당자 입력 항목과 현장별 필수 설정 →</p>
         </Link>
         {Object.entries(masterConfigs).map(([key, config]) => (
           <Link className={`${panelClass} hover:border-blue-400`} href={`/m/master/${key}`} key={key}>
             <h2 className="text-lg font-bold">{config.title}</h2>
-            <p className="mt-2 text-sm text-slate-500">조회 및 관리 →</p>
+            <p className="mt-2 text-sm text-slate-600">조회 및 관리 →</p>
           </Link>
         ))}
       </div>
@@ -58,7 +59,7 @@ export function Master({ resource }: { resource: string }) {
   const [period, setPeriod] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [busy, setBusy] = useState(false);
+  const { busy, begin: acquire, end } = useBusy();
   const [search, setSearch] = useState('');
   if (!config) return <Heading title="기준정보를 찾을 수 없습니다." />;
   const admin = me.data?.role === 'ADMIN';
@@ -87,7 +88,7 @@ export function Master({ resource }: { resource: string }) {
   };
   const save = async (event: React.FormEvent) => {
     event.preventDefault();
-    setBusy(true);
+    if (!acquire()) return false;
     setError('');
     setSuccess('');
     try {
@@ -118,7 +119,7 @@ export function Master({ resource }: { resource: string }) {
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '저장하지 못했습니다.');
     } finally {
-      setBusy(false);
+      end();
     }
   };
   const optionName = (source: string, value: unknown) =>
@@ -147,11 +148,11 @@ export function Master({ resource }: { resource: string }) {
   const rowActions = (row: Row) =>
     admin && (
       <div className="flex flex-wrap gap-2">
-        <button className={secondaryClass} onClick={() => begin(row)}>
+        <button disabled={busy} className={secondaryClass} onClick={() => begin(row)}>
           수정
         </button>
         {resource === 'rates' && (
-          <button className={secondaryClass} onClick={() => begin(row, true)}>
+          <button disabled={busy} className={secondaryClass} onClick={() => begin(row, true)}>
             새 적용기간 추가
           </button>
         )}
@@ -174,6 +175,7 @@ export function Master({ resource }: { resource: string }) {
           {admin && (
             <button
               className={buttonClass}
+              disabled={busy}
               onClick={() => begin(resource === 'company' ? (rows.data?.[0] ?? null) : null)}
             >
               {resource === 'company' && rows.data?.length ? '회사 정보 수정' : '새로 등록'}
@@ -181,9 +183,20 @@ export function Master({ resource }: { resource: string }) {
           )}
         </div>
       </Heading>
-      <Notice error={error || rows.error || lookups.error} success={success} />
+      <Notice
+        error={error || rows.error || lookups.error}
+        success={success}
+        onRetry={
+          rows.error || lookups.error
+            ? () => {
+                rows.refresh();
+                lookups.refresh();
+              }
+            : undefined
+        }
+      />
       {!admin && me.data && (
-        <p className="mb-4 text-sm text-slate-500">등록·수정은 관리자 권한이 필요합니다.</p>
+        <p className="mb-4 text-sm text-slate-600">등록·수정은 관리자 권한이 필요합니다.</p>
       )}
       {open && (
         <form onSubmit={save} className={`${panelClass} mb-5`}>
@@ -276,7 +289,7 @@ export function Master({ resource }: { resource: string }) {
                     .filter((field) => rateCoreFields.includes(field.key))
                     .map((field) => (
                       <div key={field.key} className="min-w-0">
-                        <dt className="text-slate-500">{field.title}</dt>
+                        <dt className="text-slate-600">{field.title}</dt>
                         <dd className="mt-1 break-words font-medium">{fieldValue(row, field)}</dd>
                       </div>
                     ))}
@@ -293,7 +306,7 @@ export function Master({ resource }: { resource: string }) {
                       )
                       .map((field) => (
                         <div key={field.key} className="min-w-0">
-                          <dt className="text-slate-500">{field.title}</dt>
+                          <dt className="text-slate-600">{field.title}</dt>
                           <dd className="mt-1 break-words">{fieldValue(row, field)}</dd>
                         </div>
                       ))}
@@ -302,7 +315,7 @@ export function Master({ resource }: { resource: string }) {
                 {rowActions(row)}
               </article>
             ))}
-          {(rows.loading || !filtered.length) && <Empty loading={rows.loading} />}
+          {(rows.loading || (rows.data && !filtered.length)) && <Empty loading={rows.loading} />}
         </div>
       )}
       <div
@@ -333,7 +346,7 @@ export function Master({ resource }: { resource: string }) {
               ))}
           </tbody>
         </table>
-        {(rows.loading || !filtered.length) && <Empty loading={rows.loading} />}
+        {(rows.loading || (rows.data && !filtered.length)) && <Empty loading={rows.loading} />}
       </div>
     </>
   );

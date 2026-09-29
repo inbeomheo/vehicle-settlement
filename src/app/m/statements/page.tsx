@@ -73,7 +73,7 @@ export default function StatementsPage() {
             </select>
           </label>
         </div>
-        <ErrorMessage error={result.error} />
+        <ErrorMessage error={result.error} onRetry={result.reload} />
         {result.loading && <p role="status">명세를 불러오는 중…</p>}
         {result.data && (
           <>
@@ -87,7 +87,7 @@ export default function StatementsPage() {
             </div>
             <p className="text-sm text-slate-600">확정 명세만 합산 · 작성 중·취소 제외</p>
             {!result.data.rows.length ? (
-              <p className="py-8 text-center text-slate-500">
+              <p className="py-8 text-center text-slate-600">
                 작성된 명세가 없습니다. 새 정산에서 시작하세요.
               </p>
             ) : (
@@ -123,7 +123,7 @@ export default function StatementsPage() {
                         </td>
                         <td className="p-3">{String(row.counterparty_snapshot?.name ?? '')}</td>
                         <td className="p-3 tabular-nums">
-                          <span className="block text-xs text-slate-500 md:hidden">합계</span>
+                          <span className="block text-xs text-slate-600 md:hidden">합계</span>
                           {money(row.grand_total)}
                         </td>
                         <td className="p-3">

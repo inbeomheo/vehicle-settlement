@@ -70,7 +70,7 @@ export function StatementItems({ items }: { items: StatementDetail['items'] }) {
                     key={headers[index]}
                     className="min-w-0 break-words whitespace-pre-wrap p-3 md:max-w-64"
                   >
-                    <span className="mb-1 block text-xs text-slate-500 md:hidden">{headers[index]}</span>
+                    <span className="mb-1 block text-xs text-slate-600 md:hidden">{headers[index]}</span>
                     {value}
                   </td>
                 ))}

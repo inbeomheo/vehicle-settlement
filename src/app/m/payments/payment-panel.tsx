@@ -1,4 +1,5 @@
 'use client';
+import { useBusy } from '@/components/ui/use-busy';
 import { useState, type FormEvent } from 'react';
 import {
   api,
@@ -13,14 +14,14 @@ import {
 } from '../statements/ui';
 export function PaymentPanel({ statement, onChange }: { statement: StatementDetail; onChange: () => void }) {
   const word = statement.direction === 'PAYABLE' ? '지급' : '입금';
-  const [busy, setBusy] = useState(false);
+  const { busy, begin, end } = useBusy();
   const [error, setError] = useState('');
   const [voidId, setVoidId] = useState('');
   const [clientId, setClientId] = useState(() => crypto.randomUUID());
   async function record(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    setBusy(true);
+    if (!begin()) return false;
     setError('');
     try {
       await api(`/api/statements/${statement.id}/payments`, {
@@ -37,13 +38,13 @@ export function PaymentPanel({ statement, onChange }: { statement: StatementDeta
     } catch (e) {
       setError((e as Error).message);
     } finally {
-      setBusy(false);
+      end();
     }
   }
   async function undo(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    setBusy(true);
+    if (!begin()) return false;
     setError('');
     try {
       await api(`/api/payments/${voidId}/void`, { reason: form.get('reason') });
@@ -52,7 +53,7 @@ export function PaymentPanel({ statement, onChange }: { statement: StatementDeta
     } catch (e) {
       setError((e as Error).message);
     } finally {
-      setBusy(false);
+      end();
     }
   }
   return (
@@ -104,7 +105,7 @@ export function PaymentPanel({ statement, onChange }: { statement: StatementDeta
           </button>
         </form>
       )}
-      {!statement.payments.length && <p className="text-sm text-slate-500">아직 {word} 기록이 없습니다.</p>}
+      {!statement.payments.length && <p className="text-sm text-slate-600">아직 {word} 기록이 없습니다.</p>}
       <ul className="space-y-3">
         {statement.payments.map((p) => (
           <li key={p.id} className="rounded-lg border border-slate-200 p-4 text-sm">
@@ -118,6 +119,7 @@ export function PaymentPanel({ statement, onChange }: { statement: StatementDeta
                 <button
                   type="button"
                   className={secondaryClass}
+                  disabled={busy}
                   onClick={() => setVoidId(voidId === p.id ? '' : p.id)}
                 >
                   오입력 취소
@@ -127,7 +129,7 @@ export function PaymentPanel({ statement, onChange }: { statement: StatementDeta
             <p className="mt-2 text-slate-600">
               참고번호: {p.reference || '-'} · 메모: {p.memo || '-'}
             </p>
-            <p className="mt-1 text-slate-500">기록: {dateTime(p.recorded_at)}</p>
+            <p className="mt-1 text-slate-600">기록: {dateTime(p.recorded_at)}</p>
             {p.voided_at && (
               <p className="mt-2 text-red-700">
                 취소: {dateTime(p.voided_at)} · {p.void_reason}

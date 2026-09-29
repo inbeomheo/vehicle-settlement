@@ -1,5 +1,6 @@
 'use client';
-import { useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useBusy } from '@/components/ui/use-busy';
 import { chargeTypeLabel, chargeUnitLabel } from '@/components/manager/charge-display';
 import {
   api,
@@ -37,17 +38,28 @@ export function NewStatement({
   const [showDrafts, setShowDrafts] = useState(false);
   const [rows, setRows] = useState<Candidate[] | null>(null);
   const [choices, setChoices] = useState<Record<string, Choice>>({});
-  const [busy, setBusy] = useState(false);
+  const { busy: saving, begin, end: finish } = useBusy();
+  const [loading, setLoading] = useState(false);
+  const requestId = useRef(0);
+  const busy = saving || loading;
+  useEffect(
+    () => () => {
+      requestId.current += 1;
+    },
+    [],
+  );
   const [error, setError] = useState('');
   const [clientId] = useState(() => crypto.randomUUID());
   const lookups = useResource<Lookup>('/api/lookups');
   async function findCandidates(includeDrafts = false, preserve = false) {
-    setBusy(true);
+    const currentRequest = ++requestId.current;
+    setLoading(true);
     setError('');
     try {
       const result = await api<{ rows: Candidate[]; unsubmitted_count: number }>(
         `/api/statements/candidates?${new URLSearchParams({ direction, counterpartyId: party, periodStart: start, periodEnd: end, includeDrafts: String(includeDrafts) })}`,
       );
+      if (currentRequest !== requestId.current) return;
       setRows(result.rows);
       setUnsubmittedCount(result.unsubmitted_count);
       setShowDrafts(includeDrafts);
@@ -62,14 +74,17 @@ export function NewStatement({
         ),
       );
     } catch (e) {
-      setError((e as Error).message);
+      if (currentRequest === requestId.current) {
+        setRows(null);
+        setError((e as Error).message);
+      }
     } finally {
-      setBusy(false);
+      if (currentRequest === requestId.current) setLoading(false);
     }
   }
   async function save(event: FormEvent) {
     event.preventDefault();
-    setBusy(true);
+    if (loading || !rows || !begin()) return;
     setError('');
     try {
       const items = Object.entries(choices)
@@ -95,7 +110,7 @@ export function NewStatement({
     } catch (e) {
       setError((e as Error).message);
     } finally {
-      setBusy(false);
+      finish();
     }
   }
   const included =
@@ -109,6 +124,12 @@ export function NewStatement({
   const supply = included.reduce((sum, row) => sum + (row.snapshot.supply_amount ?? 0), 0);
   const tax = included.reduce((sum, row) => sum + (row.snapshot.tax_amount ?? 0), 0);
   function reset() {
+    requestId.current += 1;
+    setLoading(false);
+    setError('');
+    setUnsubmittedCount(0);
+    setShowDrafts(false);
+    setChoices({});
     setRows(null);
   }
   return (
@@ -126,6 +147,7 @@ export function NewStatement({
             <button
               type="button"
               key={offset}
+              disabled={saving}
               className={secondaryClass}
               onClick={() => {
                 const p = monthPeriod(offset);
@@ -144,7 +166,7 @@ export function NewStatement({
               className={inputClass}
               required
               value={party}
-              disabled={!!replaces}
+              disabled={!!replaces || saving}
               onChange={(e) => {
                 setParty(e.target.value);
                 reset();
@@ -164,6 +186,7 @@ export function NewStatement({
             <input
               className={inputClass}
               type="date"
+              disabled={saving}
               required
               value={start}
               onChange={(e) => {
@@ -176,6 +199,7 @@ export function NewStatement({
             <input
               className={inputClass}
               type="date"
+              disabled={saving}
               required
               min={start}
               value={end}
@@ -189,12 +213,15 @@ export function NewStatement({
             <input className={inputClass} type="date" value={due} onChange={(e) => setDue(e.target.value)} />
           </Field>
         </div>
-        <ErrorMessage error={lookups.error} />
+        <ErrorMessage error={lookups.error} onRetry={lookups.reload} />
         <button className={secondaryClass} disabled={busy || lookups.loading}>
           {busy ? '조회 중…' : '후보 조회'}
         </button>
       </form>
-      <ErrorMessage error={error} />
+      <ErrorMessage
+        error={error}
+        onRetry={!saving && rows === null && party ? () => void findCandidates(showDrafts, true) : undefined}
+      />
       {rows && (
         <form onSubmit={save} className="space-y-4">
           <p className="text-sm text-slate-600">
@@ -294,7 +321,7 @@ export function NewStatement({
                         {row.snapshot.plate_no} · {row.snapshot.driver_name}
                       </td>
                       <td className="min-w-0 break-words p-3">
-                        <span className="block text-xs text-slate-500 md:hidden">비용 종류</span>
+                        <span className="block text-xs text-slate-600 md:hidden">비용 종류</span>
                         {chargeTypeLabel(row.snapshot.charge_type)}
                       </td>
                       <td className="min-w-0 break-words p-3">
@@ -304,7 +331,7 @@ export function NewStatement({
                         운행 {row.snapshot.trip_count}건
                       </td>
                       <td className="p-3 tabular-nums">
-                        <span className="block text-xs text-slate-500 md:hidden">공급가 / 세액</span>
+                        <span className="block text-xs text-slate-600 md:hidden">공급가 / 세액</span>
                         {money(row.snapshot.supply_amount)}
                         <br />
                         {money(row.snapshot.tax_amount)}

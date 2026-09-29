@@ -1,4 +1,5 @@
 'use client';
+import { useBusy } from '@/components/ui/use-busy';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { api, ApiError, mutate } from '@/client/api';
@@ -35,7 +36,7 @@ export function FormFieldSettings({ initialProject = '' }: { initialProject?: st
   const [settings, setSettings] = useState<AdminFieldSettings>();
   const [fields, setFields] = useState<FieldSetting[]>([]);
   const [attempt, setAttempt] = useState(0);
-  const [busy, setBusy] = useState(false);
+  const { busy, begin, end } = useBusy();
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [conflict, setConflict] = useState<AdminFieldSettings>();
@@ -90,7 +91,7 @@ export function FormFieldSettings({ initialProject = '' }: { initialProject?: st
   async function save(event: React.FormEvent) {
     event.preventDefault();
     if (!settings || settings.project_id !== (project || null) || !changed.length) return;
-    setBusy(true);
+    if (!begin()) return false;
     setError('');
     setSuccess('');
     try {
@@ -109,7 +110,7 @@ export function FormFieldSettings({ initialProject = '' }: { initialProject?: st
       if (reason instanceof ApiError && reason.code === 'VERSION_CONFLICT')
         setConflict((reason.details as { current: AdminFieldSettings }).current);
     } finally {
-      setBusy(false);
+      end();
     }
   }
   return (

@@ -25,7 +25,7 @@ test('확정 확인 중 금액 변경 시 최신 내역을 보여주고 다시 �
   await page.request.post('/api/auth/login', { data: { login_id: fixture.login, password: 'password1234' } });
   await page.goto(`/m/statements/${fixture.statementId}`);
   await page.getByRole('button', { name: '명세 확정', exact: true }).click();
-  const confirmation = page.getByRole('group', { name: '명세 확정 확인' });
+  const confirmation = page.getByRole('dialog', { name: '명세 확정 확인' });
   await expect(confirmation).toContainText('300,000원');
   const changed = await page.request.patch(`/api/uses/${fixture.useId}`, {
     data: {

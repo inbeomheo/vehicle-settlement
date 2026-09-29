@@ -1,6 +1,8 @@
 'use client';
+import { useBusy } from '@/components/ui/use-busy';
 import { useState } from 'react';
 import Link from 'next/link';
+import { ConfirmDialog } from '@/components/ui/modal';
 import {
   Badge,
   Empty,
@@ -51,7 +53,8 @@ export function Users() {
   const lookups = useRemote<{ projects: Option[]; drivers: Option[] }>('/api/lookups');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [busy, setBusy] = useState(false);
+  const { busy, begin, end } = useBusy();
+  const [cancelInvite, setCancelInvite] = useState<Invite | null>(null);
   const [inviteUrl, setInviteUrl] = useState('');
   const [inviteRole, setInviteRole] = useState('SITE_MANAGER');
   const [projects, setProjects] = useState<string[]>([]);
@@ -64,7 +67,7 @@ export function Users() {
   const run = async (action: () => Promise<unknown>, message: string) => {
     setError('');
     setSuccess('');
-    setBusy(true);
+    if (!begin()) return false;
     try {
       await action();
       setSuccess(message);
@@ -75,13 +78,25 @@ export function Users() {
       setError(reason instanceof Error ? reason.message : '처리하지 못했습니다.');
       return false;
     } finally {
-      setBusy(false);
+      end();
     }
   };
   return (
     <>
       <Heading title="사용자 관리" description="초대·역할·현장 배정 및 계정 상태를 관리합니다." />
-      <Notice error={error || users.error || invites.error || lookups.error} success={success} />
+      <Notice
+        error={cancelInvite ? undefined : error || users.error || invites.error || lookups.error}
+        success={success}
+        onRetry={
+          users.error || invites.error || lookups.error
+            ? () => {
+                users.refresh();
+                invites.refresh();
+                lookups.refresh();
+              }
+            : undefined
+        }
+      />
       {!users.error && (
         <>
           <details className={`${panelClass} mb-5`}>
@@ -203,7 +218,7 @@ export function Users() {
             </section>
           )}
           {selected && (
-            <section className={`${panelClass} mb-5`}>
+            <section key={selected.id} className={`${panelClass} mb-5`}>
               <h2 className="mb-4 text-lg font-bold">{selected.name} 관리</h2>
               <form
                 onSubmit={(event) => {
@@ -285,7 +300,12 @@ export function Users() {
                   <button className={buttonClass} disabled={busy}>
                     변경 저장
                   </button>
-                  <button className={secondaryClass} type="button" onClick={() => setSelected(null)}>
+                  <button
+                    className={secondaryClass}
+                    disabled={busy}
+                    type="button"
+                    onClick={() => setSelected(null)}
+                  >
                     닫기
                   </button>
                 </div>
@@ -385,10 +405,10 @@ export function Users() {
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
                       <strong>{user.name}</strong>
-                      <span className="ml-2 text-sm text-slate-500">
+                      <span className="ml-2 text-sm text-slate-600">
                         {user.login_id} · {label(user.role)}
                       </span>
-                      <p className="mt-2 text-sm text-slate-500">
+                      <p className="mt-2 text-sm text-slate-600">
                         {user.phone ?? '연락처 없음'} ·{' '}
                         {user.all_projects
                           ? '모든 현장 접근'
@@ -399,6 +419,7 @@ export function Users() {
                       <Badge value={user.status} />
                       <button
                         className={secondaryClass}
+                        disabled={busy}
                         onClick={() => {
                           setSelected(user);
                           setEditRole(user.role);
@@ -409,7 +430,7 @@ export function Users() {
                       </button>
                     </div>
                   </div>
-                  <p className="mt-2 break-all text-xs text-slate-400">사용자 ID: {user.id}</p>
+                  <p className="mt-2 break-all text-xs text-slate-600">사용자 ID: {user.id}</p>
                 </article>
               ))}
           </div>
@@ -426,7 +447,7 @@ export function Users() {
                   <p className="text-sm font-semibold">
                     {invite.name} · {label(invite.role)}
                   </p>
-                  <p className="mt-1 text-xs text-slate-500">
+                  <p className="mt-1 text-xs text-slate-600">
                     만료 {dateTime(invite.expires_at)} ·{' '}
                     {invite.used_at
                       ? '사용 완료'
@@ -441,18 +462,42 @@ export function Users() {
                   <button
                     className={secondaryClass}
                     disabled={busy}
-                    onClick={() =>
-                      run(() => mutate(`/api/invites/${invite.id}`, 'DELETE'), '초대를 취소했습니다.')
-                    }
+                    onClick={() => {
+                      setError('');
+                      setCancelInvite(invite);
+                    }}
                   >
                     초대 취소
                   </button>
                 )}
               </div>
             ))}
-            {!invites.data?.length && <Empty loading={invites.loading}>초대 내역이 없습니다.</Empty>}
+            {invites.data && !invites.data.length && (
+              <Empty loading={invites.loading}>초대 내역이 없습니다.</Empty>
+            )}
           </section>
         </>
+      )}
+      {cancelInvite && (
+        <ConfirmDialog
+          title="초대 취소 확인"
+          confirmLabel="초대 취소"
+          busy={busy}
+          error={error}
+          onClose={() => setCancelInvite(null)}
+          onConfirm={() =>
+            void run(() => mutate(`/api/invites/${cancelInvite.id}`, 'DELETE'), '초대를 취소했습니다.').then(
+              (ok) => {
+                if (ok) setCancelInvite(null);
+              },
+            )
+          }
+        >
+          <p>
+            {cancelInvite.name} · {label(cancelInvite.role)} 초대 1건을 취소합니다.
+          </p>
+          <p>기존 초대 링크는 사용할 수 없으며 복구할 수 없습니다. 필요하면 새 초대를 생성하세요.</p>
+        </ConfirmDialog>
       )}
     </>
   );

@@ -94,7 +94,7 @@ function LedgerCard({ row, visible }: { row: LedgerRow; visible: (keyof LedgerRo
     <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
       {items.map((column) => (
         <div key={column.key} className={`min-w-0 ${column.key === 'route_summary' ? 'col-span-2' : ''}`}>
-          <dt className="text-xs text-slate-500">{column.title}</dt>
+          <dt className="text-xs text-slate-600">{column.title}</dt>
           <dd className="mt-1 break-words font-medium">
             {column.render ? column.render(row) : String(row[column.key] || '—')}
           </dd>
@@ -289,19 +289,20 @@ export function Ledger({ initial = {} }: { initial?: Search }) {
           </label>
         </div>
       </form>
-      <Notice error={error || lookups.error} />
-      {error && (
-        <button className={secondaryClass} onClick={refresh}>
-          다시 불러오기
-        </button>
-      )}
+      <Notice
+        error={error || lookups.error}
+        onRetry={() => {
+          refresh();
+          lookups.refresh();
+        }}
+      />
       <div className="mb-4 grid gap-3 sm:grid-cols-2">
         <div className={panelClass}>
-          <p className="text-sm text-slate-500">현재 페이지 합계</p>
+          <p className="text-sm text-slate-600">현재 페이지 합계</p>
           <strong className="mt-2 block text-xl">{data ? money(data.totals.pageSum) : '—'}</strong>
         </div>
         <div className={`${panelClass} border-blue-200 bg-blue-50`}>
-          <p className="text-sm text-slate-600">전체 검색 결과 합계({data?.total ?? 0}건)</p>
+          <p className="text-sm text-slate-600">전체 검색 결과 합계{data ? `(${data.total}건)` : ''}</p>
           <strong className="mt-2 block text-xl">{data ? money(data.totals.filteredSum) : '—'}</strong>
         </div>
       </div>
@@ -365,11 +366,11 @@ export function Ledger({ initial = {} }: { initial?: Search }) {
               ))}
           </tbody>
         </table>
-        {(loading || !data?.rows.length) && <Empty loading={loading} />}
+        {(loading || (data && !data.rows.length)) && <Empty loading={loading} />}
       </div>
       <div className="grid gap-3 md:hidden" aria-label="사용대장 카드 목록" aria-busy={loading}>
         {!loading && data?.rows.map((row) => <LedgerCard key={row.id} row={row} visible={visible} />)}
-        {(loading || !data?.rows.length) && <Empty loading={loading} />}
+        {(loading || (data && !data.rows.length)) && <Empty loading={loading} />}
       </div>
       <div className="mt-4 flex justify-end">
         <Field title="페이지 크기">
@@ -413,7 +414,7 @@ export function ReviewInbox({ initialTab = 'SUBMITTED' }: { initialTab?: string 
   return (
     <>
       <Heading title="검수함" description="실적·증빙·비용을 함께 확인하고 검수를 진행하세요." />
-      <div role="tablist" aria-label="검수 목록" className="mb-5 flex flex-wrap gap-2">
+      <div role="group" aria-label="검수 목록" className="mb-5 flex flex-wrap gap-2">
         {[
           ['SUBMITTED', '제출됨'],
           ['NEEDS_FIX', '보완 요청'],
@@ -421,8 +422,8 @@ export function ReviewInbox({ initialTab = 'SUBMITTED' }: { initialTab?: string 
         ].map(([value, title]) => (
           <button
             key={value}
-            role="tab"
-            aria-selected={tab === value}
+            type="button"
+            aria-pressed={tab === value}
             className={tab === value ? buttonClass : secondaryClass}
             onClick={() => {
               setTab(value);
@@ -459,18 +460,20 @@ export function ReviewInbox({ initialTab = 'SUBMITTED' }: { initialTab?: string 
                 기본운임 {money(row.review_base_amount)} · 추가비 {money(row.review_extra_amount)}
                 <strong className="mt-1 block">합계 {money(row.review_total_amount)}</strong>
               </p>
-              <p className="mt-1 text-xs text-slate-500">
+              <p className="mt-1 text-xs text-slate-600">
                 승인액 우선 · 미승인 항목은 계산액/요청액 ·{' '}
                 {row.has_requested_extra ? '요청 추가비 있음' : '미검수 요청 추가비 없음'}
               </p>
-              <p className="mt-2 text-xs text-slate-500">
+              <p className="mt-2 text-xs text-slate-600">
                 {row.evidence_missing ? '필수 증빙 누락' : `증빙 ${row.evidence_count}개`} ·{' '}
                 {row.entered_as === 'PROXY' ? `대리 입력 · 작성자 ${row.creator_name}` : '기사 직접 입력'}
               </p>
             </article>
           ))}
       </div>
-      {(loading || !data?.rows.length) && <Empty loading={loading}>검수할 사용 내역이 없습니다.</Empty>}
+      {(loading || (data && !data.rows.length)) && (
+        <Empty loading={loading}>검수할 사용 내역이 없습니다.</Empty>
+      )}
       {data && <Pager page={page} pageSize={20} total={data.total} onChange={setPage} />}
     </>
   );

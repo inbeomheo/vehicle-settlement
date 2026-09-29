@@ -1,8 +1,10 @@
 'use client';
+import { useBusy } from '@/components/ui/use-busy';
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { api, mutate } from '@/client/api';
+import { api, mutate } from '@/components/manager/common';
+import { ConfirmDialog } from '@/components/ui/modal';
 import {
   importFields,
   type ImportField,
@@ -25,6 +27,8 @@ const control = 'min-h-11 w-full rounded border border-slate-300 bg-white px-3 p
 const button = 'min-h-11 rounded bg-blue-700 px-4 py-2 font-semibold text-white disabled:opacity-50';
 
 export default function ImportPage() {
+  const [deleting, setDeleting] = useState(false);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
   const [job, setJob] = useState<ImportView | null>(null);
   const [history, setHistory] = useState<History[]>([]);
   const [presets, setPresets] = useState<Preset[]>([]);
@@ -34,7 +38,7 @@ export default function ImportPage() {
   const [applyContractRate, setApplyContractRate] = useState(true);
   const [mapping, setMapping] = useState<ImportMapping>({});
   const [presetName, setPresetName] = useState('');
-  const [busy, setBusy] = useState(false);
+  const { busy, begin, end } = useBusy();
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [dirty, setDirty] = useState(true);
@@ -44,21 +48,24 @@ export default function ImportPage() {
       api<Preset[]>('/api/import/presets'),
     ]);
     setHistory(jobs);
+    setHistoryLoaded(true);
     setPresets(saved);
   }
   useEffect(() => {
     refresh().catch((e: Error) => setError(e.message));
   }, []);
   async function run(work: () => Promise<void>) {
-    setBusy(true);
+    if (!begin()) return false;
     setError('');
     setNotice('');
     try {
       await work();
+      return true;
     } catch (e) {
       setError(e instanceof Error ? e.message : '처리하지 못했습니다. 다시 시도하세요.');
+      return false;
     } finally {
-      setBusy(false);
+      end();
     }
   }
   function selectJob(value: ImportView) {
@@ -75,10 +82,8 @@ export default function ImportPage() {
     await run(async () => {
       const form = new FormData();
       form.set('file', file);
-      const response = await fetch('/api/import/upload', { method: 'POST', body: form });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error?.message ?? '업로드에 실패했습니다.');
-      selectJob(result.data);
+      const result = await api<ImportView>('/api/import/upload', { method: 'POST', body: form });
+      selectJob(result);
       await refresh();
     });
   }
@@ -96,9 +101,14 @@ export default function ImportPage() {
           추가하고 제출·검수하세요.
         </p>
       </div>
-      {error && (
+      {error && !deleting && (
         <p role="alert" className="rounded bg-red-50 p-3 text-red-800">
           {error}
+          {!historyLoaded && (
+            <button className={button} disabled={busy} onClick={() => void run(refresh)}>
+              다시 시도
+            </button>
+          )}
         </p>
       )}
       {notice && (
@@ -255,7 +265,7 @@ export default function ImportPage() {
                 disabled={!presetName.trim()}
                 onClick={() =>
                   void run(async () => {
-                    await mutate('/api/import/presets', { name: presetName, mapping });
+                    await mutate('/api/import/presets', 'POST', { name: presetName, mapping });
                     await refresh();
                     setNotice('매핑을 저장했습니다.');
                   })
@@ -267,7 +277,7 @@ export default function ImportPage() {
                 className={button}
                 onClick={() =>
                   void run(async () => {
-                    const next = await mutate<ImportView>(`/api/import/${job.id}/preview`, {
+                    const next = await mutate<ImportView>(`/api/import/${job.id}/preview`, 'POST', {
                       sheet,
                       header_row: header,
                       mapping,
@@ -305,7 +315,7 @@ export default function ImportPage() {
                   disabled={busy || committed || dirty || !job.summary.valid}
                   onClick={() =>
                     void run(async () => {
-                      const next = await mutate<ImportView>(`/api/import/${job.id}/commit`, {});
+                      const next = await mutate<ImportView>(`/api/import/${job.id}/commit`, 'POST', {});
                       setJob(next);
                       await refresh();
                       setNotice(
@@ -396,7 +406,7 @@ export default function ImportPage() {
       )}
       <div>
         <h2 className="mb-3 text-xl font-bold">내 가져오기 이력 (최근 100건)</h2>
-        {!history.length && <p className="text-slate-600">아직 가져온 파일이 없습니다.</p>}
+        {historyLoaded && !history.length && <p className="text-slate-600">아직 가져온 파일이 없습니다.</p>}
         <div className="space-y-2">
           {completedHistory.map((item) => (
             <HistoryItem
@@ -408,7 +418,7 @@ export default function ImportPage() {
               }
             />
           ))}
-          {!!history.length && !completedHistory.length && (
+          {!!history.length && historyLoaded && !completedHistory.length && (
             <p className="text-slate-600">아직 등록을 완료한 가져오기 내역이 없습니다.</p>
           )}
         </div>
@@ -423,19 +433,10 @@ export default function ImportPage() {
             <button
               className="mb-3 min-h-11 rounded border border-slate-300 bg-white px-3 py-2 disabled:opacity-50"
               disabled={busy || !stalePreviews.length}
-              onClick={() =>
-                void run(async () => {
-                  const removed = await mutate<{ deleted: number }>(
-                    '/api/import',
-                    {},
-                    crypto.randomUUID(),
-                    'DELETE',
-                  );
-                  if (job && stalePreviews.some((item) => item.id === job.id)) setJob(null);
-                  await refresh();
-                  setNotice(`오래된 미확정 미리보기 ${removed.deleted}건을 삭제했습니다.`);
-                })
-              }
+              onClick={() => {
+                setError('');
+                setDeleting(true);
+              }}
             >
               오래된 미확정 미리보기 삭제 (7일 이상)
             </button>
@@ -454,6 +455,37 @@ export default function ImportPage() {
           </details>
         )}
       </div>
+      {deleting && (
+        <ConfirmDialog
+          title="오래된 미리보기 삭제 확인"
+          confirmLabel="삭제"
+          busy={busy}
+          error={error}
+          onClose={() => setDeleting(false)}
+          onConfirm={() =>
+            void run(async () => {
+              const removed = await mutate<{ deleted: number }>('/api/import', 'DELETE', {
+                ids: stalePreviews.map((item) => item.id),
+              });
+              if (job && stalePreviews.some((item) => item.id === job.id)) setJob(null);
+              await refresh();
+              setNotice(`오래된 미확정 미리보기 ${removed.deleted}건을 삭제했습니다.`);
+            }).then((ok) => {
+              if (ok) setDeleting(false);
+            })
+          }
+        >
+          <p>현재 목록에서 확인한 7일 이상 지난 미확정 미리보기 {stalePreviews.length}건을 삭제합니다.</p>
+          <ul className="list-inside list-disc">
+            {stalePreviews.map((item) => (
+              <li key={item.id}>{item.file_name}</li>
+            ))}
+          </ul>
+          <p>
+            삭제한 미리보기와 매핑·검증 결과는 복구할 수 없습니다. 다시 사용하려면 원본 파일을 업로드하세요.
+          </p>
+        </ConfirmDialog>
+      )}
     </section>
   );
 }

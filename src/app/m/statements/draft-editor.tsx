@@ -136,10 +136,13 @@ export function DraftEditor({
           </button>
         )}
         {candidates && !additionalRows.length && (
-          <p className="text-sm text-slate-500">추가할 미정산 후보가 없습니다.</p>
+          <p className="text-sm text-slate-600">추가할 미정산 후보가 없습니다.</p>
         )}
       </div>
-      <ErrorMessage error={error} />
+      <ErrorMessage
+        error={error}
+        onRetry={!busy && !loading ? () => void findCandidates(showDrafts) : undefined}
+      />
       {rows.map((row) => {
         const choice = choices[row.charge_line_id] ?? { inclusion: 'EXCLUDED', hold_reason: '' };
         return (

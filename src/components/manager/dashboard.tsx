@@ -38,7 +38,7 @@ export function Dashboard({ role }: { role: Context['user']['role'] }) {
                   <strong className="my-3 text-3xl tracking-tight">
                     {isMoney ? money(data[key]) : `${data[key]}건`}
                   </strong>
-                  <span className="text-xs text-slate-500">
+                  <span className="text-xs text-slate-600">
                     {key === 'unpaid_amount'
                       ? `확정·미지급 명세 ${data.unpaid_count}건 · 부가세 포함`
                       : key === 'unsettled_approved_amount'

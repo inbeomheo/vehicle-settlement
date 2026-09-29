@@ -96,7 +96,7 @@ for (const width of widths) {
     await expect(tollItem).toContainText('5,000원');
     await assertFits(page, width < 768);
     await page.getByRole('button', { name: '명세 확정', exact: true }).click();
-    const confirmation = page.getByRole('group', { name: '명세 확정 확인', exact: true });
+    const confirmation = page.getByRole('dialog', { name: '명세 확정 확인', exact: true });
     await expect(confirmation).toContainText('포함 2건 · 총액 305,000원');
     expect((await (await page.request.get(`/api/statements/${id}`)).json()).data.status).toBe('DRAFT');
     await confirmation.getByRole('button', { name: '돌아가기', exact: true }).click();
@@ -116,7 +116,7 @@ for (const width of widths) {
     await expect(page.getByRole('link', { name: fixture.paidNo, exact: true })).toBeVisible();
     await expect(page.getByText('해당 조건의 지급 완료 내역이 없습니다.', { exact: true })).toHaveCount(0);
     await assertFits(page, width < 768);
-    await page.getByRole('tab', { name: '청구', exact: true }).click();
+    await page.getByRole('button', { name: '청구', exact: true }).click();
     await expect(
       page.getByRole('heading', { name: '거래처·현장별 입금 완료 내역', exact: true }),
     ).toBeVisible();
