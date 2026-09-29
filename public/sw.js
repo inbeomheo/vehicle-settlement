@@ -1,5 +1,6 @@
 /* Only public assets are cached. Never cache API, RSC, authenticated HTML or files. */
-const CACHE = 'vehicle-shell-w2-e7d203c7b8c6';
+importScripts('/sw-version.js');
+const CACHE = `vehicle-shell-w2-${self.VEHICLE_SHELL_VERSION}`;
 const ASSETS = [
   '/offline.html',
   '/w2-offline-app.js',

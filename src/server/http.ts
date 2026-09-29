@@ -23,6 +23,8 @@ type Options<T, A extends boolean> = {
   auth?: A;
   idempotent?: boolean;
   roles?: Context['user']['role'][];
+  // Transform only the persisted/replayed JSON; the initial response remains intact.
+  redactStored?: (body: unknown) => unknown;
 };
 export type RouteHandler = (request: Request, route: { params: Promise<Params> }) => Promise<Response>;
 export function json(data: unknown, status = 200, headers?: HeadersInit) {
@@ -198,7 +200,7 @@ export function withRoute<T = undefined, A extends boolean = true>(
               route: routeKey,
               request_hash: hash,
               status_code: result.status,
-              response_body: body,
+              response_body: options.redactStored ? options.redactStored(body) : body,
             });
           }
           return result;

@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import type { getUse } from '@/server/services/uses';
 import type { LedgerResult } from '@/server/services/ledger';
+import { sumMoney } from '@/server/domain/money';
 import { AuditPanel } from './audit';
 import {
   ApiError,
@@ -23,7 +24,7 @@ import {
 } from './common';
 type Detail = Awaited<ReturnType<typeof getUse>>;
 type Decision = { line_review_status: 'APPROVED' | 'HELD' | 'REJECTED'; amount: string; reason: string };
-export function UseDetail({ id }: { id: string }) {
+export function UseDetail({ id, canSettle = false }: { id: string; canSettle?: boolean }) {
   const detail = useRemote<Detail>(`/api/uses/${id}`);
   const metadata = useRemote<LedgerResult>(`/api/ledger?use_id=${id}`);
   const [tab, setTab] = useState('detail');
@@ -70,17 +71,19 @@ export function UseDetail({ id }: { id: string }) {
   const snapshot = (key: string) => String(use.snapshot[key] ?? '—');
   const decisionBody = (lineId: string) => {
     const decision = decisions[lineId];
-    if (!decision) throw new Error('비용 정보를 다시 불러오세요.');
+    const line = use.charge_lines.find((item) => item.id === lineId);
+    if (!decision || !line) throw new Error('비용 정보를 다시 불러오세요.');
+    const amountChanged = decision.amount !== '' && Number(decision.amount) !== line.approved_amount;
     if (
       decision.line_review_status === 'APPROVED' &&
-      decision.amount !== '' &&
+      amountChanged &&
       (!/^\d+$/.test(decision.amount) || Number(decision.amount) > 2147483647)
     )
-      throw new Error('승인액은 0 이상의 정수 원으로 입력하세요.');
+      throw new Error('승인 공급가는 0 이상의 정수 원으로 입력하세요.');
     return {
       id: lineId,
       line_review_status: decision.line_review_status,
-      ...(decision.line_review_status === 'APPROVED' && decision.amount !== ''
+      ...(decision.line_review_status === 'APPROVED' && amountChanged
         ? { approved_amount: Number(decision.amount) }
         : {}),
       ...(decision.reason ? { reason: decision.reason } : {}),
@@ -321,8 +324,9 @@ export function UseDetail({ id }: { id: string }) {
           <section className={panelClass}>
             <h2 className="text-lg font-bold">비용 검수</h2>
             <p className="mt-1 text-xs text-slate-500">
-              승인액은 최종 공급가입니다. 비워두면 서버가 계산액·요청액과 세금 조건으로 결정합니다. 보류·반려
-              선택은 전체 승인 시 유지됩니다.
+              승인 공급가는 부가세를 제외한 금액입니다. 기존 승인액은 유지하며, 처음 승인할 때 비워두면 계약
+              조건으로 계산합니다. 공급가를 변경하면 부가세 10%를 다시 계산합니다. 보류·반려 선택은 전체 승인
+              시 유지됩니다.
             </p>
             <div className="mt-4 max-w-full overflow-x-auto">
               <table className="w-full text-left text-sm">
@@ -335,7 +339,7 @@ export function UseDetail({ id }: { id: string }) {
                       '단가',
                       '계산액',
                       '요청액',
-                      '승인액 (원)',
+                      '승인 공급가(원)',
                       '현재 상태',
                       '검수 결정',
                       '검수 사유',
@@ -370,7 +374,7 @@ export function UseDetail({ id }: { id: string }) {
                       <td className="min-w-36 px-3">
                         {use.review_status === 'SUBMITTED' ? (
                           <input
-                            aria-label={`${label(line.charge_type)} 승인액`}
+                            aria-label={`${label(line.charge_type)} 승인 공급가`}
                             type="number"
                             min="0"
                             max="2147483647"
@@ -384,6 +388,14 @@ export function UseDetail({ id }: { id: string }) {
                           />
                         ) : (
                           money(line.approved_amount)
+                        )}
+                        {line.tax_mode === 'VAT_INCLUDED' && (
+                          <p className="mt-1 whitespace-nowrap text-xs text-slate-500">
+                            {line.approved_amount !== null && line.tax_amount !== null
+                              ? `현재 합계 ${money(sumMoney([line.approved_amount, line.tax_amount]))}`
+                              : `계산 합계 ${money(line.computed_amount ?? line.requested_amount)}`}
+                            {' · 부가세 포함'}
+                          </p>
                         )}
                       </td>
                       <td className="px-3">
@@ -568,12 +580,16 @@ export function UseDetail({ id }: { id: string }) {
             <h2 className="mb-3 text-lg font-bold">정산 연결</h2>
             {metadata.data?.rows[0]?.locked_statements.map((statement) => (
               <p className="mb-2 text-sm" key={statement.id}>
-                <Link
-                  className="font-semibold text-blue-800 underline"
-                  href={`/m/statements/${statement.id}`}
-                >
-                  {statement.statement_no ?? '확정 명세'}
-                </Link>{' '}
+                {canSettle ? (
+                  <Link
+                    className="font-semibold text-blue-800 underline"
+                    href={`/m/statements/${statement.id}`}
+                  >
+                    {statement.statement_no ?? '확정 명세'}
+                  </Link>
+                ) : (
+                  <span className="font-semibold">{statement.statement_no ?? '확정 명세'}</span>
+                )}{' '}
                 · {label(statement.direction)} · {statement.period_start} ~ {statement.period_end}
               </p>
             ))}

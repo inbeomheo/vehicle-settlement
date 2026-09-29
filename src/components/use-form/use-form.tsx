@@ -17,11 +17,12 @@ import {
   getDraft,
   listDrafts,
   putDraft,
+  removeDraft,
   OFFLINE_EVENT,
   type Bootstrap,
   type Draft,
 } from '@/client/offline/store';
-import { syncQueue } from '@/client/offline/engine';
+import { syncQueue, withQueuePaused } from '@/client/offline/engine';
 import { EvidenceEditor } from '@/components/evidence/editor';
 import { button, control, primary, Field, Section, FixContext, StatusBadge } from './fields';
 import { ChargeFields } from './charges';
@@ -58,6 +59,7 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
   const [busy, setBusy] = useState(false);
   const [evidenceBusy, setEvidenceBusy] = useState(false);
   const [online, setOnline] = useState(true);
+  const [discardConfirm, setDiscardConfirm] = useState(false);
   const persistence = useRef<Promise<void>>(Promise.resolve());
   current.current = draft;
   useEffect(() => {
@@ -279,6 +281,77 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
     await putDraft(next);
     setDraft(next);
   }
+  async function removePending(uploadId: string) {
+    if (!draft || busy) return;
+    setBusy(true);
+    setError('');
+    try {
+      await persistence.current;
+      const next = await withQueuePaused(boot.user.id, async () => {
+        const value = draft.phase === 'editing' ? draft : ((await getDraft(boot.user.id, draft.id)) ?? draft);
+        const file = value.uploads.find((upload) => upload.client_upload_id === uploadId);
+        if (!file || file.status === 'uploaded') return value;
+        if (file.serverId) {
+          try {
+            await mutate(
+              `/api/evidence/${file.serverId}`,
+              { reason: '업로드 실패 첨부 취소' },
+              crypto.randomUUID(),
+              'DELETE',
+            );
+          } catch (e) {
+            setError(
+              `이 기기의 대기 첨부는 제거했습니다. 서버 증빙: ${e instanceof Error ? e.message : '삭제하지 못했습니다.'}`,
+            );
+          }
+        }
+        let server = value.server;
+        if (value.serverId) {
+          try {
+            server = await api<UseDetail>(`/api/uses/${value.serverId}`);
+          } catch {
+            // Local queue cancellation is available even after access is revoked.
+          }
+        }
+        const updated: Draft = {
+          ...value,
+          server,
+          version: server?.version ?? value.version,
+          uploads: value.uploads.filter((upload) => upload.client_upload_id !== uploadId),
+          phase: 'editing',
+          request: undefined,
+          savedRequest: false,
+          submitRequest: undefined,
+          error: undefined,
+          updatedAt: Date.now(),
+        };
+        await putDraft(updated);
+        return updated;
+      });
+      setDraft(next);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '첨부를 제거하지 못했습니다.');
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function discard() {
+    if (!draft || busy) return;
+    const value = draft;
+    setBusy(true);
+    setDraft(undefined);
+    current.current = undefined;
+    try {
+      await persistence.current;
+      await withQueuePaused(boot.user.id, () => removeDraft(boot.user.id, value.id));
+      location.assign(mode === 'driver' ? '/d' : '/m/ledger');
+    } catch (e) {
+      setDraft(value);
+      setError(e instanceof Error ? e.message : '기기 초안을 폐기하지 못했습니다.');
+    } finally {
+      setBusy(false);
+    }
+  }
   if (!draft) return <p role={error ? 'alert' : 'status'}>{error || '기기 초안을 확인하고 있습니다…'}</p>;
   const form = draft.form;
   const locked = busy || ['queued', 'blocked', 'conflict'].includes(draft.phase);
@@ -308,6 +381,8 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
       candidates.find((e) => e.dataset.fixTarget === normalized) ??
       candidates.find((e) => normalized.startsWith(`${e.dataset.fixTarget}.`)) ??
       document.getElementById('form-errors');
+    const disclosure = element?.closest('details');
+    if (disclosure) disclosure.open = true;
     element?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     element?.querySelector<HTMLElement>('input,select,textarea,button')?.focus({ preventScroll: true });
   }
@@ -678,7 +753,14 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
                 </Field>
               </div>
             </Section>
-            <TripFields trips={form.trips} onChange={(trips) => change({ trips })} recent={recent} />
+            <TripFields
+              trips={form.trips}
+              onChange={(trips) => change({ trips })}
+              recent={recent}
+              billingUnits={form.charges
+                .filter((charge) => charge.charge_type === 'BASE')
+                .map((charge) => charge.billing_unit)}
+            />
             <ChargeFields
               form={displayForm}
               mode={mode}
@@ -703,6 +785,11 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
             policy={lookups.projects.find((p) => p.id === form.project_id)?.evidence_policy}
             onChange={(uploads) => edit({ uploads })}
             locked={locked}
+            canRemovePending={!busy}
+            canRetry={draft.phase === 'queued' && !busy}
+            onRemovePending={(id) => {
+              void removePending(id);
+            }}
             onProcessingChange={setEvidenceBusy}
             onRetry={() => {
               void syncQueue(boot.user.id, true);
@@ -732,6 +819,47 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
             연결되면 자동으로 보냅니다.
           </p>
         </form>
+        {draft.phase !== 'saved' && (
+          <section className="rounded-xl border border-slate-200 p-4">
+            {discardConfirm ? (
+              <div role="alertdialog" aria-label="기기 초안 폐기 확인">
+                <p className="font-semibold">이 기기의 초안과 미전송 첨부를 폐기할까요?</p>
+                <p className="mt-2 text-sm text-slate-600">
+                  복구할 수 없습니다. 이미 서버에 저장된 운행과 증빙은 유지됩니다.
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className={`${button} text-red-700`}
+                    disabled={busy}
+                    onClick={() => {
+                      void discard();
+                    }}
+                  >
+                    기기 초안 폐기 확인
+                  </button>
+                  <button
+                    type="button"
+                    className={button}
+                    disabled={busy}
+                    onClick={() => setDiscardConfirm(false)}
+                  >
+                    계속 작성
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                className={`${button} text-red-700`}
+                disabled={busy}
+                onClick={() => setDiscardConfirm(true)}
+              >
+                기기 초안 폐기
+              </button>
+            )}
+          </section>
+        )}
         {draft.server && (
           <Section title="검수 결과">
             <StatusBadge warning={draft.server.review_status === 'NEEDS_FIX'}>

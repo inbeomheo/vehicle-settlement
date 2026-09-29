@@ -1,12 +1,17 @@
 'use client';
 import Link from 'next/link';
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import type { paymentOverview } from '@/server/services/payments';
 import { DirectionTabs, ErrorMessage, money, Pagination, panelClass, useResource } from '../statements/ui';
 import { PaymentPanel } from './payment-panel';
-export default function PaymentsPage() {
+function PaymentsContent({ requestedState }: { requestedState: string | null }) {
   const [direction, setDirection] = useState<'PAYABLE' | 'RECEIVABLE'>('PAYABLE');
-  const [state, setState] = useState('UNPAID');
+  const [state, setState] = useState(() =>
+    requestedState && ['ALL', 'UNPAID', 'OVERDUE', 'PAID'].includes(requestedState)
+      ? requestedState
+      : 'UNPAID',
+  );
   const [page, setPage] = useState(1);
   const result = useResource<Awaited<ReturnType<typeof paymentOverview>>>(
     `/api/payments/overview?${new URLSearchParams({ direction, state, page: String(page) })}`,
@@ -101,5 +106,19 @@ export default function PaymentsPage() {
         </>
       )}
     </div>
+  );
+}
+
+function PaymentQuery() {
+  const search = useSearchParams();
+  return (
+    <PaymentsContent key={search.toString()} requestedState={search.get('state') ?? search.get('status')} />
+  );
+}
+export default function PaymentsPage() {
+  return (
+    <Suspense fallback={<p role="status">지급 내역을 불러오는 중…</p>}>
+      <PaymentQuery />
+    </Suspense>
   );
 }

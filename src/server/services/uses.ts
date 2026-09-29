@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNull, lte, gte, or, ilike, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, ne, inArray, isNull, lte, gte, or, ilike, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import {
   chargeLines,
@@ -186,7 +186,13 @@ export async function contentChanged(ctx: Context, before: Use) {
       version: sql`${chargeLines.version} + 1`,
       updated_at: new Date(),
     })
-    .where(and(eq(chargeLines.vehicle_use_id, before.id), isNull(chargeLines.deleted_at)));
+    .where(
+      and(
+        eq(chargeLines.vehicle_use_id, before.id),
+        isNull(chargeLines.deleted_at),
+        ne(chargeLines.charge_type, 'ADJUSTMENT'),
+      ),
+    );
   const autoSubmit = nextStatus === 'SUBMITTED';
   const [after] = await ctx.db
     .update(vehicleUses)
@@ -387,11 +393,11 @@ async function saveCharges(
           })
         : null;
     const unit = input.billing_unit ?? existing?.billing_unit ?? rate?.billing_unit ?? 'PER_DAY';
-    const q =
-      input.quantity !== undefined
+    const q = ['PER_DAY', 'HALF_DAY', 'MONTHLY', 'LUMP_SUM'].includes(unit)
+      ? (input.quantity ?? '1')
+      : input.quantity !== undefined
         ? input.quantity
-        : (existing?.quantity ??
-          (['PER_DAY', 'HALF_DAY', 'MONTHLY', 'LUMP_SUM'].includes(unit) ? '1' : null));
+        : (existing?.quantity ?? null);
     const price = preserve ? existing.unit_price : (rate?.unit_price ?? null);
     const snapshot = preserve
       ? existing.agreement_snapshot
@@ -634,13 +640,29 @@ async function applyDecision(ctx: Context, line: Charge, decision?: z.output<typ
   if (status === 'APPROVED') {
     if (line.price_status === 'PENDING' && decision?.approved_amount === undefined)
       invalid('단가 미확정 비용의 승인액을 지정하세요.', { charge_line_id: line.id });
+    const amount = line.included_in_base ? 0 : (line.computed_amount ?? line.requested_amount);
+    // Adjustments store a supply difference; other VAT_INCLUDED costs store gross.
+    const calculated =
+      amount === null
+        ? null
+        : line.charge_type === 'ADJUSTMENT'
+          ? { supply: amount, tax: taxFromSupply(amount, line.tax_mode) }
+          : calculateTax(amount, line.tax_mode);
     if (decision?.approved_amount !== undefined) {
       supply = decision.approved_amount;
-      tax = taxFromSupply(supply, line.tax_mode);
+      // Sending the same supply again must preserve the VAT-inclusive remainder.
+      // A genuinely changed approval is a new supply amount, with tax on that supply.
+      tax =
+        line.approved_amount === supply && line.tax_amount !== null
+          ? line.tax_amount
+          : calculated?.supply === supply
+            ? calculated.tax
+            : taxFromSupply(supply, line.tax_mode);
+    } else if (line.approved_amount !== null && line.tax_amount !== null) {
+      supply = line.approved_amount;
+      tax = line.tax_amount;
     } else {
-      const amount = line.included_in_base ? 0 : (line.computed_amount ?? line.requested_amount);
-      if (amount === null) invalid('승인할 금액이 없습니다.');
-      const calculated = calculateTax(amount, line.tax_mode);
+      if (!calculated) invalid('승인할 금액이 없습니다.');
       supply = calculated.supply;
       tax = calculated.tax;
     }

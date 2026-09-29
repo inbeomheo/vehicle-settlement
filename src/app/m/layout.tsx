@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { guardPage } from '@/server/auth/page';
 import { LogoutButton } from '@/components/logout-button';
+import { canAccessManagerPage, managerMenu } from '@/server/auth/manager-access';
 export const dynamic = 'force-dynamic';
 export default async function Layout({ children }: { children: React.ReactNode }) {
   const user = await guardPage('manager');
@@ -16,36 +17,17 @@ export default async function Layout({ children }: { children: React.ReactNode }
         </div>
       </header>
       <nav aria-label="주 메뉴" className="flex flex-wrap gap-1 border-b border-slate-200 bg-white px-3 py-2">
-        <Link className="rounded-lg px-3 py-3 hover:bg-blue-50 hover:text-blue-800" href="/m">
-          대시보드
-        </Link>
-        <Link className="rounded-lg px-3 py-3 hover:bg-blue-50 hover:text-blue-800" href="/m/review">
-          검수함
-        </Link>
-        <Link className="rounded-lg px-3 py-3 hover:bg-blue-50 hover:text-blue-800" href="/m/ledger">
-          차량 사용대장
-        </Link>
-        <Link className="rounded-lg px-3 py-3 hover:bg-blue-50 hover:text-blue-800" href="/m/uses/new">
-          대리 입력
-        </Link>
-        <Link className="rounded-lg px-3 py-3 hover:bg-blue-50 hover:text-blue-800" href="/m/statements">
-          월 정산
-        </Link>
-        <Link className="rounded-lg px-3 py-3 hover:bg-blue-50 hover:text-blue-800" href="/m/payments">
-          지급 관리
-        </Link>
-        <Link className="rounded-lg px-3 py-3 hover:bg-blue-50 hover:text-blue-800" href="/m/master">
-          기준정보
-        </Link>
-        <Link className="rounded-lg px-3 py-3 hover:bg-blue-50 hover:text-blue-800" href="/m/import">
-          엑셀 가져오기
-        </Link>
-        <Link className="rounded-lg px-3 py-3 hover:bg-blue-50 hover:text-blue-800" href="/m/users">
-          사용자 관리
-        </Link>
-        <Link className="rounded-lg px-3 py-3 hover:bg-blue-50 hover:text-blue-800" href="/m/audit">
-          변경 이력
-        </Link>
+        {managerMenu
+          .filter((item) => canAccessManagerPage(user.role, item.href))
+          .map((item) => (
+            <Link
+              key={item.href}
+              className="rounded-lg px-3 py-3 hover:bg-blue-50 hover:text-blue-800"
+              href={item.href}
+            >
+              {item.title}
+            </Link>
+          ))}
       </nav>
       <main className="mx-auto max-w-6xl px-6 py-10">{children}</main>
     </div>

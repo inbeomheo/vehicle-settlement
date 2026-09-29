@@ -20,3 +20,4 @@ graft/
 
 public/w2-offline-app.js
 public/w2-offline-app.css
+public/sw-version.js

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { and, asc, desc, eq, gte, inArray, isNull, lte, ne, sql, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Context } from '../context';
@@ -5,6 +6,7 @@ import { todaySeoul } from '../context';
 import { accessibleProjectIds, accessibleUseFilter, assertCanReadUse, assertCanSettle } from '../authz';
 import { audit } from '../audit';
 import {
+  auditLogs,
   chargeLines,
   companySettings,
   counterparties,
@@ -30,6 +32,7 @@ import {
 
 export type Statement = typeof statements.$inferSelect;
 export type Item = typeof statementItems.$inferSelect;
+export type StatementItem = Item & { eligible?: boolean; reasons?: string[] };
 export type ItemSnapshot = {
   vehicle_use_id: string;
   project_id: string;
@@ -224,8 +227,16 @@ async function headerSnapshots(ctx: Context, statement: Pick<Statement, 'counter
     },
   };
 }
-export function itemTotals(items: Pick<Item, 'inclusion' | 'supply_amount' | 'tax_amount'>[]) {
-  const included = items.filter((item) => item.inclusion === 'INCLUDED');
+export function itemTotals(
+  items: (Pick<Item, 'inclusion' | 'supply_amount' | 'tax_amount'> & { eligible?: boolean })[],
+) {
+  const included = items.filter(
+    (item) =>
+      item.inclusion === 'INCLUDED' &&
+      item.eligible !== false &&
+      item.supply_amount !== null &&
+      item.tax_amount !== null,
+  );
   const supply_total = won(sumMoney(included.map((i) => i.supply_amount)));
   const tax_total = won(sumMoney(included.map((i) => i.tax_amount)));
   return { supply_total, tax_total, grand_total: won(sumMoney([supply_total, tax_total])) };
@@ -238,19 +249,23 @@ async function liveItems(ctx: Context, statement: Statement) {
     .innerJoin(vehicleUses, eq(vehicleUses.id, chargeLines.vehicle_use_id))
     .where(eq(statementItems.statement_id, statement.id))
     .orderBy(asc(vehicleUses.use_date), asc(chargeLines.id));
-  const result: Item[] = [];
-  for (const { item, line, use } of rows)
+  const result: StatementItem[] = [];
+  for (const { item, line, use } of rows) {
+    const reasons = await eligibilityReasons(ctx, line, use, statement);
     result.push({
+      eligible: !reasons.length,
+      reasons,
       ...item,
       snapshot: await makeItemSnapshot(ctx, line, use, statement.period_start),
       supply_amount: line.approved_amount,
       tax_amount: line.tax_amount,
     });
+  }
   return result;
 }
 export async function getStatement(ctx: Context, id: string) {
   let statement = await rawStatement(ctx, id);
-  const items =
+  const items: StatementItem[] =
     statement.status === 'DRAFT'
       ? await liveItems(ctx, statement)
       : await ctx.db
@@ -273,6 +288,10 @@ export async function getStatement(ctx: Context, id: string) {
   return {
     ...statement,
     items,
+    blocked_count: items.filter((item) => item.inclusion === 'INCLUDED' && item.eligible === false).length,
+    unpriced_count: items.filter(
+      (item) => item.inclusion === 'INCLUDED' && (item.supply_amount === null || item.tax_amount === null),
+    ).length,
     payments,
     replacements,
     payment_status: paid ? ('PAID' as const) : ('UNPAID' as const),
@@ -310,6 +329,36 @@ async function replaceItems(
     });
   }
 }
+function statementRequestHash(data: {
+  client_request_id: string | null;
+  direction: string;
+  counterparty_id: string;
+  period_start: string;
+  period_end: string;
+  title?: string | null;
+  due_date?: string | null;
+  replaces_statement_id?: string | null;
+  items: { charge_line_id: string; inclusion?: string; hold_reason?: string | null }[];
+}) {
+  const normalized = {
+    client_request_id: data.client_request_id,
+    direction: data.direction,
+    counterparty_id: data.counterparty_id,
+    period_start: data.period_start,
+    period_end: data.period_end,
+    title: data.title ?? null,
+    due_date: data.due_date ?? null,
+    replaces_statement_id: data.replaces_statement_id ?? null,
+    items: data.items
+      .map((item) => ({
+        charge_line_id: item.charge_line_id,
+        inclusion: item.inclusion ?? 'INCLUDED',
+        hold_reason: item.inclusion === 'HELD' ? (item.hold_reason ?? null) : null,
+      }))
+      .sort((a, b) => a.charge_line_id.localeCompare(b.charge_line_id)),
+  };
+  return createHash('sha256').update(JSON.stringify(normalized)).digest('hex');
+}
 export async function createStatement(ctx: Context, input: z.input<typeof createStatementSchema>) {
   const data = createStatementSchema.parse(input);
   return atomic(ctx, async (tx) => {
@@ -321,7 +370,29 @@ export async function createStatement(ctx: Context, input: z.input<typeof create
       .select()
       .from(statements)
       .where(eq(statements.client_request_id, data.client_request_id));
-    if (prior) return getStatement(tx, prior.id);
+    if (prior) {
+      await rawStatement(tx, prior.id);
+      const [creation] = await tx.db
+        .select()
+        .from(auditLogs)
+        .where(
+          and(
+            eq(auditLogs.entity_id, prior.id),
+            eq(auditLogs.entity_type, 'statement'),
+            eq(auditLogs.action, 'STATEMENT_CREATE'),
+          ),
+        )
+        .limit(1);
+      const original = creation?.after as (Statement & { items: Item[]; request_hash?: string }) | undefined;
+      // Older drafts retain their original creation snapshot even after edits.
+      const storedHash = original?.request_hash ?? (original?.items ? statementRequestHash(original) : null);
+      if (storedHash !== statementRequestHash(data))
+        throw new AppError(
+          'IDEMPOTENCY_MISMATCH',
+          '같은 요청 식별자의 명세 내용이 다릅니다. 새 요청으로 작성하세요.',
+        );
+      return getStatement(tx, prior.id);
+    }
     const [party] = await tx.db
       .select()
       .from(counterparties)
@@ -345,7 +416,10 @@ export async function createStatement(ctx: Context, input: z.input<typeof create
     await replaceItems(tx, statement, items);
     const result = await getStatement(tx, statement.id);
     await tx.db.update(statements).set(itemTotals(result.items)).where(eq(statements.id, statement.id));
-    await audit(tx, 'STATEMENT_CREATE', 'statement', statement.id, null, result);
+    await audit(tx, 'STATEMENT_CREATE', 'statement', statement.id, null, {
+      ...result,
+      request_hash: statementRequestHash(data),
+    });
     return result;
   });
 }
@@ -498,6 +572,13 @@ export async function cancelStatement(
       .from(paymentRecords)
       .where(and(eq(paymentRecords.statement_id, id), isNull(paymentRecords.voided_at)));
     if (payment) invalid('유효한 지급·입금 기록을 먼저 취소하세요.');
+    const [adjustment] = await tx.db
+      .select({ id: chargeLines.id })
+      .from(chargeLines)
+      .where(and(eq(chargeLines.adjusts_statement_id, id), isNull(chargeLines.deleted_at)))
+      .limit(1);
+    if (adjustment)
+      invalid('이 명세를 참조하는 유효한 조정 항목이 있어 취소할 수 없습니다. 조정 내역을 먼저 확인하세요.');
     await tx.db
       .update(chargeLines)
       .set({ locked_statement_id: null, version: sql`${chargeLines.version} + 1`, updated_at: new Date() })

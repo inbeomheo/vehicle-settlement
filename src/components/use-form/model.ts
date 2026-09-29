@@ -181,7 +181,7 @@ export function toInput(form: FormValues, mode: Mode): CreateUseInput {
           billing_unit: c.billing_unit || undefined,
           quantity:
             c.quantity ||
-            (['PER_DAY', 'HALF_DAY', 'MONTHLY', 'LUMP_SUM'].includes(c.billing_unit) ? '1' : null),
+            (['PER_DAY', 'HALF_DAY', 'MONTHLY', 'LUMP_SUM'].includes(c.billing_unit) ? '1' : undefined),
           requested_amount: c.charge_type === 'BASE' ? undefined : Number(c.requested_amount),
         };
       }),

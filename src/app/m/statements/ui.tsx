@@ -135,6 +135,20 @@ export function Totals({
     </dl>
   );
 }
+export function DraftWarnings({
+  blocked_count,
+  unpriced_count,
+}: {
+  blocked_count: number;
+  unpriced_count: number;
+}) {
+  return blocked_count > 0 ? (
+    <p role="status" className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
+      확정 불가 {blocked_count}건 (금액 미확정 {unpriced_count}건) · 합계에서 제외했습니다. 해당 항목을
+      보류·제외하거나 검수를 완료하세요.
+    </p>
+  ) : null;
+}
 export function DirectionTabs({
   value,
   onChange,

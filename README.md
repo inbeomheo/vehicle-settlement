@@ -77,9 +77,32 @@ npm run format:check
 ```
 
 - Vitest는 실제 PG의 파일별 독립 DB를 생성·마이그레이션·삭제합니다. 개발 DB를 초기화하지 않습니다. 별도 서버는 `TEST_DATABASE_URL`을 지정하고 CREATE DATABASE 권한을 부여합니다.
-- Playwright는 `.env`의 `PORT`에서 개발 서버를 시작하며 **개발 DB에 테스트 자료를 추가**합니다. 먼저 마이그레이션과 시드를 실행하세요. 운영 DB에서는 실행하지 않습니다. W5 전체 흐름은 위 시드 계정을 사용합니다.
+- `npm run test:e2e`: Playwright 브라우저 시나리오를 전용 `vehicle_e2e` DB에서 실행합니다. 아래 E2E 절을 참고하세요.
 - `npm run format`은 Prettier로 포맷합니다. 커밋 전 `format:check`를 통과시킵니다.
 - 14개 필수 시나리오별 테스트명·결과 및 복구 리허설 로그: [VERIFICATION](docs/VERIFICATION.md).
+
+## 시연용 9월 데이터
+
+기본 계정·기준정보 시드 이후 실행합니다.
+
+```sh
+npm run seed
+npm run seed:demo
+```
+
+`seed:demo`는 2026년 9월 사용 15건과 8월 이월 1건을 생성합니다. 기사 2명의 작성중·제출·보완요청·승인 건, 일대 5회 운행, 회당 청구수량, 대기비 보류, 고객 청구와 작은 시연 증빙 이미지가 포함됩니다. 확정 지급명세는 지급완료 1건(660,000원), 미지급 1건(880,000원)입니다. 금액·검수·명세·지급은 실제 서비스 함수를 통해 생성하며, 재실행하면 같은 데이터를 유지합니다.
+
+`site` 또는 `settlement` 계정으로 `/m`에서 검수 대기·보완 대기·증빙 누락·미정산 승인액·미지급액을 확인할 수 있습니다. 처음부터 다시 만들 때는 로컬 데이터를 지우는 `npm run db:reset` 후 `npm run seed && npm run seed:demo`를 실행합니다.
+
+## E2E 전용 환경
+
+```sh
+npm run test:e2e
+```
+
+Playwright는 `.env`의 PostgreSQL 호스트·포트를 사용하되 데이터베이스 이름을 `vehicle_e2e`로 고정합니다. 매 실행의 globalSetup에서 이 전용 DB를 재생성·마이그레이션·기본 seed하고, 증빙은 `.data/e2e-storage`에 저장합니다. 웹 서버와 스펙의 서비스 호출 모두 같은 전용 DB를 사용합니다. 개발 DB의 사용 건·명세 수는 실행 전후 비교하며 달라지면 실패합니다.
+
+웹 서버 포트는 `.env`의 `PORT`, PostgreSQL은 `PG_PORT`입니다. 기존 개발 서버를 재사용하지 않으므로 E2E 실행 전에 해당 웹 포트를 비워 주세요. 이 설정은 `tests/e2e/full-flow.spec.ts`를 포함해 모든 E2E 스펙에 적용됩니다.
 
 ## 백업·복구
 

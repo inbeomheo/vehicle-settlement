@@ -4,6 +4,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
 import { PaymentPanel } from '../../payments/payment-panel';
 import { NewStatement } from '../new-statement';
+import { DraftEditor } from '../draft-editor';
 import {
   api,
   billingLabels,
@@ -17,6 +18,7 @@ import {
   secondaryClass,
   statusLabels,
   Totals,
+  DraftWarnings,
   useResource,
   type StatementDetail,
 } from '../ui';
@@ -45,24 +47,6 @@ export default function StatementPage() {
     } finally {
       setBusy(false);
     }
-  }
-  async function update(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!statement) return;
-    const form = new FormData(event.currentTarget);
-    await action(
-      `/api/statements/${id}/items`,
-      {
-        version: statement.version,
-        due_date: form.get('due_date') || null,
-        items: statement.items.map((item) => ({
-          charge_line_id: item.charge_line_id,
-          inclusion: form.get(`inclusion-${item.id}`),
-          hold_reason: form.get(`reason-${item.id}`) || null,
-        })),
-      },
-      'PATCH',
-    );
   }
   async function cancel(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -134,6 +118,7 @@ export default function StatementPage() {
         </p>
       )}
       <Totals {...statement} />
+      {statement.status === 'DRAFT' && <DraftWarnings {...statement} />}
       <section className={`${panelClass} space-y-4`}>
         <h2 className="text-lg font-bold">포함 내역 · {included.length}건</h2>
         <div className="overflow-x-auto">
@@ -212,45 +197,12 @@ export default function StatementPage() {
       {statement.status === 'DRAFT' && (
         <section className={`${panelClass} space-y-5`}>
           <h2 className="text-lg font-bold">초안 편집</h2>
-          <form onSubmit={update} className="space-y-4">
-            <Field label={statement.direction === 'PAYABLE' ? '지급 예정일' : '입금 예정일'}>
-              <input
-                className={inputClass}
-                name="due_date"
-                type="date"
-                defaultValue={statement.due_date ?? ''}
-              />
-            </Field>
-            {statement.items.map((item) => (
-              <div
-                key={`${item.id}-${statement.version}`}
-                className="grid items-end gap-3 rounded-lg bg-slate-50 p-3 sm:grid-cols-3"
-              >
-                <p className="text-sm">
-                  {String(item.snapshot?.use_no)}
-                  <br />
-                  {money(item.supply_amount)}
-                </p>
-                <Field label="포함 여부">
-                  <select name={`inclusion-${item.id}`} className={inputClass} defaultValue={item.inclusion}>
-                    <option value="INCLUDED">포함</option>
-                    <option value="HELD">보류</option>
-                  </select>
-                </Field>
-                <Field label="보류 사유">
-                  <input
-                    name={`reason-${item.id}`}
-                    className={inputClass}
-                    defaultValue={item.hold_reason ?? ''}
-                    maxLength={1000}
-                  />
-                </Field>
-              </div>
-            ))}
-            <button className={secondaryClass} disabled={busy}>
-              초안 변경 저장
-            </button>
-          </form>
+          <DraftEditor
+            key={statement.version}
+            statement={statement}
+            busy={busy}
+            onSave={(changes) => action(`/api/statements/${id}/items`, changes, 'PATCH')}
+          />
           <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
             <p className="mb-3 text-sm">
               저장된 포함 항목과 합계로 확정합니다. 확정 후 수정은 취소·재작성 또는 조정으로 처리합니다.
