@@ -1,3 +1,4 @@
+import { passwordWithinByteLimit } from '../auth/password';
 import { z } from 'zod';
 import {
   billingUnitEnum,
@@ -142,10 +143,16 @@ export const inviteSchema = z
   })
   .strict();
 export const loginSchema = z
-  .object({ login_id: z.string().min(1).max(200), password: z.string().min(1).max(200) })
+  .object({
+    login_id: z.string().min(1).max(200),
+    password: z.string().min(1).refine(passwordWithinByteLimit, '비밀번호가 너무 깁니다'),
+  })
   .strict();
 export const acceptInviteSchema = z
-  .object({ login_id: z.string().trim().min(1).max(100), password: z.string().min(8).max(72) })
+  .object({
+    login_id: z.string().trim().min(1).max(100),
+    password: z.string().min(8).refine(passwordWithinByteLimit, '비밀번호가 너무 깁니다'),
+  })
   .strict();
 export const rateLookupSchema = z.object({
   project_id: uuid,

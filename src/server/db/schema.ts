@@ -610,3 +610,22 @@ export const formFieldSettings = pgTable(
     ),
   ],
 );
+
+export const loginThrottles = pgTable(
+  'login_throttles',
+  {
+    id: id(),
+    key: text('key').notNull().unique(),
+    scope: text('scope').$type<'ACCOUNT' | 'IP'>().notNull(),
+    failures: integer('failures').notNull().default(0),
+    window_started_at: time('window_started_at').notNull().defaultNow(),
+    locked_until: time('locked_until'),
+    created_at: created(),
+    updated_at: updated(),
+  },
+  (t) => [
+    check('login_throttles_scope_check', sql`${t.scope} IN ('ACCOUNT', 'IP')`),
+    check('login_throttles_failures_check', sql`${t.failures} >= 0`),
+    index('login_throttles_updated_idx').on(t.updated_at),
+  ],
+);
