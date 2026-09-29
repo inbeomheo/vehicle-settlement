@@ -1,3 +1,4 @@
+import { assertDriverEvidenceAccess } from '../authz';
 import { and, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { createHash, randomUUID } from 'node:crypto';
@@ -33,6 +34,7 @@ export async function createEvidence(ctx: Context, useId: string, raw: z.input<t
       .from(evidence)
       .where(eq(evidence.client_upload_id, input.client_upload_id));
     if (old) {
+      await assertDriverEvidenceAccess(tx, old.id);
       if (old.vehicle_use_id !== useId || old.deleted_at || old.replaced_by_id) notFound();
       if (
         old.kind !== input.kind ||
@@ -74,6 +76,7 @@ async function accessibleEvidence(ctx: Context, id: string, lock = false, histor
   // Re-read after acquiring the parent lock, so replacement/deletion cannot race upload.
   const [current] = await ctx.db.select().from(evidence).where(eq(evidence.id, id));
   if (current.deleted_at || (!history && current.replaced_by_id)) notFound();
+  await assertDriverEvidenceAccess(ctx, id);
   return { file: current, use };
 }
 function validMagic(bytes: Buffer, mime: string) {

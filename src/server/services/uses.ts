@@ -28,6 +28,7 @@ import {
   canSeeReceivable,
   redactForDriver,
   accessibleUseFilter,
+  driverEvidenceFilter,
 } from '../authz';
 import { AppError, invalid, notFound } from '../errors';
 import { audit } from '../audit';
@@ -110,8 +111,18 @@ export async function rawDetail(ctx: Context, use: Use) {
     is_locked: lines.some((line) => line.locked_statement_id !== null),
   };
 }
+async function publicDetail(ctx: Context, detail: Awaited<ReturnType<typeof rawDetail>>) {
+  const hidden =
+    ctx.user.role === 'DRIVER'
+      ? await ctx.db
+          .select({ id: evidence.id })
+          .from(evidence)
+          .where(and(eq(evidence.vehicle_use_id, detail.id), sql`NOT (${driverEvidenceFilter(ctx)})`))
+      : [];
+  return redactForDriver(ctx, detail, new Set(hidden.map((file) => file.id)));
+}
 export async function getUse(ctx: Context, id: string) {
-  return redactForDriver(ctx, await rawDetail(ctx, await rawUse(ctx, id)));
+  return publicDetail(ctx, await rawDetail(ctx, await rawUse(ctx, id)));
 }
 export function assertVersion(use: Use, version: number) {
   if (use.version !== version)
@@ -561,7 +572,7 @@ export async function createUse(ctx: Context, raw: CreateUseInput) {
     await saveCharges(tx, use, lines);
     const after = await rawDetail(tx, use);
     await audit(tx, 'CREATE', 'vehicle_use', use.id, null, after);
-    return redactForDriver(tx, after);
+    return publicDetail(tx, after);
   });
 }
 export async function updateUse(ctx: Context, id: string, raw: UpdateUseInput) {
@@ -643,7 +654,7 @@ export async function updateUse(ctx: Context, id: string, raw: UpdateUseInput) {
     const afterUse = await contentChanged(tx, before);
     const after = await rawDetail(tx, afterUse);
     await audit(tx, 'UPDATE', 'vehicle_use', id, beforeDetail, after, input.change_reason);
-    return redactForDriver(tx, after);
+    return publicDetail(tx, after);
   });
 }
 async function assertFormFieldsSatisfied(ctx: Context, use: Use, lines?: Charge[]) {

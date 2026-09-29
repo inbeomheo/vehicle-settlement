@@ -6,7 +6,7 @@ import { idempotencyKeys, vehicleUses } from './db/schema';
 import { authenticate } from './auth/session';
 import type { Context } from './context';
 import { AppError, invalid } from './errors';
-import { assertActive, assertCanReadUse, redactForDriver } from './authz';
+import { assertActive, assertCanReadUse, assertDriverEvidenceAccess, redactForDriver } from './authz';
 export { AppError } from './errors';
 type Params = Record<string, string>;
 type RouteArgs<T, A extends boolean> = {
@@ -88,6 +88,8 @@ export function errorResponse(error: unknown, requestId: string): Response {
 }
 async function authorizeReplay(ctx: Context, body: unknown): Promise<void> {
   if (!body || typeof body !== 'object') return;
+  if ('client_upload_id' in body && 'id' in body && typeof body.id === 'string')
+    await assertDriverEvidenceAccess(ctx, body.id);
   // W4 records must recheck the entire statement scope after assignment/role revocation.
   if ('statement_id' in body && typeof body.statement_id === 'string') {
     const { rawStatement } = await import('./services/statements');

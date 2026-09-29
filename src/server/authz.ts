@@ -1,5 +1,5 @@
 import { and, eq, isNull, lte, gte, or, inArray, sql, type SQL } from 'drizzle-orm';
-import { projectAssignments, users, vehicleUses } from './db/schema';
+import { projectAssignments, users, vehicleUses, evidence } from './db/schema';
 import type { Context } from './context';
 import { todaySeoul } from './context';
 import { AppError, notFound } from './errors';
@@ -64,14 +64,57 @@ export async function assertCanSettle(ctx: Context, projectId?: string) {
     throw new AppError('FORBIDDEN', '정산 담당자 권한이 필요합니다.');
   if (projectId) await assertProjectAccess(ctx, projectId);
 }
+// A retained attachment may belong to a previous driver even in the current
+// revision. Preserve it for managers but do not transfer historical access.
+export function driverEvidenceFilter(ctx: Context): SQL | undefined {
+  if (ctx.user.role !== 'DRIVER') return undefined;
+  return sql`NOT EXISTS (
+    SELECT 1 FROM users uploader WHERE uploader.id=${evidence.uploaded_by}
+      AND uploader.driver_id IS NOT NULL AND uploader.driver_id IS DISTINCT FROM ${ctx.user.driver_id}::uuid
+  ) AND NOT EXISTS (
+    SELECT 1 FROM use_revisions revision WHERE revision.vehicle_use_id=${evidence.vehicle_use_id}
+      AND revision.snapshot->>'driver_id' IS DISTINCT FROM ${ctx.user.driver_id}
+      AND revision.snapshot->'evidence' @> jsonb_build_array(jsonb_build_object('id', ${evidence.id}::text))
+  )`;
+}
+export async function assertDriverEvidenceAccess(ctx: Context, id: string) {
+  if (ctx.user.role !== 'DRIVER') return;
+  const [visible] = await ctx.db
+    .select({ id: evidence.id })
+    .from(evidence)
+    .where(and(eq(evidence.id, id), driverEvidenceFilter(ctx)));
+  if (!visible) notFound();
+}
 // Apply to complete nested responses, revision snapshots and audit payloads before exposing them to a driver.
-export function redactForDriver<T>(ctx: Context, value: T): T {
+export function redactForDriver<T>(
+  ctx: Context,
+  value: T,
+  hiddenEvidenceIds: ReadonlySet<string> = new Set(),
+): T {
   if (canSeeReceivable(ctx)) return value;
+  const hidden = new Set(hiddenEvidenceIds);
+  const collect = (v: unknown): void => {
+    if (!v || typeof v !== 'object') return;
+    if ('revision_no' in v && 'snapshot' in v) {
+      const snapshot = v.snapshot as Record<string, unknown> | null;
+      if (snapshot?.driver_id !== ctx.user.driver_id && Array.isArray(snapshot?.evidence)) {
+        for (const file of snapshot.evidence) if (file?.id) hidden.add(file.id);
+      }
+    }
+    for (const item of Object.values(v)) collect(item);
+  };
+  collect(value);
   const visit = (v: unknown): unknown => {
     if (v instanceof Date || v === null || typeof v !== 'object') return v;
     if (Array.isArray(v))
       return v
-        .filter((x) => !(x && typeof x === 'object' && 'direction' in x && x.direction === 'RECEIVABLE'))
+        .filter((x) => {
+          if (!x || typeof x !== 'object') return true;
+          if ('direction' in x && x.direction === 'RECEIVABLE') return false;
+          if ('revision_no' in x && 'snapshot' in x) return x.snapshot?.driver_id === ctx.user.driver_id;
+          if ('client_upload_id' in x && hidden.has(x.id)) return false;
+          return true;
+        })
         .map(visit);
     return Object.fromEntries(
       Object.entries(v)
