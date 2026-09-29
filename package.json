@@ -22,7 +22,10 @@
     "format:check": "prettier --check .",
     "pwa:build": "node src/client/offline/build-shell.mjs",
     "predev": "npm run pwa:build",
-    "prebuild": "npm run pwa:build"
+    "prebuild": "npm run pwa:build",
+    "backup": "tsx scripts/backup.ts",
+    "restore": "tsx scripts/restore.ts",
+    "restore:verify": "tsx scripts/restore-verify.ts"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
