@@ -272,3 +272,7 @@ scripts/             db 시작, 시드, 백업/복구
 ## 11. W1 세부 입력 계약
 
 필드·enum·업무 모델은 위 정의를 유지한다. 중첩 배열 저장 방식, 입력 JSON, 버전 대상, 응답 합계, 증빙 재전송 및 워커 간 잠금 순서는 [API.md](API.md)에 명시한다. W1의 모듈·테스트 헬퍼 사용법과 검증 결과는 [reports/W1.md](reports/W1.md)에 있다.
+
+## 12. W5 가져오기 영속화 보완
+
+§5.5의 기존 import_jobs와 §5.3의 source_row_hash를 사용한다. 마이그레이션 `0100_w5_import.sql`은 사용 건에 nullable `import_job_id` FK를 추가하고, 개인별 매핑 프리셋 `import_presets(id, name, mapping jsonb, created_by, created_at)` 및 `(created_by, name)` unique를 추가한다. 업무 상태 모델은 변경하지 않는다. 가져온 자료는 DRAFT/PROXY이고 수량·단가·재가져오기 계약은 [ASSUMPTIONS](ASSUMPTIONS.md), HTTP 계약은 [API](API.md)에 기록한다.
