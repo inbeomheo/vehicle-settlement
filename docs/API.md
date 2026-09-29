@@ -133,3 +133,12 @@ commit은 generic 응답 캐시를 사용하지 않는다. job 행 잠금 + 가�
 초안 상세·생성·수정 응답의 `confirmation_token`은 서버가 포함 항목 ID, 비용 라인 ID·version·승인 공급가·세액, 정산 가능 여부와 합계로 만든 SHA-256 해시다. 확정·취소 명세에서는 null이다.
 
 `POST /api/statements/:id/confirm`은 `{ version, confirmation_token }`을 필수로 받는다. 서버는 부모 사용 건과 비용 라인을 잠그고 확정 가능 여부를 재검사한 뒤 토큰을 비교한다. 변경된 초안은 `409 STATEMENT_CHANGED`와 `details.{supply_total,tax_total,grand_total,included_count,confirmation_token}`을 반환한다. 클라이언트는 최신 상세를 다시 조회·표시하고 사용자의 재확인을 받는다. 기존 명세 version 충돌은 `VERSION_CONFLICT`, 미승인·잠금·증빙 등 확정 불가 사유는 `CONFIRM_BLOCKED`를 유지한다.
+
+## F7A 담당자 조회·집계 보완
+
+- `GET /api/statements/candidates`: `includeDrafts="true"|"false"`(기본 false)를 추가한다. 운행 상태 CANCELED는 항상 제외한다. 검수 DRAFT 또는 제출 차수 0인 사용은 기본 숨기며, `unsubmitted_count`는 같은 권한·거래처·기간 조건의 미제출 **사용 건 수**다(비용 줄 중복 제외). true일 때만 해당 비용과 `미제출 사용 건` 사유를 반환하며 포함 가능 여부는 false다. 확정 트랜잭션에서도 취소·미제출을 재검사한다.
+- `GET /api/statements`: rows/total에는 선택한 상태의 모든 명세를 유지한다. `totals.pageSum/filteredSum`은 해당 페이지/검색 결과의 CONFIRMED 명세만 합산하며 DRAFT·CANCELED는 제외한다. 취소 명세 상세·목록의 `payment_status`, `collection_status`는 null이다. 화면은 `—(취소됨)`으로 표시한다. 지급 관리와 대시보드 미지급 집계 역시 CONFIRMED만 대상이다.
+- 명세 상세·출력 순서는 실제 사용일 → 사용번호 → 비용 ID다. 확정·취소 명세 정렬은 고정 snapshot을 사용하며 당시 값·합계를 다시 계산하지 않는다.
+- `GET /api/ledger` 및 대장 Excel의 합계는 CANCELED 사용을 제외한다. 취소 행과 당시 금액은 조회에 남으며 `operation_status`로 취소 뱃지를 표시한다.
+- `GET /api/audit`: `include_sessions="true"|"false"`(기본 false)로 로그인·로그아웃 세션 이력을 포함한다. 기존 역할/현장 접근 범위는 유지한다. 설정 이력의 `entity_label`은 `요청자(서울 현장)`처럼 항목·현장을 제공한다. 신규 설정 감사에는 당시 `project_name`을 보존하며 기존 감사는 현장 기준정보로 보완한다. 조회 응답의 `before/after.approved_revision_id`는 해당 제출본 차수(`제출본 #3`)로 해석한다. 저장된 감사 원문은 변경하지 않는다.
+- 담당자 `/m/uses/new?project=`와 `/m/master/form-fields?project=`는 UUID 형식·현장 존재·접근 범위를 검증하고 잘못된 값을 제거한 URL로 이동한다. 대리 입력은 활성 현장만 허용하고, 설정 화면은 사용 중지 현장도 관리 가능하다. 폼 설정의 현장 선택은 URL에 반영되어 새로고침·뒤로가기 때 복원된다. 직접 API의 잘못된 현장값은 기존대로 `422 VALIDATION_FAILED`와 `details[].path=["project_id"]`를 반환한다.
