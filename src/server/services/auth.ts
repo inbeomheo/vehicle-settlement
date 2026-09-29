@@ -46,6 +46,21 @@ export async function listInvites(ctx: Context) {
     return rest;
   });
 }
+export async function getInviteStatus(db: Db, token: string) {
+  const [invite] = await db
+    .select({
+      name: invites.name,
+      role: invites.role,
+      used_at: invites.used_at,
+      revoked_at: invites.revoked_at,
+      expires_at: invites.expires_at,
+    })
+    .from(invites)
+    .where(eq(invites.token_hash, hashToken(token)));
+  if (!invite || invite.used_at || invite.revoked_at || invite.expires_at <= new Date())
+    return { status: 'INVALID' as const, name: null, role: null };
+  return { status: 'VALID' as const, name: invite.name, role: invite.role };
+}
 export async function createInvite(ctx: Context, raw: z.input<typeof inviteSchema>) {
   const input = inviteSchema.parse(raw);
   return atomic(ctx, async (tx) => {
@@ -55,8 +70,14 @@ export async function createInvite(ctx: Context, raw: z.input<typeof inviteSchem
       const [driver] = await tx.db
         .select()
         .from(drivers)
-        .where(and(eq(drivers.id, input.driver_id), eq(drivers.active, true)));
+        .where(and(eq(drivers.id, input.driver_id), eq(drivers.active, true)))
+        .for('update');
       if (!driver) notFound();
+      const [account] = await tx.db
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.driver_id, driver.id));
+      if (account) invalid('이미 계정이 연결된 기사입니다. 계정 없는 기사를 선택하세요.');
     }
     if (input.project_ids.length) {
       const found = await tx.db
@@ -118,6 +139,12 @@ export async function acceptInvite(
       .where(eq(invites.token_hash, hashToken(token)))
       .for('update');
     if (!invite || invite.used_at || invite.revoked_at || invite.expires_at <= new Date()) notFound();
+    if (invite.driver_id) {
+      const [driver] = await tx.select().from(drivers).where(eq(drivers.id, invite.driver_id)).for('update');
+      if (!driver?.active) invalid('초대된 기사가 사용 중지되었습니다. 관리자에게 문의하세요.');
+      const [account] = await tx.select({ id: users.id }).from(users).where(eq(users.driver_id, driver.id));
+      if (account) invalid('이미 계정이 연결된 기사입니다. 관리자에게 문의하세요.');
+    }
     const [existing] = await tx.select().from(users).where(eq(users.login_id, input.login_id));
     if (existing) invalid('이미 사용 중인 아이디입니다.');
     const [user] = await tx

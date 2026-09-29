@@ -1,8 +1,8 @@
 'use client';
 import { useState, type FormEvent } from 'react';
+import { chargeTypeLabel, chargeUnitLabel } from '@/components/manager/charge-display';
 import {
   api,
-  billingLabels,
   buttonClass,
   ErrorMessage,
   Field,
@@ -193,28 +193,32 @@ export function NewStatement({
           {!rows.length ? (
             <p className="rounded-lg bg-slate-50 p-6">조회된 미정산 비용이 없습니다.</p>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[900px] text-left text-sm">
-                <thead className="border-y bg-slate-50">
+            <div className="md:overflow-x-auto">
+              <table className="block w-full text-left text-sm md:table md:min-w-[1000px]">
+                <thead className="hidden border-y bg-slate-50 md:table-header-group">
                   <tr>
                     {[
                       '포함 여부',
                       '사용일 / 사용번호',
                       '현장 / 차량 / 기사',
+                      '비용 종류',
                       '과금 / 운행수',
                       '공급가 / 세액',
                       '상태·사유',
                     ].map((h) => (
-                      <th className="p-3" key={h}>
+                      <th className="min-w-0 break-words p-3" key={h}>
                         {h}
                       </th>
                     ))}
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="grid gap-4 md:table-row-group">
                   {rows.map((row) => (
-                    <tr className="border-b align-top" key={row.charge_line_id}>
-                      <td className="p-3">
+                    <tr
+                      className="grid grid-cols-2 rounded-lg border p-2 align-top md:table-row md:rounded-none md:border-0 md:border-b md:p-0"
+                      key={row.charge_line_id}
+                    >
+                      <td className="min-w-0 break-words p-3">
                         <select
                           aria-label={`${row.snapshot.use_no} 포함 여부`}
                           className={inputClass}
@@ -255,24 +259,30 @@ export function NewStatement({
                           />
                         )}
                       </td>
-                      <td className="p-3">
+                      <td className="min-w-0 break-words p-3">
                         <p>{row.snapshot.use_date}</p>
                         <p>{row.snapshot.use_no}</p>
                         {row.snapshot.carried_forward && (
                           <span className="rounded bg-amber-100 px-2 text-amber-900">전월분</span>
                         )}
                       </td>
-                      <td className="p-3">
+                      <td className="min-w-0 break-words p-3">
                         {row.snapshot.project_name}
                         <br />
                         {row.snapshot.plate_no} · {row.snapshot.driver_name}
                       </td>
-                      <td className="p-3">
-                        {billingLabels[row.snapshot.billing_unit]} · 수량 {row.snapshot.quantity ?? '미정'}
+                      <td className="min-w-0 break-words p-3">
+                        <span className="block text-xs text-slate-500 md:hidden">비용 종류</span>
+                        {chargeTypeLabel(row.snapshot.charge_type)}
+                      </td>
+                      <td className="min-w-0 break-words p-3">
+                        {chargeUnitLabel(row.snapshot.charge_type, row.snapshot.billing_unit)} · 수량{' '}
+                        {row.snapshot.quantity ?? '미정'}
                         <br />
                         운행 {row.snapshot.trip_count}건
                       </td>
                       <td className="p-3 tabular-nums">
+                        <span className="block text-xs text-slate-500 md:hidden">공급가 / 세액</span>
                         {money(row.snapshot.supply_amount)}
                         <br />
                         {money(row.snapshot.tax_amount)}

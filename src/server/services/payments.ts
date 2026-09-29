@@ -89,13 +89,15 @@ export async function paymentOverview(ctx: Context, input: z.input<typeof paymen
       direction: string;
       project_id: string;
       project_name: string;
+      count: number;
+      amount: number;
       unpaid_count: number;
       unpaid_amount: number;
       overdue_count: number;
       overdue_amount: number;
     }
   >();
-  for (const statement of all.filter((s) => s.payment_status === 'UNPAID')) {
+  for (const statement of all) {
     const projects = new Map<string, { name: string; amounts: number[] }>();
     for (const item of statement.items.filter((i) => i.inclusion === 'INCLUDED')) {
       const snapshot = item.snapshot as ItemSnapshot;
@@ -111,13 +113,19 @@ export async function paymentOverview(ctx: Context, input: z.input<typeof paymen
         counterparty_name: String(statement.counterparty_snapshot?.name ?? ''),
         project_id: projectId,
         project_name: project.name,
+        count: 0,
+        amount: 0,
         unpaid_count: 0,
         unpaid_amount: 0,
         overdue_count: 0,
         overdue_amount: 0,
       };
-      entry.unpaid_count++;
-      entry.unpaid_amount = sumMoney([entry.unpaid_amount, sumMoney(project.amounts)]);
+      entry.count++;
+      entry.amount = sumMoney([entry.amount, sumMoney(project.amounts)]);
+      if (statement.payment_status === 'UNPAID') {
+        entry.unpaid_count++;
+        entry.unpaid_amount = sumMoney([entry.unpaid_amount, sumMoney(project.amounts)]);
+      }
       if (statement.overdue) {
         entry.overdue_count++;
         entry.overdue_amount = sumMoney([entry.overdue_amount, sumMoney(project.amounts)]);

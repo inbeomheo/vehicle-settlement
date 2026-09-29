@@ -56,7 +56,7 @@ export default function StatementsPage() {
           <label className="text-sm">
             상태{' '}
             <select
-              className="ml-2 min-h-11 rounded border border-slate-300 px-3"
+              className="ml-2 min-h-11 text-base rounded border border-slate-300 px-3"
               value={status}
               onChange={(e) => {
                 setStatus(e.target.value);
@@ -89,9 +89,9 @@ export default function StatementsPage() {
                 작성된 명세가 없습니다. 새 정산에서 시작하세요.
               </p>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[750px] text-left text-sm">
-                  <thead className="bg-slate-50">
+              <div className="md:overflow-x-auto">
+                <table className="block w-full text-left text-sm md:table md:min-w-[750px]">
+                  <thead className="hidden bg-slate-50 md:table-header-group">
                     <tr>
                       {['명세', '정산 기간', '거래처', '합계', '상태', '지급·입금'].map((h) => (
                         <th key={h} className="p-3">
@@ -100,12 +100,15 @@ export default function StatementsPage() {
                       ))}
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="grid gap-4 md:table-row-group">
                     {result.data.rows.map((row) => (
-                      <tr key={row.id} className="border-b">
+                      <tr
+                        key={row.id}
+                        className="grid grid-cols-2 rounded-lg border p-2 md:table-row md:rounded-none md:border-0 md:border-b md:p-0"
+                      >
                         <td className="p-3">
                           <Link
-                            className="font-semibold text-blue-700 underline"
+                            className="inline-flex min-h-11 items-center break-all font-semibold text-blue-700 underline"
                             href={`/m/statements/${row.id}`}
                           >
                             {row.statement_no ?? '작성 중 명세'}
@@ -117,7 +120,10 @@ export default function StatementsPage() {
                           {row.period_end}
                         </td>
                         <td className="p-3">{String(row.counterparty_snapshot?.name ?? '')}</td>
-                        <td className="p-3 tabular-nums">{money(row.grand_total)}</td>
+                        <td className="p-3 tabular-nums">
+                          <span className="block text-xs text-slate-500 md:hidden">합계</span>
+                          {money(row.grand_total)}
+                        </td>
                         <td className="p-3">{statusLabels[row.status]}</td>
                         <td className="p-3">
                           {row.payment_status === 'PAID'

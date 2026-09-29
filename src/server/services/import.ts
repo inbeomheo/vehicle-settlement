@@ -4,7 +4,7 @@ import path from 'node:path';
 import Decimal from 'decimal.js';
 import { boundedPayload, readCsv, readXlsx } from './import-file';
 import ExcelJS from 'exceljs';
-import { and, desc, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, lt, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { importJobs, importPresets, vehicleUses, chargeLines, billingUnitEnum, trips } from '../db/schema';
 import type { Context } from '../context';
@@ -15,7 +15,7 @@ import { computeAmount } from '../domain/money';
 import { createUse, atomic } from './uses';
 import { getLookups } from './lookups';
 import { findRate } from './rates';
-import { createUseSchema, type CreateUseInput } from './schemas';
+import { createUseSchema, quantity as quantitySchema, type CreateUseInput } from './schemas';
 import {
   importFields,
   previewSchema,
@@ -167,58 +167,116 @@ function matchOne<T extends { id: string }>(rows: T[], value: string, keys: (key
   return matches[0];
 }
 type LookupCache = Map<string, Awaited<ReturnType<typeof getLookups>>>;
-async function resolveRow(ctx: Context, values: string[], mapping: ImportMapping, cache: LookupCache) {
+async function resolveRow(
+  ctx: Context,
+  values: string[],
+  mapping: ImportMapping,
+  cache: LookupCache,
+  applyContractRate: boolean,
+) {
   const get = (field: keyof ImportMapping) =>
     mapping[field] === undefined ? '' : (values[mapping[field]!] ?? '').trim();
-  const useDate = date(get('use_date'));
-  if (!cache.has(useDate)) cache.set(useDate, await getLookups(ctx, useDate));
-  const lookups = cache.get(useDate)!;
-  const project = matchOne(lookups.projects, get('project'), ['id', 'name', 'code'], '현장');
-  const driver = matchOne(lookups.drivers, get('driver'), ['id', 'name'], '기사');
-  const vehicle = matchOne(lookups.vehicles, get('vehicle'), ['id', 'plate_no'], '차량번호');
-  const payee = matchOne(
-    lookups.counterparties.filter((p) => p.kind !== 'CUSTOMER'),
-    get('payee'),
-    ['id', 'name'],
-    '지급처',
+  const errors: string[] = [];
+  const collect = <T>(read: () => T): T | undefined => {
+    try {
+      return read();
+    } catch (error) {
+      if (!(error instanceof AppError)) throw error;
+      errors.push(error.message);
+      return undefined;
+    }
+  };
+  const useDate = collect(() => date(get('use_date')));
+  const cacheKey = useDate ?? 'invalid-date';
+  if (!cache.has(cacheKey)) cache.set(cacheKey, await getLookups(ctx, useDate));
+  const lookups = cache.get(cacheKey)!;
+  const project = collect(() => matchOne(lookups.projects, get('project'), ['id', 'name', 'code'], '현장'));
+  const driver = collect(() => matchOne(lookups.drivers, get('driver'), ['id', 'name'], '기사'));
+  const vehicle = collect(() => matchOne(lookups.vehicles, get('vehicle'), ['id', 'plate_no'], '차량번호'));
+  const payee = collect(() =>
+    matchOne(
+      lookups.counterparties.filter((p) => p.kind !== 'CUSTOMER'),
+      get('payee'),
+      ['id', 'name'],
+      '지급처',
+    ),
   );
   const rawUnit = get('billing_unit');
   const unit = units[rawUnit] ?? rawUnit;
   if (!billingUnitEnum.enumValues.includes(unit as (typeof billingUnitEnum.enumValues)[number]))
-    invalid('과금단위: 일대·회당·반일·월대·시간·톤·루베·1식을 지정하세요.');
+    errors.push('과금단위: 일대·회당·반일·월대·시간·톤·루베·1식을 지정하세요.');
   const billingUnit = unit as (typeof billingUnitEnum.enumValues)[number];
   const tripCount = Number(get('trips') || '1');
   if (!Number.isInteger(tripCount) || tripCount < 1 || tripCount > 500)
-    invalid('운행횟수: 1~500 정수를 입력하세요.');
+    errors.push('운행횟수: 1~500 정수를 입력하세요.');
   const quantity =
     get('quantity') || (['PER_DAY', 'HALF_DAY', 'MONTHLY', 'LUMP_SUM'].includes(unit) ? '1' : null);
-  const price = money(get('unit_price'), '단가');
-  const extra = money(get('extra'), '추가비');
+  if (quantity !== null && !quantitySchema.safeParse(quantity).success)
+    errors.push('청구수량: 0 이상, 소수 셋째 자리까지 입력하세요.');
+  const importedPrice = collect(() => money(get('unit_price'), '단가'));
+  const extra = collect(() => money(get('extra'), '추가비'));
+  if (!get('origin')) errors.push('출발지: 필수 항목입니다.');
+  if (!get('destination')) errors.push('도착지: 필수 항목입니다.');
+  if (get('extra') && !get('reason')) errors.push('추가비 사유: 필수 항목입니다.');
   const parsed = createUseSchema.safeParse({
     use_date: useDate,
-    project_id: project.id,
-    driver_id: driver.id,
-    vehicle_id: vehicle.id,
-    payee_counterparty_id: payee.id,
+    project_id: project?.id,
+    driver_id: driver?.id,
+    vehicle_id: vehicle?.id,
+    payee_counterparty_id: payee?.id,
     cargo_desc: get('cargo_desc'),
     notes: get('notes'),
     billing_unit: billingUnit,
     quantity,
-    trips: Array.from({ length: tripCount }, (_, i) => ({
-      seq: i + 1,
-      origin: get('origin'),
-      destination: get('destination'),
-      cargo_desc: get('cargo_desc'),
-    })),
+    trips: Array.from(
+      { length: Number.isInteger(tripCount) && tripCount >= 1 && tripCount <= 500 ? tripCount : 1 },
+      (_, i) => ({
+        seq: i + 1,
+        origin: get('origin'),
+        destination: get('destination'),
+        cargo_desc: get('cargo_desc'),
+      }),
+    ),
     charge_lines: [
       { charge_type: 'BASE', billing_unit: billingUnit, quantity },
       ...(extra !== null ? [{ charge_type: 'OTHER', requested_amount: extra, reason: get('reason') }] : []),
     ],
   });
-  if (!parsed.success)
-    invalid(
-      `필수 출발지·도착지, 청구수량(소수 3자리 이하), 추가비 사유를 확인하세요. ${parsed.error.issues.some((i) => i.path.includes('reason')) ? '추가비 사유가 필요합니다.' : ''}`,
-    );
+  if (!parsed.success) {
+    const labels: Record<string, string> = {
+      use_date: '사용일',
+      project_id: '현장',
+      driver_id: '기사',
+      vehicle_id: '차량번호',
+      payee_counterparty_id: '지급처',
+      cargo_desc: '운반내용',
+      notes: '비고',
+      billing_unit: '과금단위',
+      quantity: '청구수량',
+      origin: '출발지',
+      destination: '도착지',
+      reason: '추가비 사유',
+      charge_lines: '비용',
+      trips: '운행',
+    };
+    for (const issue of parsed.error.issues) {
+      const field = issue.path.filter((part) => typeof part === 'string').at(-1) ?? '';
+      const label = labels[String(field)] ?? '입력값';
+      if (!errors.some((message) => message.startsWith(`${label}:`)))
+        errors.push(`${label}: 입력 형식과 길이를 확인하세요.`);
+    }
+  }
+  if (errors.length || !parsed.success) invalid('행의 입력값을 확인하세요.', errors);
+  if (
+    !useDate ||
+    !project ||
+    !driver ||
+    !vehicle ||
+    !payee ||
+    importedPrice === undefined ||
+    extra === undefined
+  )
+    invalid('기준정보와 입력값을 확인하세요.');
   const input: CreateUseInput = parsed.data;
   const rate = await findRate(ctx.db, {
     project_id: project.id,
@@ -228,8 +286,11 @@ async function resolveRow(ctx: Context, values: string[], mapping: ImportMapping
     billing_unit: billingUnit,
     direction: 'PAYABLE',
   });
+  const price = importedPrice ?? (applyContractRate ? (rate?.unit_price ?? null) : null);
+  const appliedContract = importedPrice === null && price !== null;
   const warnings: string[] = [];
-  if (price === null) warnings.push('단가 없음: 단가 미확정(PENDING)');
+  if (appliedContract) warnings.push(`계약 단가 적용: ${price.toLocaleString('ko-KR')}원`);
+  if (price === null) warnings.push('단가 없음: 단가 미확정');
   if (quantity === null) warnings.push('청구수량 없음: 운행횟수를 청구수량으로 사용하지 않음');
   if (price !== null && rate && price !== rate.unit_price)
     warnings.push(`계약 단가 ${rate.unit_price.toLocaleString('ko-KR')}원과 파일 단가가 다릅니다.`);
@@ -238,7 +299,7 @@ async function resolveRow(ctx: Context, values: string[], mapping: ImportMapping
     price !== null && quantity !== null
       ? computeAmount(quantity, price, rate?.rounding, price === rate?.unit_price ? rate?.min_charge : null)
       : null;
-  return { input, price, rate, computed, warnings };
+  return { input, price, importedPrice, appliedContract, rate, computed, warnings };
 }
 async function evaluate(ctx: Context, job: Job, raw: unknown) {
   const selection = previewSchema.parse(raw);
@@ -284,9 +345,10 @@ async function evaluate(ctx: Context, job: Job, raw: unknown) {
     try {
       for (const column of Object.values(selection.mapping)) {
         const error = sheet.cell_errors?.[row.row]?.[column];
-        if (error) invalid(`${column + 1}열: ${error}`);
+        if (error) row.errors.push(`${column + 1}열: ${error}`);
       }
-      const data = await resolveRow(ctx, values, selection.mapping, cache);
+      const data = await resolveRow(ctx, values, selection.mapping, cache, selection.apply_contract_rate);
+      if (row.errors.length) invalid('셀 오류를 확인하세요.', row.errors);
       const contentHash = sha(
         JSON.stringify({
           ...data.input,
@@ -324,7 +386,11 @@ async function evaluate(ctx: Context, job: Job, raw: unknown) {
       if (!(error instanceof AppError || error instanceof z.ZodError || error instanceof RangeError))
         throw error;
       row.status = 'ERROR';
-      row.errors = [error instanceof AppError ? error.message : '입력값 형식·금액 범위를 확인하세요.'];
+      const errors =
+        error instanceof AppError && Array.isArray(error.details)
+          ? error.details.filter((item): item is string => typeof item === 'string')
+          : [error instanceof AppError ? error.message : '입력값 형식·금액 범위를 확인하세요.'];
+      row.errors = [...new Set([...row.errors, ...errors])];
     }
     if (excluded.has(row.row)) {
       row.status = 'SKIPPED';
@@ -382,6 +448,8 @@ export async function commitImport(ctx: Context, id: string) {
         .update(chargeLines)
         .set({
           unit_price: data.price,
+          tax_mode: data.rate?.tax_mode ?? 'VAT_EXCLUDED',
+          rounding: data.rate?.rounding ?? 'HALF_UP',
           rate_agreement_id: data.price === null ? null : (data.rate?.id ?? null),
           computed_amount: data.computed,
           price_status: data.computed === null ? 'PENDING' : 'CONFIRMED',
@@ -397,7 +465,8 @@ export async function commitImport(ctx: Context, id: string) {
                   contract_unit_price: data.rate?.unit_price ?? null,
                   min_charge: data.price === data.rate?.unit_price ? data.rate?.min_charge : null,
                   source: 'IMPORT',
-                  imported_unit_price: data.price,
+                  imported_unit_price: data.importedPrice,
+                  applied_contract_rate: data.appliedContract,
                   import_job_id: id,
                 },
           updated_at: new Date(),
@@ -407,7 +476,8 @@ export async function commitImport(ctx: Context, id: string) {
       await audit(tx, 'IMPORT_ROW', 'vehicle_use', use.id, null, {
         import_job_id: id,
         source_row_hash: row.source_row_hash,
-        imported_unit_price: data.price,
+        imported_unit_price: data.importedPrice,
+        applied_contract_rate: data.appliedContract,
         warnings: row.warnings,
       });
     }
@@ -447,8 +517,46 @@ export async function listImports(ctx: Context) {
     created_at: job.created_at,
     created_by_name: ctx.user.name,
     status: job.status,
+    stale_preview: job.status === 'PREVIEW' && job.updated_at < stalePreviewCutoff(),
     summary: job.summary as ImportSummary | null,
   }));
+}
+function stalePreviewCutoff() {
+  return new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+}
+export async function deleteStaleImportPreviews(ctx: Context) {
+  const deleted = await atomic(ctx, async (tx) => {
+    await manager(tx);
+    const jobs = await tx.db
+      .select()
+      .from(importJobs)
+      .where(
+        and(
+          eq(importJobs.created_by, tx.user.id),
+          eq(importJobs.status, 'PREVIEW'),
+          lt(importJobs.updated_at, stalePreviewCutoff()),
+        ),
+      )
+      .for('update');
+    for (const job of jobs) {
+      await tx.db.delete(importJobs).where(eq(importJobs.id, job.id));
+      await audit(
+        tx,
+        'IMPORT_PREVIEW_DELETE',
+        'import_job',
+        job.id,
+        { file_name: job.file_name, status: job.status },
+        null,
+        '7일 이상 사용하지 않은 미확정 미리보기 삭제',
+      );
+    }
+    return jobs;
+  });
+  for (const job of deleted) {
+    const source = (job.rows as Payload).source_file;
+    if (source) await rm(sourcePath(source), { force: true });
+  }
+  return { deleted: deleted.length };
 }
 export async function listImportPresets(ctx: Context) {
   await manager(ctx);

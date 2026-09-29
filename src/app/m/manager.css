@@ -1,0 +1,62 @@
+.manager-shell input,
+.manager-shell select,
+.manager-shell textarea {
+  font-size: 16px;
+}
+.manager-shell button,
+.manager-shell summary,
+.manager-shell label:has(input[type='checkbox']),
+.manager-shell label:has(input[type='radio']) {
+  min-height: 44px;
+}
+.manager-shell summary {
+  align-content: center;
+}
+.manager-shell input[type='checkbox'],
+.manager-shell input[type='radio'] {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+}
+.manager-shell :not(label) > input[type='checkbox'],
+.manager-shell :not(label) > input[type='radio'] {
+  width: 44px;
+  height: 44px;
+}
+@media (max-width: 767px) {
+  .review-costs,
+  .review-costs tbody {
+    display: block;
+  }
+  .review-costs thead {
+    display: none;
+  }
+  .review-costs tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    margin-top: 12px;
+    padding: 16px;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+  }
+  .review-costs td {
+    display: block;
+    min-width: 0;
+    padding: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .review-costs td::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 4px;
+    color: #64748b;
+    font-size: 12px;
+  }
+  .review-costs td:first-child,
+  .review-costs td[data-label='승인 공급가(원)'],
+  .review-costs td[data-label='검수 사유'] {
+    grid-column: 1 / -1;
+  }
+}

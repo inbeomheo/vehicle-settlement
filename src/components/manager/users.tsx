@@ -1,5 +1,6 @@
 'use client';
 import { useState } from 'react';
+import Link from 'next/link';
 import {
   Badge,
   Empty,
@@ -57,6 +58,9 @@ export function Users() {
   const [selected, setSelected] = useState<User | null>(null);
   const [search, setSearch] = useState('');
   const [editRole, setEditRole] = useState('SITE_MANAGER');
+  const availableDrivers = (lookups.data?.drivers ?? []).filter(
+    (driver) => users.data && !users.data.some((user) => user.driver_id === driver.id),
+  );
   const run = async (action: () => Promise<unknown>, message: string) => {
     setError('');
     setSuccess('');
@@ -92,7 +96,7 @@ export function Users() {
                     role: inviteRole,
                     name: form.get('name'),
                     phone: form.get('phone') || undefined,
-                    driver_id: form.get('driver_id') || undefined,
+                    driver_id: inviteRole === 'DRIVER' ? form.get('driver_id') || undefined : undefined,
                     project_ids: projects,
                   });
                   setInviteUrl(result.invite_url);
@@ -119,23 +123,45 @@ export function Users() {
                 <Field title="초대 연락처">
                   <input className={inputClass} name="phone" type="tel" maxLength={100} />
                 </Field>
-                <Field title="기사 연결">
-                  <select className={inputClass} name="driver_id" required={inviteRole === 'DRIVER'}>
-                    <option value="">선택하세요</option>
-                    {lookups.data?.drivers.map((driver) => (
-                      <option key={driver.id} value={driver.id}>
-                        {driver.name}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
+                {inviteRole === 'DRIVER' && (
+                  <Field title="기사 연결">
+                    <select
+                      className={inputClass}
+                      name="driver_id"
+                      required
+                      disabled={users.loading || lookups.loading}
+                    >
+                      <option value="">선택하세요</option>
+                      {availableDrivers.map((driver) => (
+                        <option key={driver.id} value={driver.id}>
+                          {driver.name}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                )}
               </div>
+              {inviteRole === 'DRIVER' && (
+                <div className="mt-3 text-sm text-slate-600">
+                  <p>
+                    계정이 없는 기사만 선택할 수 있습니다.
+                    {!availableDrivers.length && ' 먼저 기사를 등록하세요.'}
+                  </p>
+                  <Link
+                    href="/m/master/drivers"
+                    className="inline-flex min-h-11 items-center font-semibold text-blue-800 underline"
+                  >
+                    새 기사 먼저 등록
+                  </Link>
+                </div>
+              )}
               <fieldset className="mt-4">
                 <legend className="mb-2 text-sm font-semibold">현장 배정</legend>
                 <div className="flex flex-wrap gap-4">
                   {lookups.data?.projects.map((project) => (
-                    <label key={project.id} className="flex items-center gap-2 text-sm">
+                    <label key={project.id} className="flex min-h-11 items-center gap-2 text-sm">
                       <input
+                        className="h-5 w-5"
                         type="checkbox"
                         checked={projects.includes(project.id)}
                         onChange={(e) =>
@@ -244,8 +270,13 @@ export function Users() {
                     </select>
                   </Field>
                   {['ADMIN', 'SETTLEMENT_MANAGER'].includes(editRole) && (
-                    <label className="flex items-center gap-2 text-sm">
-                      <input name="all_projects" type="checkbox" defaultChecked={selected.all_projects} />
+                    <label className="flex min-h-11 items-center gap-2 text-sm">
+                      <input
+                        className="h-5 w-5"
+                        name="all_projects"
+                        type="checkbox"
+                        defaultChecked={selected.all_projects}
+                      />
                       모든 현장 접근
                     </label>
                   )}

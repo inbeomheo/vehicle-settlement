@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 export const inputClass =
-  'w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm disabled:bg-slate-100';
+  'w-full min-h-11 min-w-0 rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-base disabled:bg-slate-100';
 export const buttonClass =
   'inline-flex min-h-11 items-center justify-center whitespace-nowrap rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 disabled:cursor-wait disabled:opacity-50';
 export const secondaryClass =
@@ -292,7 +292,10 @@ export function Pager({
 }
 export function UseLink({ id, children }: { id: string; children: React.ReactNode }) {
   return (
-    <Link className="font-semibold text-blue-800 underline" href={`/m/uses/${id}`}>
+    <Link
+      className="inline-flex min-h-11 items-center font-semibold text-blue-800 underline"
+      href={`/m/uses/${id}`}
+    >
       {children}
     </Link>
   );

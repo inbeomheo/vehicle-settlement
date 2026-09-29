@@ -28,6 +28,8 @@ export const previewSchema = z
     sheet: z.number().int().min(0),
     header_row: z.number().int().min(1),
     mapping: mappingSchema,
+    // Existing API callers retain their previous handling of blank prices.
+    apply_contract_rate: z.boolean().default(false),
     excluded_rows: z.array(z.number().int().min(1).max(2000)).max(2000).default([]),
   })
   .strict();

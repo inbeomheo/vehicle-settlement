@@ -83,6 +83,7 @@ async function settle(page: Page, party: string, uses: Use[], total: number, pri
   await page.getByRole('button', { name: '초안 만들기' }).click();
   await expect(page).toHaveURL(/\/m\/statements\/[a-f0-9-]+$/);
   await page.getByRole('button', { name: '명세 확정', exact: true }).click();
+  await page.getByRole('button', { name: '확정', exact: true }).click();
   const heading = page.getByRole('heading', { name: /^PAY-202609-/ });
   await expect(heading).toBeVisible();
   const no = (await heading.textContent())!;

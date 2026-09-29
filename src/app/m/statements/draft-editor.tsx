@@ -1,5 +1,6 @@
 'use client';
 import { useState, type FormEvent } from 'react';
+import { chargeTypeLabel, chargeUnitLabel } from '@/components/manager/charge-display';
 import {
   api,
   ErrorMessage,
@@ -130,7 +131,8 @@ export function DraftEditor({
                 {row.snapshot.use_date} · {row.snapshot.use_no}
               </p>
               <p>
-                {row.snapshot.charge_type === 'ADJUSTMENT' ? '조정 · ' : ''}
+                {chargeTypeLabel(row.snapshot.charge_type)} ·{' '}
+                {chargeUnitLabel(row.snapshot.charge_type, row.snapshot.billing_unit)} ·
                 {money(row.snapshot.supply_amount)}
               </p>
               {!row.eligible && <p className="mt-1 text-amber-800">{row.reasons.join(' · ')}</p>}

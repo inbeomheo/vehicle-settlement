@@ -5,6 +5,8 @@ import type { getUse } from '@/server/services/uses';
 import type { LedgerResult } from '@/server/services/ledger';
 import { sumMoney } from '@/server/domain/money';
 import { AuditPanel } from './audit';
+import { chargeTypeLabel, chargeUnitLabel } from './charge-display';
+import { formatQuantity } from '@/shared/quantity';
 import {
   ApiError,
   Badge,
@@ -252,14 +254,33 @@ export function UseDetail({ id, canSettle = false }: { id: string; canSettle?: b
                     </strong>
                     <Badge value={trip.status} />
                   </div>
-                  <p className="mt-2 text-sm text-slate-600">
-                    {trip.via?.length ? `경유 ${trip.via.join(' → ')} · ` : ''}
-                    {trip.quantity ?? '—'} {trip.quantity_unit ?? ''} · {trip.hours ?? '—'}시간{' '}
-                    {trip.is_empty_return ? '· 공차 복귀' : ''}
-                  </p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    출발 {dateTime(trip.depart_at)} / 도착 {dateTime(trip.arrive_at)}
-                  </p>
+                  {(trip.via?.length ||
+                    trip.quantity !== null ||
+                    trip.hours !== null ||
+                    trip.is_empty_return) && (
+                    <p className="mt-2 text-sm text-slate-600">
+                      {[
+                        trip.via?.length ? `경유 ${trip.via.join(' → ')}` : null,
+                        trip.quantity !== null
+                          ? `${formatQuantity(trip.quantity)}${trip.quantity_unit ?? ''}`
+                          : null,
+                        trip.hours !== null ? `${formatQuantity(trip.hours)}시간` : null,
+                        trip.is_empty_return ? '공차 복귀' : null,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </p>
+                  )}
+                  {(trip.depart_at || trip.arrive_at) && (
+                    <p className="mt-1 text-xs text-slate-500">
+                      {[
+                        trip.depart_at ? `출발 ${dateTime(trip.depart_at)}` : null,
+                        trip.arrive_at ? `도착 ${dateTime(trip.arrive_at)}` : null,
+                      ]
+                        .filter(Boolean)
+                        .join(' / ')}
+                    </p>
+                  )}
                   {trip.cargo_desc && <p className="mt-1 text-sm">{trip.cargo_desc}</p>}
                   {trip.notes && <p className="text-sm">{trip.notes}</p>}
                 </article>
@@ -299,7 +320,7 @@ export function UseDetail({ id, canSettle = false }: { id: string; canSettle?: b
                         )}
                         <div className="mt-2 flex flex-wrap gap-3 text-xs text-blue-800">
                           <button
-                            className="min-h-10 underline"
+                            className="min-h-11 underline"
                             onClick={() =>
                               setPreview({ id: file.id, mime: file.mime ?? '', name: file.original_name! })
                             }
@@ -307,7 +328,7 @@ export function UseDetail({ id, canSettle = false }: { id: string; canSettle?: b
                             원본 보기
                           </button>
                           <a
-                            className="inline-flex min-h-10 items-center underline"
+                            className="inline-flex min-h-11 items-center underline"
                             href={`/api/evidence/${file.id}/file`}
                           >
                             다운로드
@@ -329,17 +350,18 @@ export function UseDetail({ id, canSettle = false }: { id: string; canSettle?: b
               시 유지됩니다.
             </p>
             <div className="mt-4 max-w-full overflow-x-auto">
-              <table className="w-full text-left text-sm">
+              <table className="review-costs w-full text-left text-sm">
                 <thead className="bg-slate-50 text-xs">
                   <tr>
                     {[
-                      '구분',
+                      '비용 종류',
                       '단위',
                       '수량',
                       '단가',
                       '계산액',
                       '요청액',
                       '승인 공급가(원)',
+                      '세액',
                       '현재 상태',
                       '검수 결정',
                       '검수 사유',
@@ -358,20 +380,30 @@ export function UseDetail({ id, canSettle = false }: { id: string; canSettle?: b
                       key={line.id}
                       data-testid={`charge-${line.charge_type}`}
                     >
-                      <td className="min-w-32 px-3 py-4">
-                        <strong>{label(line.charge_type)}</strong>
+                      <td data-label="비용 종류" className="min-w-32 px-3 py-4">
+                        <strong>{chargeTypeLabel(line.charge_type)}</strong>
                         <p className="text-xs text-slate-500">
                           {label(line.direction)} · {label(line.tax_mode)}
                         </p>
                         {line.reason && <p className="mt-1 text-xs">{line.reason}</p>}
                         {line.included_in_base && <span className="text-xs">기본운임 포함</span>}
                       </td>
-                      <td className="px-3 whitespace-nowrap">{label(line.billing_unit)}</td>
-                      <td className="px-3 whitespace-nowrap">{line.quantity ?? '—'}</td>
-                      <td className="px-3 whitespace-nowrap">{money(line.unit_price)}</td>
-                      <td className="px-3 whitespace-nowrap">{money(line.computed_amount)}</td>
-                      <td className="px-3 whitespace-nowrap">{money(line.requested_amount)}</td>
-                      <td className="min-w-36 px-3">
+                      <td data-label="단위" className="px-3 whitespace-nowrap">
+                        {chargeUnitLabel(line.charge_type, line.billing_unit)}
+                      </td>
+                      <td data-label="수량" className="px-3 whitespace-nowrap">
+                        {formatQuantity(line.quantity)}
+                      </td>
+                      <td data-label="단가" className="px-3 whitespace-nowrap">
+                        {money(line.unit_price)}
+                      </td>
+                      <td data-label="계산액" className="px-3 whitespace-nowrap">
+                        {money(line.computed_amount)}
+                      </td>
+                      <td data-label="요청액" className="px-3 whitespace-nowrap">
+                        {money(line.requested_amount)}
+                      </td>
+                      <td data-label="승인 공급가(원)" className="min-w-36 px-3">
                         {use.review_status === 'SUBMITTED' ? (
                           <input
                             aria-label={`${label(line.charge_type)} 승인 공급가`}
@@ -398,13 +430,16 @@ export function UseDetail({ id, canSettle = false }: { id: string; canSettle?: b
                           </p>
                         )}
                       </td>
-                      <td className="px-3">
+                      <td data-label="세액" className="px-3 whitespace-nowrap">
+                        {money(line.tax_amount)}
+                      </td>
+                      <td data-label="현재 상태" className="px-3">
                         <Badge value={line.line_review_status} />
                         {line.price_status === 'PENDING' && (
                           <p className="mt-1 text-xs text-amber-800">단가 미확정</p>
                         )}
                       </td>
-                      <td className="min-w-28 px-3">
+                      <td data-label="검수 결정" className="min-w-28 px-3">
                         <select
                           aria-label={`${label(line.charge_type)} 검수 결정`}
                           className={inputClass}
@@ -423,7 +458,7 @@ export function UseDetail({ id, canSettle = false }: { id: string; canSettle?: b
                           ))}
                         </select>
                       </td>
-                      <td className="min-w-40 px-3">
+                      <td data-label="검수 사유" className="min-w-40 px-3">
                         <input
                           aria-label={`${label(line.charge_type)} 검수 사유`}
                           disabled={!canReview}
@@ -432,7 +467,7 @@ export function UseDetail({ id, canSettle = false }: { id: string; canSettle?: b
                           onChange={(e) => updateDecision(line.id, { reason: e.target.value })}
                         />
                       </td>
-                      <td className="px-3">
+                      <td data-label="처리" className="px-3">
                         <button
                           className={secondaryClass}
                           disabled={!canReview}
@@ -582,7 +617,7 @@ export function UseDetail({ id, canSettle = false }: { id: string; canSettle?: b
               <p className="mb-2 text-sm" key={statement.id}>
                 {canSettle ? (
                   <Link
-                    className="font-semibold text-blue-800 underline"
+                    className="inline-flex min-h-11 items-center font-semibold text-blue-800 underline"
                     href={`/m/statements/${statement.id}`}
                   >
                     {statement.statement_no ?? '확정 명세'}

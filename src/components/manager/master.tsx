@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import Link from 'next/link';
-import { masterConfigs } from './master-config';
+import { masterConfigs, type MasterField } from './master-config';
 import {
   Badge,
   Empty,
@@ -124,6 +124,35 @@ export function Master({ resource }: { resource: string }) {
   const filtered = (rows.data ?? []).filter((row) =>
     Object.values(row).some((value) => String(value ?? '').includes(search)),
   );
+  const fieldValue = (row: Row, field: MasterField) => {
+    if (field.type === 'boolean') return <Badge value={row[field.key] ? 'ACTIVE' : 'DISABLED'} />;
+    if (field.source) return String(optionName(field.source, row[field.key]) ?? '—');
+    if (field.key === 'min_charge' && row[field.key] == null) return '없음';
+    if (['unit_price', 'min_charge'].includes(field.key)) return money(row[field.key] as number | null);
+    return label(String(row[field.key] ?? ''));
+  };
+  const rateCoreFields = [
+    'direction',
+    'counterparty_id',
+    'billing_unit',
+    'unit_price',
+    'min_charge',
+    'valid_from',
+    'valid_to',
+  ];
+  const rowActions = (row: Row) =>
+    admin && (
+      <div className="flex flex-wrap gap-2">
+        <button className={secondaryClass} onClick={() => begin(row)}>
+          수정
+        </button>
+        {resource === 'rates' && (
+          <button className={secondaryClass} onClick={() => begin(row, true)}>
+            새 적용기간 추가
+          </button>
+        )}
+      </div>
+    );
   return (
     <>
       <Heading
@@ -229,7 +258,52 @@ export function Master({ resource }: { resource: string }) {
           />
         </Field>
       </div>
-      <div className="max-w-full overflow-x-auto rounded-xl border border-slate-200 bg-white">
+      {resource === 'rates' && (
+        <div className="grid gap-3 md:hidden" aria-label="계약·단가 카드 목록">
+          {!rows.loading &&
+            filtered.map((row) => (
+              <article key={row.id} className={panelClass}>
+                <div className="mb-3 flex items-start justify-between gap-3">
+                  <h2 className="font-bold">{String(row.name)}</h2>
+                  <Badge value={row.active ? 'ACTIVE' : 'DISABLED'} />
+                </div>
+                <dl className="grid grid-cols-2 gap-3 text-sm">
+                  {config.fields
+                    .filter((field) => rateCoreFields.includes(field.key))
+                    .map((field) => (
+                      <div key={field.key} className="min-w-0">
+                        <dt className="text-slate-500">{field.title}</dt>
+                        <dd className="mt-1 break-words font-medium">{fieldValue(row, field)}</dd>
+                      </div>
+                    ))}
+                </dl>
+                <details className="my-3 border-t border-slate-100">
+                  <summary className="min-h-11 cursor-pointer py-3 text-sm font-semibold">
+                    적용 조건·세금 더 보기
+                  </summary>
+                  <dl className="grid grid-cols-2 gap-3 text-sm">
+                    {config.fields
+                      .filter(
+                        (field) =>
+                          !rateCoreFields.includes(field.key) && !['name', 'active'].includes(field.key),
+                      )
+                      .map((field) => (
+                        <div key={field.key} className="min-w-0">
+                          <dt className="text-slate-500">{field.title}</dt>
+                          <dd className="mt-1 break-words">{fieldValue(row, field)}</dd>
+                        </div>
+                      ))}
+                  </dl>
+                </details>
+                {rowActions(row)}
+              </article>
+            ))}
+          {(rows.loading || !filtered.length) && <Empty loading={rows.loading} />}
+        </div>
+      )}
+      <div
+        className={`${resource === 'rates' ? 'hidden md:block' : ''} max-w-full overflow-x-auto rounded-xl border border-slate-200 bg-white`}
+      >
         <table className="w-full text-left text-sm">
           <thead className="bg-slate-100 text-xs">
             <tr>
@@ -247,31 +321,10 @@ export function Master({ resource }: { resource: string }) {
                 <tr key={row.id} className="border-t border-slate-100">
                   {config.fields.map((field) => (
                     <td className="min-w-28 px-4 py-3" key={field.key}>
-                      {field.type === 'boolean' ? (
-                        <Badge value={row[field.key] ? 'ACTIVE' : 'DISABLED'} />
-                      ) : field.source ? (
-                        String(optionName(field.source, row[field.key]) ?? '—')
-                      ) : ['unit_price', 'min_charge'].includes(field.key) ? (
-                        money(row[field.key] as number | null)
-                      ) : (
-                        label(String(row[field.key] ?? ''))
-                      )}
+                      {fieldValue(row, field)}
                     </td>
                   ))}
-                  {admin && (
-                    <td className="min-w-44 px-4 py-3">
-                      <div className="flex flex-wrap gap-2">
-                        <button className={secondaryClass} onClick={() => begin(row)}>
-                          수정
-                        </button>
-                        {resource === 'rates' && (
-                          <button className={secondaryClass} onClick={() => begin(row, true)}>
-                            새 적용기간 추가
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  )}
+                  {admin && <td className="min-w-44 px-4 py-3">{rowActions(row)}</td>}
                 </tr>
               ))}
           </tbody>
