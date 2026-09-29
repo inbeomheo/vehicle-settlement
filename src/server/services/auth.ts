@@ -132,15 +132,13 @@ export async function acceptInvite(
       })
       .returning();
     if (invite.project_ids.length)
-      await tx
-        .insert(projectAssignments)
-        .values(
-          invite.project_ids.map((project_id) => ({
-            user_id: user.id,
-            project_id,
-            valid_from: todaySeoul(),
-          })),
-        );
+      await tx.insert(projectAssignments).values(
+        invite.project_ids.map((project_id) => ({
+          user_id: user.id,
+          project_id,
+          valid_from: todaySeoul(),
+        })),
+      );
     await tx
       .update(invites)
       .set({ used_at: new Date(), used_by_user_id: user.id, updated_at: new Date() })

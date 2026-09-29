@@ -184,16 +184,14 @@ export function withRoute<T = undefined, A extends boolean = true>(
           const result = await invoke(tx, currentCtx);
           if (result.ok) {
             const body = await result.clone().json();
-            await tx
-              .insert(idempotencyKeys)
-              .values({
-                user_id: ctx.user.id,
-                key,
-                route: routeKey,
-                request_hash: hash,
-                status_code: result.status,
-                response_body: body,
-              });
+            await tx.insert(idempotencyKeys).values({
+              user_id: ctx.user.id,
+              key,
+              route: routeKey,
+              request_hash: hash,
+              status_code: result.status,
+              response_body: body,
+            });
           }
           return result;
         });

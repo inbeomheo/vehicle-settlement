@@ -9,16 +9,14 @@ export async function audit(
   after: unknown = null,
   reason?: string | null,
 ) {
-  await ctx.db
-    .insert(auditLogs)
-    .values({
-      user_id: ctx.user.id,
-      action,
-      entity_type: entityType,
-      entity_id: entityId,
-      before,
-      after,
-      reason,
-      request_id: ctx.request_id,
-    });
+  await ctx.db.insert(auditLogs).values({
+    user_id: ctx.user.id,
+    action,
+    entity_type: entityType,
+    entity_id: entityId,
+    before,
+    after,
+    reason,
+    request_id: ctx.request_id,
+  });
 }
