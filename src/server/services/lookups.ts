@@ -1,12 +1,13 @@
 import { and, eq, inArray, isNull, lte, gte, or, sql } from 'drizzle-orm';
 import { counterparties, driverAffiliations, drivers, projects, vehicles, workTypes } from '../db/schema';
 import type { Context } from '../context';
+import { dateString } from './schemas';
 import { todaySeoul } from '../context';
 import { accessibleProjectIds, redactForDriver } from '../authz';
-export async function getLookups(ctx: Context) {
+export async function getLookups(ctx: Context, useDate?: string) {
   const ids = await accessibleProjectIds(ctx);
   const driver = ctx.user.role === 'DRIVER';
-  const today = todaySeoul();
+  const today = useDate ? dateString.parse(useDate) : todaySeoul();
   const affiliations = await ctx.db
     .select()
     .from(driverAffiliations)
