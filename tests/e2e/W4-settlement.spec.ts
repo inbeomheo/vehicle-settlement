@@ -26,7 +26,10 @@ test.beforeAll(async () => {
       s,
       otherUse.charge_lines.map((l) => l.id),
     );
-    const otherStatement = await confirmStatement(s.adminCtx, otherDraft.id, { version: 1 });
+    const otherStatement = await confirmStatement(s.adminCtx, otherDraft.id, {
+      confirmation_token: otherDraft.confirmation_token!,
+      version: 1,
+    });
     fixture = {
       login: user.login_id,
       driverLogin: s.driverUser.login_id,

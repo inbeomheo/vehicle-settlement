@@ -32,7 +32,7 @@ import {
 
 export type Statement = typeof statements.$inferSelect;
 export type Item = typeof statementItems.$inferSelect;
-export type StatementItem = Item & { eligible?: boolean; reasons?: string[] };
+export type StatementItem = Item & { eligible?: boolean; reasons?: string[]; line_version?: number };
 export type ItemSnapshot = {
   vehicle_use_id: string;
   project_id: string;
@@ -256,12 +256,29 @@ async function liveItems(ctx: Context, statement: Statement) {
       eligible: !reasons.length,
       reasons,
       ...item,
+      line_version: line.version,
       snapshot: await makeItemSnapshot(ctx, line, use, statement.period_start),
       supply_amount: line.approved_amount,
       tax_amount: line.tax_amount,
     });
   }
   return result;
+}
+function confirmationToken(statement: Statement, items: StatementItem[]) {
+  const included = items
+    .filter((item) => item.inclusion === 'INCLUDED')
+    .map((item) => ({
+      id: item.id,
+      charge_line_id: item.charge_line_id,
+      version: item.line_version,
+      approved_amount: item.supply_amount,
+      tax_amount: item.tax_amount,
+      eligible: item.eligible,
+    }))
+    .sort((a, b) => a.id.localeCompare(b.id));
+  return createHash('sha256')
+    .update(JSON.stringify({ id: statement.id, version: statement.version, included, ...itemTotals(items) }))
+    .digest('hex');
 }
 export async function getStatement(ctx: Context, id: string) {
   let statement = await rawStatement(ctx, id);
@@ -287,6 +304,7 @@ export async function getStatement(ctx: Context, id: string) {
   const paid = payments.some((p) => !p.voided_at);
   return {
     ...statement,
+    confirmation_token: statement.status === 'DRAFT' ? confirmationToken(statement, items) : null,
     items,
     blocked_count: items.filter((item) => item.inclusion === 'INCLUDED' && item.eligible === false).length,
     unpriced_count: items.filter(
@@ -498,6 +516,20 @@ export async function confirmStatement(
         failures.push({ chargeLineId: line.id, useNo: use.use_no, reason });
     }
     if (failures.length) blocked(failures);
+    // Parent uses and lines are locked: validate exactly the content the user reviewed.
+    const current = await getStatement(tx, id);
+    if (data.confirmation_token !== current.confirmation_token)
+      throw new AppError(
+        'STATEMENT_CHANGED',
+        '명세 내용이 변경되었습니다. 최신 내역과 합계를 다시 확인하세요.',
+        {
+          supply_total: current.supply_total,
+          tax_total: current.tax_total,
+          grand_total: current.grand_total,
+          included_count: current.items.filter((item) => item.inclusion === 'INCLUDED').length,
+          confirmation_token: current.confirmation_token,
+        },
+      );
     const ids = included.map((i) => i.charge_line_id);
     const locked = await tx.db
       .update(chargeLines)

@@ -25,7 +25,9 @@ it('부분 유니크 최종 방어 실패도 CONFIRM_BLOCKED이며 조건부 잠
     .db.update(statementItems)
     .set({ is_active_lock: true })
     .where(eq(statementItems.statement_id, other.id));
-  await expect(confirmStatement(s.adminCtx, first.id, { version: 1 })).rejects.toMatchObject({
+  await expect(
+    confirmStatement(s.adminCtx, first.id, { confirmation_token: first.confirmation_token!, version: 1 }),
+  ).rejects.toMatchObject({
     code: 'CONFIRM_BLOCKED',
   });
   const [line] = await database()
@@ -91,7 +93,12 @@ it('거래처 변조를 확정 시 재검사하고 정상 라인까지 잠그지
     .db.update(chargeLines)
     .set({ counterparty_id: party.id })
     .where(eq(chargeLines.id, use.charge_lines[0].id));
-  await expect(confirmStatement(s.adminCtx, statement.id, { version: 1 })).rejects.toMatchObject({
+  await expect(
+    confirmStatement(s.adminCtx, statement.id, {
+      confirmation_token: statement.confirmation_token!,
+      version: 1,
+    }),
+  ).rejects.toMatchObject({
     code: 'CONFIRM_BLOCKED',
     details: expect.arrayContaining([expect.objectContaining({ reason: '방향 또는 거래처 불일치' })]),
   });

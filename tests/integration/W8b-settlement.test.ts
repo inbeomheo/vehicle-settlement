@@ -127,7 +127,10 @@ describe('W8b 비용 종류와 확정 출력', () => {
       period_start: '2026-10-01',
       period_end: '2026-10-31',
     });
-    const next = await confirmStatement(s.adminCtx, nextDraft.id, { version: nextDraft.version });
+    const next = await confirmStatement(s.adminCtx, nextDraft.id, {
+      confirmation_token: nextDraft.confirmation_token!,
+      version: nextDraft.version,
+    });
     const model = await statementExportModel(s.adminCtx, next.id);
     expect(rowValues(model.rows[0])[13]).toBe('조정');
     expect(rowValues(model.rows[0])[7]).toBe('건');

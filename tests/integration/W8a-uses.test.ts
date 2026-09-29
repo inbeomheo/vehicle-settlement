@@ -71,7 +71,10 @@ it('승인 후 기사 수정은 승인 해제, 확정 후 수정·제출·취소
     period_end: '2026-09-30',
     items: [{ charge_line_id: use.charge_lines[0].id }],
   });
-  statement = await confirmStatement(s.adminCtx, statement.id, { version: statement.version });
+  statement = await confirmStatement(s.adminCtx, statement.id, {
+    confirmation_token: statement.confirmation_token!,
+    version: statement.version,
+  });
   expect((await getUse(s.driverCtx, use.id)).is_locked).toBe(true);
   const expected = {
     code: 'STATEMENT_LOCKED',
@@ -103,7 +106,10 @@ it('고객 청구가 잠긴 운행도 기사에게 금액 노출 없이 잠금 �
     period_end: '2026-09-30',
     items: [{ charge_line_id: line.id }],
   });
-  await confirmStatement(s.adminCtx, statement.id, { version: statement.version });
+  await confirmStatement(s.adminCtx, statement.id, {
+    confirmation_token: statement.confirmation_token!,
+    version: statement.version,
+  });
   const driver = await getUse(s.driverCtx, use.id);
   expect(driver.is_locked).toBe(true);
   expect(driver.charge_lines.every((line) => line.direction === 'PAYABLE')).toBe(true);

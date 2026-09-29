@@ -115,3 +115,9 @@
 commit은 generic 응답 캐시를 사용하지 않는다. job 행 잠금 + 가져오기 공통 advisory lock + source_row_hash unique로 멱등성을 제공하며 매 요청에서 현재 권한을 검사한다. 프리셋 저장은 공용 Idempotency-Key 래퍼를 쓴다. upload/preview는 새 파일 및 재검증 요청으로 취급한다. 예상하지 못한 commit 실패는 전체 rollback하여 PREVIEW에서 재시도할 수 있다.
 
 W7: 캐시 결과가 없는 수식/오류 셀은 매핑된 열에서만 해당 행 오류다. 동일 내용의 파일 내 발생 순번을 해시에 포함하여 실제 반복행을 보존하며, `excluded_rows`는 확정 때도 적용한다. UTF-8이 아닌 CSV는 422와 UTF-8 저장 안내를 반환한다. 기존 W5 작업의 바이트 기반 해시는 유지하고 유사 경로 경고로 확인한다.
+
+## F1 명세 확정 재확인
+
+초안 상세·생성·수정 응답의 `confirmation_token`은 서버가 포함 항목 ID, 비용 라인 ID·version·승인 공급가·세액, 정산 가능 여부와 합계로 만든 SHA-256 해시다. 확정·취소 명세에서는 null이다.
+
+`POST /api/statements/:id/confirm`은 `{ version, confirmation_token }`을 필수로 받는다. 서버는 부모 사용 건과 비용 라인을 잠그고 확정 가능 여부를 재검사한 뒤 토큰을 비교한다. 변경된 초안은 `409 STATEMENT_CHANGED`와 `details.{supply_total,tax_total,grand_total,included_count,confirmation_token}`을 반환한다. 클라이언트는 최신 상세를 다시 조회·표시하고 사용자의 재확인을 받는다. 기존 명세 version 충돌은 `VERSION_CONFLICT`, 미승인·잠금·증빙 등 확정 불가 사유는 `CONFIRM_BLOCKED`를 유지한다.

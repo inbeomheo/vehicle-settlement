@@ -96,7 +96,10 @@ describe('W4 월 정산과 확정 잠금', () => {
       approvedLate.charge_lines.map((l) => l.id),
       { period_start: '2026-10-01', period_end: '2026-10-31' },
     );
-    const october = await confirmStatement(s.adminCtx, octoberDraft.id, { version: octoberDraft.version });
+    const october = await confirmStatement(s.adminCtx, octoberDraft.id, {
+      confirmation_token: octoberDraft.confirmation_token!,
+      version: octoberDraft.version,
+    });
     expect(october.grand_total).toBe(400000);
     expect((await getStatement(s.adminCtx, september.id)).grand_total).toBe(530000);
   });
@@ -119,8 +122,12 @@ describe('W4 월 정산과 확정 잠금', () => {
         (await b.query('select pg_backend_pid() pid')).rows[0].pid,
       );
       const results = await Promise.allSettled([
-        confirmStatement({ ...s.adminCtx, db: drizzle(a, { schema }) }, first.id, { version: 1 }),
+        confirmStatement({ ...s.adminCtx, db: drizzle(a, { schema }) }, first.id, {
+          confirmation_token: first.confirmation_token!,
+          version: 1,
+        }),
         confirmStatement({ ...s.adminCtx, user: another, db: drizzle(b, { schema }) }, second.id, {
+          confirmation_token: second.confirmation_token!,
           version: 1,
         }),
       ]);
@@ -164,7 +171,10 @@ describe('W4 월 정산과 확정 잠금', () => {
       use.charge_lines.filter((l) => l.direction === 'RECEIVABLE').map((l) => l.id),
       { direction: 'RECEIVABLE', counterparty_id: customer.id },
     );
-    const bill = await confirmStatement(s.adminCtx, billDraft.id, { version: 1 });
+    const bill = await confirmStatement(s.adminCtx, billDraft.id, {
+      confirmation_token: billDraft.confirmation_token!,
+      version: 1,
+    });
     expect(pay.grand_total).toBe(300000);
     expect(bill.grand_total).toBe(350000);
     expect(pay.statement_no).toMatch(/^PAY-202609-/);
@@ -184,7 +194,12 @@ describe('W4 월 정산과 확정 잠금', () => {
       use.charge_lines.map((l) => l.id),
     );
     await database().db.update(chargeLines).set(change).where(eq(chargeLines.id, use.charge_lines[0].id));
-    await expect(confirmStatement(s.adminCtx, statement.id, { version: 1 })).rejects.toMatchObject({
+    await expect(
+      confirmStatement(s.adminCtx, statement.id, {
+        confirmation_token: statement.confirmation_token!,
+        version: 1,
+      }),
+    ).rejects.toMatchObject({
       code: 'CONFIRM_BLOCKED',
       details: expect.arrayContaining([expect.objectContaining({ reason })]),
     });
@@ -219,7 +234,12 @@ describe('W4 월 정산과 확정 잠금', () => {
       .db.update(projects)
       .set({ evidence_policy: 'PHOTO_REQUIRED' })
       .where(eq(projects.id, s.project.id));
-    await expect(confirmStatement(s.adminCtx, statement.id, { version: 1 })).rejects.toMatchObject({
+    await expect(
+      confirmStatement(s.adminCtx, statement.id, {
+        confirmation_token: statement.confirmation_token!,
+        version: 1,
+      }),
+    ).rejects.toMatchObject({
       code: 'CONFIRM_BLOCKED',
       details: expect.arrayContaining([expect.objectContaining({ reason: '필수증빙 미충족' })]),
     });
@@ -231,7 +251,12 @@ describe('W4 월 정산과 확정 잠금', () => {
       .db.update(vehicleUses)
       .set({ review_status: 'SUBMITTED' })
       .where(eq(vehicleUses.id, use.id));
-    await expect(confirmStatement(s.adminCtx, statement.id, { version: 1 })).rejects.toMatchObject({
+    await expect(
+      confirmStatement(s.adminCtx, statement.id, {
+        confirmation_token: statement.confirmation_token!,
+        version: 1,
+      }),
+    ).rejects.toMatchObject({
       code: 'CONFIRM_BLOCKED',
       details: expect.arrayContaining([expect.objectContaining({ reason: '사용 건 미승인' })]),
     });
@@ -239,7 +264,10 @@ describe('W4 월 정산과 확정 잠금', () => {
       .db.update(vehicleUses)
       .set({ review_status: 'APPROVED' })
       .where(eq(vehicleUses.id, use.id));
-    const result = await confirmStatement(s.adminCtx, statement.id, { version: 1 });
+    const result = await confirmStatement(s.adminCtx, statement.id, {
+      confirmation_token: statement.confirmation_token!,
+      version: 1,
+    });
     expect(result.grand_total).toBe(0);
     expect(result.items.find((i) => i.charge_line_id === held.id)).toMatchObject({
       inclusion: 'HELD',
@@ -281,7 +309,7 @@ describe('W4 월 정산과 확정 잠금', () => {
       use.charge_lines.map((l) => l.id),
       { replaces_statement_id: statement.id },
     );
-    await confirmStatement(s.adminCtx, next.id, { version: 1 });
+    await confirmStatement(s.adminCtx, next.id, { confirmation_token: next.confirmation_token!, version: 1 });
     const old = await getStatement(s.adminCtx, statement.id);
     expect(old).toMatchObject({
       status: 'CANCELED',
