@@ -86,6 +86,14 @@ export function errorResponse(error: unknown, requestId: string): Response {
 }
 async function authorizeReplay(ctx: Context, body: unknown): Promise<void> {
   if (!body || typeof body !== 'object') return;
+  // W4 records must recheck the entire statement scope after assignment/role revocation.
+  if ('statement_id' in body && typeof body.statement_id === 'string') {
+    const { rawStatement } = await import('./services/statements');
+    await rawStatement(ctx, body.statement_id);
+  } else if ('statement_no' in body && 'id' in body && typeof body.id === 'string') {
+    const { rawStatement } = await import('./services/statements');
+    await rawStatement(ctx, body.id);
+  }
   if ('id' in body && 'use_no' in body && typeof body.id === 'string') {
     const [current] = await ctx.db.select().from(vehicleUses).where(eq(vehicleUses.id, body.id));
     if (!current) throw new AppError('NOT_FOUND', '자료를 찾을 수 없습니다.');
