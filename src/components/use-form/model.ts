@@ -1,3 +1,4 @@
+import { requiredFieldErrors, type FieldModes } from '@/shared/form-settings';
 import type { CreateUseInput } from '@/server/services/schemas';
 import type { Lookups, Mode, UseDetail } from '@/client/types';
 import { todaySeoul } from '@/client/types';
@@ -187,7 +188,7 @@ export function toInput(form: FormValues, mode: Mode): CreateUseInput {
       }),
   };
 }
-export function validate(form: FormValues, intent: 'save' | 'submit' = 'save') {
+export function validate(form: FormValues, intent: 'save' | 'submit' = 'save', modes?: FieldModes) {
   const errors: string[] = [];
   if (!form.use_date || !form.project_id || !form.driver_id || !form.vehicle_id)
     errors.push('사용일·현장·기사·차량을 선택하세요.');
@@ -215,7 +216,28 @@ export function validate(form: FormValues, intent: 'save' | 'submit' = 'save') {
     )
       errors.push('추가 비용은 정수 원 요청액과 사유를 입력하세요.');
   });
-  return errors;
+  if (intent === 'submit') {
+    if (modes)
+      errors.push(
+        ...requiredFieldErrors(
+          {
+            ...form,
+            trips: form.trips.map((trip, index) => ({
+              ...trip,
+              via: trip.via
+                .split(',')
+                .map((value) => value.trim())
+                .filter(Boolean),
+              seq: index + 1,
+            })),
+            charge_lines: form.charges,
+          },
+          modes,
+        ).map((field) => field.reason),
+      );
+    else if (!form.trips.length) errors.push('출발·도착을 입력한 운행을 1건 이상 추가하세요.');
+  }
+  return [...new Set(errors)];
 }
 
 // Copies contain only editable values, never server row IDs or review/statement links.

@@ -8,6 +8,8 @@ import {
   type ReactElement,
   type ReactNode,
 } from 'react';
+import { defaultFieldModes, fieldKeyForTarget, type FieldModes } from '@/shared/form-settings';
+export const SettingsContext = createContext<FieldModes>(defaultFieldModes('manager'));
 export const control =
   'min-h-12 w-full min-w-0 rounded-xl border border-slate-300 bg-white px-3 py-2 text-base disabled:bg-slate-100';
 const buttonBase =
@@ -15,18 +17,42 @@ const buttonBase =
 export const button = `${buttonBase} border-slate-300 bg-white`;
 export const primary = `${buttonBase} border-blue-700 bg-blue-700 text-white`;
 export const FixContext = createContext<{ target: string; message: string }[]>([]);
-export function Field({ label, target, children }: { label: string; target?: string; children: ReactNode }) {
+export function FormContexts({
+  fixes,
+  modes,
+  children,
+}: {
+  fixes: { target: string; message: string }[];
+  modes: FieldModes;
+  children: ReactNode;
+}) {
+  return (
+    <SettingsContext.Provider value={modes}>
+      <FixContext.Provider value={fixes}>{children}</FixContext.Provider>
+    </SettingsContext.Provider>
+  );
+}
+
+export function Field({ label, target, children }: { label: string; target?: string; children?: ReactNode }) {
   const inputId = useId();
   const fixes = useContext(FixContext).filter(
     (f) => target && (f.target === target || f.target === `use.${target}`),
   );
+  const key = fieldKeyForTarget(target);
+  const modes = useContext(SettingsContext);
+  if (key && modes[key] === 'HIDDEN') return null;
+  const required = !!key && modes[key] === 'REQUIRED';
   return (
     <div data-fix-target={target} className="min-w-0 scroll-mt-8">
       <label htmlFor={inputId} className="mb-2 block text-sm font-semibold text-slate-700">
-        {label}
+        {required ? label.replace(' (선택)', '') : label}
+        {required && <span className="ml-2 text-red-700">필수</span>}
       </label>
       {isValidElement(children)
-        ? cloneElement(children as ReactElement<{ id?: string }>, { id: inputId })
+        ? cloneElement(children as ReactElement<{ id?: string; 'aria-required'?: boolean }>, {
+            id: inputId,
+            ...(required ? { 'aria-required': true } : {}),
+          })
         : children}
       {fixes.map((f, i) => (
         <p key={i} className="mt-2 rounded-lg bg-amber-50 p-2 text-sm font-semibold text-amber-900">

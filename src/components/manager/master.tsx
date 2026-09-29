@@ -33,6 +33,10 @@ export function MasterIndex() {
     <>
       <Heading title="기준정보" description="사용 당시 정보와 계약 금액은 과거 기록에 보존됩니다." />
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <Link className={`${panelClass} hover:border-blue-400`} href="/m/master/form-fields">
+          <h2 className="text-lg font-bold">입력 항목 설정</h2>
+          <p className="mt-2 text-sm text-slate-500">기사·담당자 입력 항목과 현장별 필수 설정 →</p>
+        </Link>
         {Object.entries(masterConfigs).map(([key, config]) => (
           <Link className={`${panelClass} hover:border-blue-400`} href={`/m/master/${key}`} key={key}>
             <h2 className="text-lg font-bold">{config.title}</h2>

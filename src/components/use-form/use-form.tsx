@@ -24,10 +24,11 @@ import {
 } from '@/client/offline/store';
 import { syncQueue, withQueuePaused } from '@/client/offline/engine';
 import { copyToDevice } from '@/client/copy-draft';
+import { useFormSettings } from './settings';
 import { ReadOnlyUse } from './read-only';
 import { evidenceError } from './evidence-policy';
 import { EvidenceEditor } from '@/components/evidence/editor';
-import { button, control, primary, Field, Section, FixContext, StatusBadge } from './fields';
+import { button, control, primary, Field, Section, FormContexts, StatusBadge } from './fields';
 import { ChargeFields } from './charges';
 import { TripFields } from './trips';
 import {
@@ -68,6 +69,7 @@ export function UseFormPage({ mode, useId }: { mode: Mode; useId?: string }) {
 }
 export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mode; useId?: string }) {
   const [draft, setDraft] = useState<Draft>();
+  const settings = useFormSettings(boot.user.id, draft?.form.project_id, mode);
   const current = useRef<Draft | undefined>(undefined);
   const [lookups, setLookups] = useState(boot.lookups);
   const [recent, setRecent] = useState<UseDetail[]>([]);
@@ -285,34 +287,38 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
     }));
   }
   async function enqueue(intent: 'save' | 'submit') {
-    if (!draft || evidenceBusy || activeUser() !== boot.user.id) return;
+    if (!draft || busy || evidenceBusy || activeUser() !== boot.user.id) return;
     if (
       draft.server?.is_locked ||
       (mode === 'driver' && draft.server?.review_status === 'APPROVED' && !editApproved)
     )
       return;
-    const errors = validate(draft.form, intent);
-    const missingEvidence =
-      intent === 'submit'
-        ? evidenceError(
-            lookups.projects.find((p) => p.id === draft.form.project_id)?.evidence_policy,
-            draft.server?.evidence ?? [],
-            draft.uploads,
-          )
-        : '';
-    setEvidenceValidation(missingEvidence);
-    if (missingEvidence) {
-      scrollTo('evidence');
-      return;
-    }
-    setValidation(errors);
-    if (errors.length) {
-      document.getElementById('form-errors')?.scrollIntoView({ block: 'center' });
-      return;
-    }
+    if (!settings.ready) return;
     setBusy(true);
     setError('');
     try {
+      const modes = intent === 'submit' ? await settings.refresh() : settings.modes;
+      const errors = validate(draft.form, intent, modes);
+      const missingEvidence =
+        intent === 'submit'
+          ? evidenceError(
+              lookups.projects.find((p) => p.id === draft.form.project_id)?.evidence_policy,
+              draft.server?.evidence ?? [],
+              draft.uploads,
+            )
+          : '';
+      setEvidenceValidation(missingEvidence);
+      setValidation(errors);
+      if (missingEvidence) {
+        scrollTo('evidence');
+        return;
+      }
+      if (errors.length) {
+        requestAnimationFrame(() =>
+          document.getElementById('form-errors')?.scrollIntoView({ block: 'center' }),
+        );
+        return;
+      }
       const queued: Draft = {
         ...draft,
         intent,
@@ -440,7 +446,8 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
     (statementLocked ||
       draft.server.operation_status === 'CANCELED' ||
       (draft.server.review_status === 'APPROVED' && !editApproved));
-  const locked = readOnly || busy || ['queued', 'blocked', 'conflict'].includes(draft.phase);
+  const locked =
+    readOnly || busy || !settings.ready || ['queued', 'blocked', 'conflict'].includes(draft.phase);
   const fixes =
     draft.server?.review_status === 'NEEDS_FIX'
       ? (draft.server.revisions.find((r) => r.decision === 'NEEDS_FIX')?.fix_items ?? [])
@@ -509,7 +516,7 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
     </>
   );
   return (
-    <FixContext.Provider value={fixes}>
+    <FormContexts fixes={fixes} modes={settings.modes}>
       <div className="mx-auto max-w-3xl space-y-5 pb-8">
         <div>
           <p className="text-sm font-semibold text-blue-700">
@@ -798,6 +805,16 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
               ))}
           </div>
         )}
+        {!readOnly && settings.notice && (
+          <p className="rounded-xl bg-slate-50 p-3 text-sm">
+            {settings.notice}
+            {!settings.ready && (
+              <button type="button" className={`${button} ml-2`} onClick={settings.retry}>
+                다시 확인
+              </button>
+            )}
+          </p>
+        )}
         {readOnly ? (
           <ReadOnlyUse use={draft.server!} />
         ) : (
@@ -979,16 +996,18 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
                 userId={boot.user.id}
                 saved={draft.server}
               />
-              <Section title="특이사항">
-                <Field label="특이사항" target="notes">
-                  <textarea
-                    className={control}
-                    rows={4}
-                    value={form.notes}
-                    onChange={(e) => change({ notes: e.target.value })}
-                  />
-                </Field>
-              </Section>
+              {settings.modes.notes !== 'HIDDEN' && (
+                <Section title="특이사항">
+                  <Field label="특이사항" target="notes">
+                    <textarea
+                      className={control}
+                      rows={4}
+                      value={form.notes}
+                      onChange={(e) => change({ notes: e.target.value })}
+                    />
+                  </Field>
+                </Section>
+              )}
             </fieldset>
             <EvidenceEditor
               validationError={evidenceValidation}
@@ -1119,6 +1138,6 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
           </Section>
         )}
       </div>
-    </FixContext.Provider>
+    </FormContexts>
   );
 }

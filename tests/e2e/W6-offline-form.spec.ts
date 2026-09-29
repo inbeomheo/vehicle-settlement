@@ -4,6 +4,7 @@ import { eq } from 'drizzle-orm';
 import { createDatabase, defaultDatabaseUrl } from '../../src/server/db/client';
 import { setupScenario } from '../helpers/factories';
 import { vehicleUses } from '../../src/server/db/schema';
+import { saveFormSettings } from '../../src/server/services/form-settings';
 import { getUse } from '../../src/server/services/uses';
 
 test.use({ viewport: { width: 360, height: 800 } });
@@ -24,6 +25,13 @@ async function openForm(page: Page, loginId: string) {
 
 test('360px 운행 상세 접기와 과금 필수 입력, 증빙 동작 중에만 사유 표시', async ({ page }) => {
   const scenario = await setupScenario(database.db);
+  // This regression exercises optional detail inputs explicitly enabled by an administrator.
+  await saveFormSettings(scenario.adminCtx, {
+    project_id: scenario.project.id,
+    fields: (
+      ['via', 'quantity', 'hours', 'depart_at', 'arrive_at', 'quantity_unit', 'trip_notes'] as const
+    ).map((field_key) => ({ field_key, driver_mode: 'OPTIONAL', manager_mode: null, version: 0 })),
+  });
   await openForm(page, scenario.driverUser.login_id);
   const quantity = page.getByLabel('1회차 수량', { exact: true });
   const hours = page.getByLabel('1회차 시간', { exact: true });

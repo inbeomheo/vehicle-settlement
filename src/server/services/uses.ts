@@ -1,3 +1,5 @@
+import { requiredFieldErrors } from '../../shared/form-settings';
+import { getEffectiveFormSettings } from './form-settings';
 import { and, asc, desc, eq, ne, inArray, isNull, lte, gte, or, ilike, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import {
@@ -212,7 +214,10 @@ export async function contentChanged(ctx: Context, before: Use) {
     })
     .where(eq(vehicleUses.id, before.id))
     .returning();
-  if (autoSubmit) await revision(ctx, after);
+  if (autoSubmit) {
+    await assertFormFieldsSatisfied(ctx, after);
+    await revision(ctx, after);
+  }
   return after;
 }
 async function resolveHeader(ctx: Context, input: CreateUseInput, previous?: Use) {
@@ -615,6 +620,26 @@ export async function updateUse(ctx: Context, id: string, raw: UpdateUseInput) {
     return redactForDriver(tx, after);
   });
 }
+async function assertFormFieldsSatisfied(ctx: Context, use: Use, lines?: Charge[]) {
+  const tripRows = await ctx.db.select().from(trips).where(eq(trips.vehicle_use_id, use.id));
+  const chargeRows =
+    lines ??
+    (await ctx.db
+      .select()
+      .from(chargeLines)
+      .where(and(eq(chargeLines.vehicle_use_id, use.id), isNull(chargeLines.deleted_at))));
+  const settings = await getEffectiveFormSettings(ctx, use.project_id);
+  const fields = requiredFieldErrors(
+    {
+      ...use,
+      trips: tripRows,
+      charge_lines: chargeRows.filter((line) => ctx.user.role !== 'DRIVER' || line.direction === 'PAYABLE'),
+    },
+    settings.modes,
+  );
+  if (fields.length)
+    throw new AppError('SUBMIT_BLOCKED', fields.map((field) => field.reason).join(' '), { fields });
+}
 export async function submitUse(ctx: Context, id: string, raw: z.input<typeof versionInput>) {
   const input = versionInput.strict().parse(raw);
   return atomic(ctx, async (tx) => {
@@ -628,6 +653,7 @@ export async function submitUse(ctx: Context, id: string, raw: z.input<typeof ve
       .select()
       .from(chargeLines)
       .where(and(eq(chargeLines.vehicle_use_id, id), isNull(chargeLines.deleted_at)));
+    await assertFormFieldsSatisfied(tx, before, lines);
     const missing = lines.filter(
       (line) =>
         line.charge_type === 'BASE' &&

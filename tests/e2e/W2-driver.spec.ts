@@ -134,14 +134,14 @@ test('오프라인 작성·앱 재실행 복구·자동 전송 1건·로그아�
   expect(rows[0].review_status).toBe('SUBMITTED');
   // New unsent data must not appear for another user on the same phone.
   await newForm(page);
-  await page.getByLabel('특이사항', { exact: true }).fill('첫 계정 전용 초안');
+  await page.getByLabel('운반 내용', { exact: true }).fill('첫 계정 전용 초안');
   await expect(page.getByText('휴대폰에 임시저장됨', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '로그아웃', exact: true }).click();
   const other = await setupScenario(database.db);
   await login(page, other.driverUser.login_id);
   await expect(page.getByText('이 휴대폰에 보관된 운행')).toHaveCount(0);
   await page.goto('/d/new');
-  await expect(page.getByLabel('특이사항', { exact: true })).toHaveValue('');
+  await expect(page.getByLabel('운반 내용', { exact: true })).toHaveValue('');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.screenshot({ path: 'test-results/W2-form-mobile.png', fullPage: true });
 });

@@ -160,6 +160,12 @@ export async function setupScenario(
     assignment,
     adminCtx: f.context(admin),
     driverCtx: f.context(driverUser),
-    input: { use_date: '2026-09-15', project_id: project.id, driver_id: driver.id, vehicle_id: vehicle.id },
+    input: {
+      use_date: '2026-09-15',
+      project_id: project.id,
+      driver_id: driver.id,
+      vehicle_id: vehicle.id,
+      trips: [{ seq: 1, origin: '상차장', destination: '현장' }],
+    },
   };
 }

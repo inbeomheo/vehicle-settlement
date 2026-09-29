@@ -29,6 +29,13 @@
       "when": 1790655000000,
       "tag": "0100_w6_redact_invites",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790661000000,
+      "tag": "0300_w9_field_settings",
+      "breakpoints": true
     }
   ]
 }

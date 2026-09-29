@@ -1,10 +1,10 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useContext, useEffect, useState } from 'react';
 import Decimal from 'decimal.js';
 import { api, ApiError } from '@/client/api';
 import { cachedValue, cacheValue } from '@/client/offline/store';
 import { units, chargeKinds, money, type RateResult, type UseDetail } from '@/client/types';
-import { button, control, Field, Section } from './fields';
+import { button, control, Field, Section, SettingsContext } from './fields';
 import { newCharge, type FormCharge, type FormValues } from './model';
 function RateFields({
   charge,
@@ -172,13 +172,18 @@ export function ChargeFields({
   userId: string;
   saved?: UseDetail;
 }) {
+  const settings = useContext(SettingsContext);
+  const showExtra = settings.extra_charges !== 'HIDDEN';
   const patch = (key: string, change: Partial<FormCharge>) =>
     onChange(form.charges.map((c) => (c.key === key ? { ...c, ...change } : c)));
   return (
-    <Section title="과금·추가 비용" target="charges">
+    <Section title={showExtra ? '과금·추가 비용' : '과금'} target="charges">
       <div className="grid gap-6">
         {form.charges
-          .filter((c) => mode === 'manager' || c.direction === 'PAYABLE')
+          .filter(
+            (c) =>
+              (mode === 'manager' || c.direction === 'PAYABLE') && (c.charge_type === 'BASE' || showExtra),
+          )
           .map((c, i) => (
             <div
               key={c.key}
@@ -256,24 +261,26 @@ export function ChargeFields({
             </div>
           ))}
       </div>
-      <div className="mt-4 flex flex-wrap gap-2">
-        <button
-          type="button"
-          className={button}
-          onClick={() => onChange([...form.charges, newCharge('PAYABLE', false)])}
-        >
-          + 추가 비용
-        </button>
-        {mode === 'manager' && form.customer_counterparty_id && (
+      {showExtra && (
+        <div className="mt-4 flex flex-wrap gap-2">
           <button
             type="button"
             className={button}
-            onClick={() => onChange([...form.charges, newCharge('RECEIVABLE', false)])}
+            onClick={() => onChange([...form.charges, newCharge('PAYABLE', false)])}
           >
-            + 고객 청구 추가비
+            + 추가 비용{settings.extra_charges === 'REQUIRED' ? ' (필수)' : ''}
           </button>
-        )}
-      </div>
+          {mode === 'manager' && form.customer_counterparty_id && (
+            <button
+              type="button"
+              className={button}
+              onClick={() => onChange([...form.charges, newCharge('RECEIVABLE', false)])}
+            >
+              + 고객 청구 추가비
+            </button>
+          )}
+        </div>
+      )}
     </Section>
   );
 }

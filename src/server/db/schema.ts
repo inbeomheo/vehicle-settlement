@@ -1,3 +1,4 @@
+import { fieldKeys, fieldModes } from '../../shared/form-settings';
 import { sql } from 'drizzle-orm';
 import {
   pgTable,
@@ -573,4 +574,38 @@ export const companySettings = pgTable(
     updated_at: updated(),
   },
   () => [uniqueIndex('company_singleton_unique').on(sql`(true)`)],
+);
+
+export const formFieldModeEnum = pgEnum('form_field_mode', fieldModes);
+export const formFieldSettings = pgTable(
+  'form_field_settings',
+  {
+    id: id(),
+    project_id: uuid('project_id').references(() => projects.id),
+    field_key: text('field_key', { enum: fieldKeys }).notNull(),
+    driver_mode: formFieldModeEnum('driver_mode'),
+    manager_mode: formFieldModeEnum('manager_mode'),
+    updated_by: uuid('updated_by')
+      .notNull()
+      .references(() => users.id),
+    version: version(),
+    created_at: created(),
+    updated_at: updated(),
+  },
+  (t) => [
+    uniqueIndex('form_field_settings_company_unique')
+      .on(t.field_key)
+      .where(sql`${t.project_id} IS NULL`),
+    uniqueIndex('form_field_settings_project_unique')
+      .on(t.project_id, t.field_key)
+      .where(sql`${t.project_id} IS NOT NULL`),
+    check('form_field_settings_version_check', sql`${t.version} > 0`),
+    check(
+      'form_field_settings_field_key_check',
+      sql`${t.field_key} IN (${sql.join(
+        fieldKeys.map((key) => sql.raw("'" + key + "'")),
+        sql`, `,
+      )})`,
+    ),
+  ],
 );

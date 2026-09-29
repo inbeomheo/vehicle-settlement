@@ -17,7 +17,7 @@ async function login(page: Page, login_id: string, path = '/d/new') {
 async function fillTrip(page: Page, seq = 1) {
   await page.getByLabel(`${seq}회차 출발`, { exact: true }).fill('서울 상차장');
   await page.getByLabel(`${seq}회차 도착`, { exact: true }).fill('인천 현장');
-  await page.getByLabel(`${seq}회차 화물`, { exact: true }).fill('자재');
+  await page.getByLabel('운반 내용', { exact: true }).fill('자재');
 }
 async function approved(s: Awaited<ReturnType<typeof setupScenario>>) {
   let use = await createUse(s.driverCtx, {
@@ -38,7 +38,7 @@ test('확정 상세는 읽기 전용, 승인 건은 확인 후 편집·재승인
     '수정하면 승인이 해제되고 다시 검수를 받아야 합니다',
   );
   await page.getByRole('button', { name: '확인 후 수정' }).click();
-  await page.getByLabel('특이사항', { exact: true }).fill('기사 수정');
+  await page.getByLabel('운반 내용', { exact: true }).fill('기사 수정');
   await page.getByRole('button', { name: '서버 저장', exact: true }).click();
   await expect(page.getByRole('status')).toHaveText('서버 저장(작성중)');
   expect((await getUse(s.driverCtx, use.id)).review_status).toBe('DRAFT');
@@ -57,7 +57,7 @@ test('확정 상세는 읽기 전용, 승인 건은 확인 후 편집·재승인
     items: [{ charge_line_id: use.charge_lines[0].id }],
   });
   await confirmStatement(s.adminCtx, statement.id, { version: statement.version });
-  await page.getByLabel('특이사항', { exact: true }).fill('확정 직후 수정 시도');
+  await page.getByLabel('운반 내용', { exact: true }).fill('확정 직후 수정 시도');
   await page.getByRole('button', { name: '서버 저장', exact: true }).click();
   await expect(page.locator('#form-errors')).toContainText('담당자에게 문의하세요');
   await expect(page.getByText('휴대폰에 저장 중…', { exact: true })).toHaveCount(0);

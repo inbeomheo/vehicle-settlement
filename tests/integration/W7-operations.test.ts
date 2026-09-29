@@ -14,7 +14,9 @@ it('10. journal 시각은 과거·생성순이며 기존 미래 기록 보정 �
   const journal = JSON.parse(await readFile('drizzle/meta/_journal.json', 'utf8'));
   const last = journal.entries.at(-1);
   expect(last.when).toBeGreaterThan(journal.entries.at(-2).when);
-  expect(last.when).toBeLessThan(1790657972000); // Audit start, not a clock-dependent future pass.
+  const w6 = journal.entries.find((entry: { tag: string }) => entry.tag === '0100_w6_redact_invites');
+  expect(w6.when).toBeLessThan(1790657972000); // W7 audit start: only the repaired W6 entry.
+  expect(last.when).toBeLessThan(Date.now());
   const client = await database().pool.connect();
   const temp = await mkdtemp(path.join(os.tmpdir(), 'w7-migration-'));
   try {
@@ -28,7 +30,7 @@ it('10. journal 시각은 과거·생성순이며 기존 미래 기록 보정 �
     await migrateDatabase(database().db);
     expect(
       (await client.query('SELECT created_at FROM drizzle.__drizzle_migrations WHERE hash=$1', [hash])).rows,
-    ).toEqual([{ created_at: String(last.when) }]);
+    ).toEqual([{ created_at: String(w6.when) }]);
     await mkdir(path.join(temp, 'meta'));
     await writeFile(
       path.join(temp, 'meta/_journal.json'),
@@ -41,7 +43,7 @@ it('10. journal 시각은 과거·생성순이며 기존 미래 기록 보정 �
     );
   } finally {
     await client.query(
-      'DROP TABLE IF EXISTS w7_migration_probe; DELETE FROM drizzle.__drizzle_migrations WHERE created_at=1790655000001',
+      `DROP TABLE IF EXISTS w7_migration_probe; DELETE FROM drizzle.__drizzle_migrations WHERE created_at=${last.when + 1}`,
     );
     client.release();
     await rm(temp, { recursive: true, force: true });

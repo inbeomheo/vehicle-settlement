@@ -1,8 +1,8 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useContext, useEffect, useState } from 'react';
 import type { UseDetail } from '@/client/types';
 import { operationLabels } from '@/client/types';
-import { Field, button, control, Section } from './fields';
+import { Field, button, control, Section, SettingsContext } from './fields';
 import { newTrip, type FormCharge, type FormTrip } from './model';
 export function TripFields({
   trips,
@@ -15,6 +15,7 @@ export function TripFields({
   recent: UseDetail[];
   billingUnits?: FormCharge['billing_unit'][];
 }) {
+  const settings = useContext(SettingsContext);
   const [collapsed, setCollapsed] = useState<Set<string>>(
     () =>
       new Set(
@@ -61,8 +62,23 @@ export function TripFields({
       },
     ]);
   };
-  const showQuantity = billingUnits.some((unit) => unit === 'PER_TON' || unit === 'PER_M3');
-  const showHours = billingUnits.includes('PER_HOUR');
+  const showQuantity =
+    settings.quantity === 'REQUIRED' || billingUnits.some((unit) => unit === 'PER_TON' || unit === 'PER_M3');
+  const showHours = settings.hours === 'REQUIRED' || billingUnits.includes('PER_HOUR');
+  const detailKeys = (
+    [
+      'via',
+      'quantity',
+      'quantity_unit',
+      'hours',
+      'depart_at',
+      'arrive_at',
+      'is_empty_return',
+      'trip_notes',
+    ] as const
+  ).filter((key) => !(key === 'quantity' && showQuantity) && !(key === 'hours' && showHours));
+  const showDetails = detailKeys.some((key) => settings[key] !== 'HIDDEN');
+  const requiredDetails = detailKeys.some((key) => settings[key] === 'REQUIRED');
   const routes = [
     ...new Map(recent.flatMap((u) => u.trips).map((t) => [`${t.origin} → ${t.destination}`, t])).entries(),
   ].slice(0, 8);
@@ -114,7 +130,8 @@ export function TripFields({
                 }
               >
                 <span className="min-w-0 flex-1 truncate text-sm font-semibold">
-                  {i + 1}회차 · {t.origin} → {t.destination} · {t.cargo_desc || '화물 없음'}
+                  {i + 1}회차 · {t.origin} → {t.destination}
+                  {settings.cargo !== 'HIDDEN' && ` · ${t.cargo_desc || '화물 없음'}`}
                 </span>
                 <span aria-hidden="true">⌄</span>
               </button>
@@ -190,48 +207,50 @@ export function TripFields({
                 {showQuantity && inputField(t, i, 'quantity')}
                 {showHours && inputField(t, i, 'hours')}
               </div>
-              <details className="mt-4 rounded-xl bg-slate-50 p-3">
-                <summary className="min-h-11 cursor-pointer py-2 font-semibold text-slate-700">
-                  {i + 1}회차 상세 입력
-                </summary>
-                <div className="mt-3 grid gap-4 sm:grid-cols-2">
-                  {inputField(t, i, 'via')}
-                  {!showQuantity && inputField(t, i, 'quantity')}
-                  {inputField(t, i, 'quantity_unit')}
-                  {!showHours && inputField(t, i, 'hours')}
-                  <Field label={`${i + 1}회차 출발시각 (서울)`} target={`trip:${i + 1}.depart_at`}>
-                    <input
-                      className={control}
-                      type="datetime-local"
-                      value={t.depart_at}
-                      onChange={(e) => change(i, { depart_at: e.target.value })}
-                    />
-                  </Field>
-                  <Field label={`${i + 1}회차 도착시각 (서울)`} target={`trip:${i + 1}.arrive_at`}>
-                    <input
-                      className={control}
-                      type="datetime-local"
-                      value={t.arrive_at}
-                      onChange={(e) => change(i, { arrive_at: e.target.value })}
-                    />
-                  </Field>
-                  <Field label={`${i + 1}회차 공차회차`} target={`trip:${i + 1}.is_empty_return`}>
-                    <input
-                      className="h-11 w-11 text-base"
-                      type="checkbox"
-                      checked={t.is_empty_return}
-                      onChange={(e) => change(i, { is_empty_return: e.target.checked })}
-                    />
-                  </Field>
-                  <Field label={`${i + 1}회차 비고`} target={`trip:${i + 1}.notes`}>
-                    <input
-                      className={control}
-                      value={t.notes ?? ''}
-                      onChange={(e) => change(i, { notes: e.target.value })}
-                    />
-                  </Field>
-                </div>
-              </details>
+              {showDetails && (
+                <details open={requiredDetails || undefined} className="mt-4 rounded-xl bg-slate-50 p-3">
+                  <summary className="min-h-11 cursor-pointer py-2 font-semibold text-slate-700">
+                    {i + 1}회차 상세 입력
+                  </summary>
+                  <div className="mt-3 grid gap-4 sm:grid-cols-2">
+                    {inputField(t, i, 'via')}
+                    {!showQuantity && inputField(t, i, 'quantity')}
+                    {inputField(t, i, 'quantity_unit')}
+                    {!showHours && inputField(t, i, 'hours')}
+                    <Field label={`${i + 1}회차 출발시각 (서울)`} target={`trip:${i + 1}.depart_at`}>
+                      <input
+                        className={control}
+                        type="datetime-local"
+                        value={t.depart_at}
+                        onChange={(e) => change(i, { depart_at: e.target.value })}
+                      />
+                    </Field>
+                    <Field label={`${i + 1}회차 도착시각 (서울)`} target={`trip:${i + 1}.arrive_at`}>
+                      <input
+                        className={control}
+                        type="datetime-local"
+                        value={t.arrive_at}
+                        onChange={(e) => change(i, { arrive_at: e.target.value })}
+                      />
+                    </Field>
+                    <Field label={`${i + 1}회차 공차회차`} target={`trip:${i + 1}.is_empty_return`}>
+                      <input
+                        className="h-11 w-11 text-base"
+                        type="checkbox"
+                        checked={t.is_empty_return}
+                        onChange={(e) => change(i, { is_empty_return: e.target.checked })}
+                      />
+                    </Field>
+                    <Field label={`${i + 1}회차 비고`} target={`trip:${i + 1}.notes`}>
+                      <input
+                        className={control}
+                        value={t.notes ?? ''}
+                        onChange={(e) => change(i, { notes: e.target.value })}
+                      />
+                    </Field>
+                  </div>
+                </details>
+              )}
               {t.origin.trim() && t.destination.trim() && (
                 <button
                   type="button"

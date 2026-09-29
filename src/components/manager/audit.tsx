@@ -1,5 +1,6 @@
 'use client';
 import { useState } from 'react';
+import { fieldLabels as formFieldLabels } from '@/shared/form-settings';
 import {
   Empty,
   Field,
@@ -36,6 +37,12 @@ type Result = {
   user_options: { id: string; name: string }[];
 };
 const auditLabels: Record<string, string> = {
+  ...formFieldLabels,
+  FORM_FIELDS_UPDATE: '입력 항목 설정 변경',
+  form_field_setting: '입력 항목 설정',
+  HIDDEN: '숨김',
+  OPTIONAL: '선택',
+  REQUIRED: '필수',
   IMPORT_UPLOAD: '가져오기 파일 등록',
   IMPORT_ROW: '가져오기 사용 등록',
   IMPORT_COMMIT: '가져오기 저장',
@@ -71,6 +78,10 @@ const auditLabels: Record<string, string> = {
 };
 export const auditLabel = (value: string) => auditLabels[value] ?? label(value);
 const fieldLabels: Record<string, string> = {
+  field_key: '입력 항목',
+  driver_mode: '기사 입력',
+  manager_mode: '담당자 입력',
+  updated_by: '변경자',
   name: '이름',
   phone: '연락처',
   login_id: '아이디',
@@ -407,6 +418,7 @@ export function AuditPanel({ useId }: { useId?: string }) {
               'project_assignment',
               'invite',
               'company_settings',
+              'form_field_setting',
               'statement',
               'payment',
               'import_job',
