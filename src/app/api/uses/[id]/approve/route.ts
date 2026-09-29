@@ -4,5 +4,5 @@ import { approveUse } from '@/server/services/uses';
 import { approveSchema, uuid } from '@/server/services/schemas';
 export const POST = withRoute(
   async ({ ctx, params, input }) => approveUse(ctx, uuid.parse(params.id), input),
-  { schema: approveSchema, idempotent: true },
+  { schema: approveSchema, idempotent: true, roles: ['ADMIN', 'SITE_MANAGER', 'SETTLEMENT_MANAGER'] },
 );

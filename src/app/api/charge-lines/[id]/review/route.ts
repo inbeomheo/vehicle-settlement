@@ -4,5 +4,5 @@ import { reviewChargeLine } from '@/server/services/uses';
 import { uuid } from '@/server/services/schemas';
 export const PATCH = withRoute(
   async ({ ctx, params, input }) => reviewChargeLine(ctx, uuid.parse(params.id), input),
-  { idempotent: true },
+  { idempotent: true, roles: ['ADMIN', 'SITE_MANAGER', 'SETTLEMENT_MANAGER'] },
 );
