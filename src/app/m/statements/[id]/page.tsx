@@ -1,0 +1,382 @@
+'use client';
+import Link from 'next/link';
+import { useParams, useRouter } from 'next/navigation';
+import { useState, type FormEvent } from 'react';
+import { PaymentPanel } from '../../payments/payment-panel';
+import { NewStatement } from '../new-statement';
+import {
+  api,
+  billingLabels,
+  buttonClass,
+  dateTime,
+  ErrorMessage,
+  Field,
+  inputClass,
+  money,
+  panelClass,
+  secondaryClass,
+  statusLabels,
+  Totals,
+  useResource,
+  type StatementDetail,
+} from '../ui';
+import type { ItemSnapshot } from '@/server/services/statements';
+export default function StatementPage() {
+  const { id } = useParams<{ id: string }>();
+  const router = useRouter();
+  const result = useResource<StatementDetail>(`/api/statements/${id}`);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [canceling, setCanceling] = useState(false);
+  const [replacing, setReplacing] = useState(false);
+  const [notice, setNotice] = useState('');
+  const statement = result.data;
+  async function action(path: string, data: unknown, method = 'POST') {
+    setBusy(true);
+    setError('');
+    setNotice('');
+    try {
+      await api(path, data, method);
+      result.reload();
+      return true;
+    } catch (e) {
+      setError((e as Error).message);
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function update(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!statement) return;
+    const form = new FormData(event.currentTarget);
+    await action(
+      `/api/statements/${id}/items`,
+      {
+        version: statement.version,
+        due_date: form.get('due_date') || null,
+        items: statement.items.map((item) => ({
+          charge_line_id: item.charge_line_id,
+          inclusion: form.get(`inclusion-${item.id}`),
+          hold_reason: form.get(`reason-${item.id}`) || null,
+        })),
+      },
+      'PATCH',
+    );
+  }
+  async function cancel(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!statement) return;
+    if (
+      await action(`/api/statements/${id}/cancel`, {
+        version: statement.version,
+        reason: new FormData(event.currentTarget).get('reason'),
+      })
+    )
+      setCanceling(false);
+  }
+  async function adjust(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    if (
+      await action('/api/adjustments', {
+        adjusts_statement_id: id,
+        charge_line_id: form.get('charge_line_id'),
+        supply_amount: Number(form.get('supply_amount')),
+        reason: form.get('reason'),
+        ...(form.get('effective_date') ? { effective_date: form.get('effective_date') } : {}),
+      })
+    )
+      setNotice('조정 비용을 만들었습니다. 다음 정산 후보에서 확인하세요.');
+  }
+  if (!statement)
+    return (
+      <div className="space-y-4">
+        <Link href="/m/statements" className="text-blue-700 underline">
+          월 정산
+        </Link>
+        <ErrorMessage error={result.error} />
+        {result.loading && <p role="status">명세를 불러오는 중…</p>}
+      </div>
+    );
+  const included = statement.items.filter((i) => i.inclusion === 'INCLUDED');
+  const held = statement.items.filter((i) => i.inclusion === 'HELD');
+  return (
+    <div className="min-w-0 space-y-6">
+      <Link href="/m/statements" className="text-sm text-blue-700 underline">
+        ← 월 정산 목록
+      </Link>
+      <header className="flex flex-wrap justify-between gap-4">
+        <div>
+          <p className="mb-1 text-sm text-slate-500">
+            {statusLabels[statement.status]} ·{' '}
+            {statement.direction === 'PAYABLE' ? '운송사 지급명세' : '원청 청구명세'}
+          </p>
+          <h1 className="break-all text-2xl font-bold">{statement.statement_no ?? '작성 중 명세'}</h1>
+          <p className="mt-2">
+            {String(statement.counterparty_snapshot?.name ?? '')} · {statement.period_start} ~{' '}
+            {statement.period_end}
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2 self-start">
+          <a className={secondaryClass} href={`/api/statements/${id}/export.xlsx`} download>
+            엑셀 다운로드
+          </a>
+          <a className={secondaryClass} href={`/api/statements/${id}/export.pdf`} download>
+            PDF 다운로드
+          </a>
+        </div>
+      </header>
+      <ErrorMessage error={error || result.error} />
+      {notice && (
+        <p role="status" className="rounded-lg bg-emerald-50 p-4 text-emerald-900">
+          {notice}
+        </p>
+      )}
+      <Totals {...statement} />
+      <section className={`${panelClass} space-y-4`}>
+        <h2 className="text-lg font-bold">포함 내역 · {included.length}건</h2>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[1250px] text-left text-sm">
+            <thead className="bg-slate-50">
+              <tr>
+                {[
+                  '사용일 / 사용번호',
+                  '현장',
+                  '차량 / 기사',
+                  '운반내용',
+                  '운행수',
+                  '과금단위',
+                  '수량',
+                  '단가',
+                  '공급가',
+                  '세액',
+                  '비고',
+                ].map((h) => (
+                  <th key={h} className="p-3">
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {included.map((item) => {
+                const s = item.snapshot as ItemSnapshot;
+                return (
+                  <tr key={item.id} className="border-b align-top">
+                    <td className="p-3">
+                      {s.use_date}
+                      <br />
+                      {s.use_no}
+                    </td>
+                    <td className="p-3">{s.project_name}</td>
+                    <td className="p-3">
+                      {s.plate_no}
+                      <br />
+                      {s.driver_name}
+                    </td>
+                    <td className="max-w-56 whitespace-pre-wrap p-3">{s.cargo_desc}</td>
+                    <td className="p-3">{s.trip_count}</td>
+                    <td className="p-3">{billingLabels[s.billing_unit]}</td>
+                    <td className="p-3">{s.quantity ?? '-'}</td>
+                    <td className="p-3">{money(s.unit_price)}</td>
+                    <td className="p-3">{money(item.supply_amount)}</td>
+                    <td className="p-3">{money(item.tax_amount)}</td>
+                    <td className="max-w-64 whitespace-pre-wrap p-3">
+                      {s.carried_forward && (
+                        <span className="mr-2 rounded bg-amber-100 px-2 text-amber-900">전월분</span>
+                      )}
+                      {s.charge_type === 'ADJUSTMENT' && '조정 · '}
+                      {s.notes}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        {!included.length && <p>포함 항목이 없습니다.</p>}
+        <h3 className="pt-3 font-semibold">보류 내역 · {held.length}건</h3>
+        {!held.length ? (
+          <p className="text-sm text-slate-500">보류 항목이 없습니다.</p>
+        ) : (
+          <ul className="space-y-2">
+            {held.map((item) => (
+              <li key={item.id} className="rounded bg-amber-50 p-3 text-sm">
+                {String(item.snapshot?.use_no)} · {item.hold_reason} · {money(item.supply_amount)} (합계 제외)
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+      {statement.status === 'DRAFT' && (
+        <section className={`${panelClass} space-y-5`}>
+          <h2 className="text-lg font-bold">초안 편집</h2>
+          <form onSubmit={update} className="space-y-4">
+            <Field label={statement.direction === 'PAYABLE' ? '지급 예정일' : '입금 예정일'}>
+              <input
+                className={inputClass}
+                name="due_date"
+                type="date"
+                defaultValue={statement.due_date ?? ''}
+              />
+            </Field>
+            {statement.items.map((item) => (
+              <div
+                key={`${item.id}-${statement.version}`}
+                className="grid items-end gap-3 rounded-lg bg-slate-50 p-3 sm:grid-cols-3"
+              >
+                <p className="text-sm">
+                  {String(item.snapshot?.use_no)}
+                  <br />
+                  {money(item.supply_amount)}
+                </p>
+                <Field label="포함 여부">
+                  <select name={`inclusion-${item.id}`} className={inputClass} defaultValue={item.inclusion}>
+                    <option value="INCLUDED">포함</option>
+                    <option value="HELD">보류</option>
+                  </select>
+                </Field>
+                <Field label="보류 사유">
+                  <input
+                    name={`reason-${item.id}`}
+                    className={inputClass}
+                    defaultValue={item.hold_reason ?? ''}
+                    maxLength={1000}
+                  />
+                </Field>
+              </div>
+            ))}
+            <button className={secondaryClass} disabled={busy}>
+              초안 변경 저장
+            </button>
+          </form>
+          <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
+            <p className="mb-3 text-sm">
+              저장된 포함 항목과 합계로 확정합니다. 확정 후 수정은 취소·재작성 또는 조정으로 처리합니다.
+            </p>
+            <button
+              className={buttonClass}
+              disabled={busy}
+              onClick={() => action(`/api/statements/${id}/confirm`, { version: statement.version })}
+            >
+              {busy ? '처리 중…' : '명세 확정'}
+            </button>
+          </div>
+        </section>
+      )}
+      <section className={`${panelClass} space-y-4`}>
+        <h2 className="text-lg font-bold">명세 이력</h2>
+        <p className="text-sm">
+          확정 시각: {dateTime(statement.confirmed_at)} · 담당자:{' '}
+          {String(statement.issuer_snapshot?.prepared_by ?? '-')} · 예정일: {statement.due_date ?? '-'}
+        </p>
+        {statement.replaces_statement_id && (
+          <p className="text-sm">
+            <Link
+              className="text-blue-700 underline"
+              href={`/m/statements/${statement.replaces_statement_id}`}
+            >
+              재작성 전 취소 명세 보기
+            </Link>
+          </p>
+        )}
+        {statement.status === 'CANCELED' ? (
+          <>
+            <p className="rounded-lg bg-red-50 p-3 text-sm text-red-800">
+              취소 시각: {dateTime(statement.canceled_at)}
+              <br />
+              취소 사유: {statement.cancel_reason}
+            </p>
+            <button className={secondaryClass} onClick={() => setReplacing(!replacing)}>
+              새 명세로 재작성
+            </button>
+            {statement.replacements.map((s) => (
+              <p key={s.id}>
+                <Link className="text-sm text-blue-700 underline" href={`/m/statements/${s.id}`}>
+                  재작성 명세: {s.statement_no ?? '작성 중'} ({statusLabels[s.status]})
+                </Link>
+              </p>
+            ))}
+          </>
+        ) : (
+          <>
+            <button
+              className={secondaryClass}
+              disabled={statement.payment_status === 'PAID'}
+              onClick={() => setCanceling(!canceling)}
+            >
+              명세 취소
+            </button>
+            {statement.payment_status === 'PAID' && (
+              <p className="text-sm text-slate-500">
+                유효 지급·입금 기록을 먼저 취소해야 명세를 취소할 수 있습니다.
+              </p>
+            )}
+          </>
+        )}
+        {canceling && (
+          <form onSubmit={cancel} className="space-y-3">
+            <Field label="명세 취소 사유">
+              <input name="reason" className={inputClass} required maxLength={1000} />
+            </Field>
+            <button className={buttonClass} disabled={busy}>
+              명세 취소 확인
+            </button>
+          </form>
+        )}
+      </section>
+      {replacing && (
+        <NewStatement
+          direction={statement.direction}
+          replaces={statement}
+          onCreated={(next) => router.push(`/m/statements/${next}`)}
+        />
+      )}
+      <div className={panelClass}>
+        <PaymentPanel statement={statement} onChange={result.reload} />
+      </div>
+      {statement.payment_status === 'PAID' && (
+        <section className={`${panelClass} space-y-4`}>
+          <h2 className="text-lg font-bold">다음 정산에 조정 반영</h2>
+          <p className="text-sm text-slate-600">
+            원명세는 유지하고 다음 정산에 포함할 조정 비용을 만듭니다. 감액은 음수로 입력하세요.
+          </p>
+          <form onSubmit={adjust} className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="원명세 항목">
+                <select name="charge_line_id" className={inputClass} required>
+                  {included.map((i) => (
+                    <option key={i.id} value={i.charge_line_id}>
+                      {String(i.snapshot?.use_no)} · {money(i.supply_amount)}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="조정 공급가(원)">
+                <input
+                  name="supply_amount"
+                  type="number"
+                  step="1"
+                  min="-2147483647"
+                  max="2147483647"
+                  className={inputClass}
+                  required
+                />
+              </Field>
+              <Field label="조정 사유">
+                <input name="reason" className={inputClass} required maxLength={1000} />
+              </Field>
+              <Field label="반영 기준일(선택)">
+                <input name="effective_date" type="date" className={inputClass} />
+              </Field>
+            </div>
+            <button className={buttonClass} disabled={busy}>
+              조정 비용 생성
+            </button>
+          </form>
+        </section>
+      )}
+    </div>
+  );
+}
