@@ -2,7 +2,7 @@ import type { NextConfig } from 'next';
 const config: NextConfig = {
   serverExternalPackages: ['pg', 'bcryptjs', 'pdfkit'],
   outputFileTracingIncludes: {
-    '/api/statements/**': ['./assets/fonts/**/*', './node_modules/pdfkit/js/data/**/*'],
+    '/api/statements/**': ['./assets/fonts/**/*', './node_modules/pdfkit/js/**/*'],
   },
   async headers() {
     return [
