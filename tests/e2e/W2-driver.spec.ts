@@ -74,6 +74,7 @@ test('모바일 5회 운행·사진 실패 재시도·일대 30만원 제출·�
     fix_items: [{ target: 'trip:2.destination', message: '2회차 하차장을 보완하세요' }],
   });
   await page.goto(`/d/uses/${use.id}`);
+  await expect(page.getByLabel('2회차 도착', { exact: true })).toBeEnabled();
   await page.getByRole('button', { name: '2회차 하차장을 보완하세요 →' }).click();
   await expect(page.getByLabel('2회차 도착', { exact: true })).toBeFocused();
   await page.getByLabel('2회차 도착', { exact: true }).fill('동쪽 출입구');
@@ -112,10 +113,16 @@ test('오프라인 작성·앱 재실행 복구·자동 전송 1건·로그아�
   const s = await setupScenario(database.db, { evidence_policy: 'PHOTO_OR_ALTERNATIVE' });
   await login(page, s.driverUser.login_id);
   await newForm(page);
-  await page.evaluate(async () => {
+  await expect(page.getByText('휴대폰에 임시저장됨', { exact: true })).toBeVisible();
+  const controlled = await page.evaluate(async () => {
     await navigator.serviceWorker.ready;
+    return !!navigator.serviceWorker.controller;
   });
+  // Activation can finish during the /d → /d/new navigation, before that new
+  // document is claimed. A navigation after readiness acquires the active worker.
+  if (!controlled) await page.reload();
   await expect.poll(() => page.evaluate(() => !!navigator.serviceWorker.controller)).toBe(true);
+  await expect(page.getByLabel('1회차 출발', { exact: true })).toHaveValue('상차장');
   await context.setOffline(true);
   await page.getByLabel('운반 내용', { exact: true }).fill('오프라인 자재 운반');
   await page.getByLabel('전표번호 (대체증빙)').fill('SLIP-OFFLINE-1');
