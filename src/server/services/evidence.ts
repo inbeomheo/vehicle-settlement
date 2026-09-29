@@ -1,4 +1,5 @@
 import { assertDriverEvidenceAccess } from '../authz';
+import { readBoundedBody } from '../request-body';
 import { and, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { createHash, randomUUID } from 'node:crypto';
@@ -94,21 +95,8 @@ function validMagic(bytes: Buffer, mime: string) {
   return false;
 }
 export async function readUpload(request: Request) {
-  const reader = request.body?.getReader();
-  if (!reader) invalid('파일 내용이 없습니다.');
-  const chunks: Uint8Array[] = [];
-  let size = 0;
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    size += value.byteLength;
-    if (size > MAX_UPLOAD_SIZE) {
-      await reader.cancel();
-      invalid('파일은 20MB 이하만 업로드할 수 있습니다.');
-    }
-    chunks.push(value);
-  }
-  return Buffer.concat(chunks);
+  if (!request.body) invalid('파일 내용이 없습니다.');
+  return readBoundedBody(request, MAX_UPLOAD_SIZE, '파일은 20MB 이하만 업로드할 수 있습니다.');
 }
 export async function markUploadFailed(ctx: Context, id: string, reason: string) {
   return atomic(ctx, async (tx) => {

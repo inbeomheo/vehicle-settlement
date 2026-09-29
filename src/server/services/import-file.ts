@@ -1,5 +1,5 @@
 import { Readable } from 'node:stream';
-import { inflateRawSync } from 'node:zlib';
+import { createInflateRaw, crc32 } from 'node:zlib';
 import ExcelJS from 'exceljs';
 import { AppError, invalid } from '../errors';
 import type { SheetData } from './import-fields';
@@ -17,59 +17,159 @@ export function boundedPayload<T>(payload: T): T {
     throw error;
   }
 }
-// Reject inflated ZIPs before ExcelJS caches shared strings/styles or spools XML.
-// ZIP64/multipart/encrypted archives are unnecessary for a <=10 MB import.
-function orderedArchive(bytes: Buffer) {
+// Validate and decompress once, then give ExcelJS a STORE-only archive. The
+// parser cannot reinterpret a forged compression method or inflate it again.
+async function orderedArchive(bytes: Buffer, maxExpandedBytes: number) {
+  const corrupt = (): never => invalid('손상된 xlsx 파일입니다.');
   let end = bytes.length - 22;
-  while (end >= Math.max(0, bytes.length - 65557) && bytes.readUInt32LE(end) !== 0x06054b50) end--;
-  if (end < 0 || bytes.readUInt32LE(end) !== 0x06054b50) invalid('xlsx 파일을 읽을 수 없습니다.');
+  while (end >= Math.max(0, bytes.length - 65557)) {
+    if (bytes.readUInt32LE(end) === 0x06054b50 && end + 22 + bytes.readUInt16LE(end + 20) === bytes.length)
+      break;
+    end--;
+  }
+  if (end < Math.max(0, bytes.length - 65557)) corrupt();
   const count = bytes.readUInt16LE(end + 10);
-  let offset = bytes.readUInt32LE(end + 16);
-  if (count > 500 || bytes.readUInt16LE(end + 4) !== 0) tooLarge();
+  const directoryStart = bytes.readUInt32LE(end + 16);
+  const directorySize = bytes.readUInt32LE(end + 12);
+  if (count > 500) tooLarge();
+  if (
+    !count ||
+    bytes.readUInt16LE(end + 4) ||
+    bytes.readUInt16LE(end + 6) ||
+    bytes.readUInt16LE(end + 8) !== count ||
+    directoryStart + directorySize !== end
+  )
+    corrupt();
+  let offset = directoryStart;
   let total = 0;
   const entries: { name: string; local: Buffer; central: Buffer }[] = [];
-  for (let i = 0; i < count; i++) {
-    if (offset + 46 > bytes.length || bytes.readUInt32LE(offset) !== 0x02014b50)
-      invalid('손상된 xlsx 파일입니다.');
-    const size = bytes.readUInt32LE(offset + 24);
-    total += size;
-    if (total > MAX_XML || bytes.readUInt16LE(offset + 8) & 1) tooLarge();
-    const nameLength = bytes.readUInt16LE(offset + 28);
-    const length = 46 + nameLength + bytes.readUInt16LE(offset + 30) + bytes.readUInt16LE(offset + 32);
-    const central = Buffer.from(bytes.subarray(offset, offset + length));
-    const name = bytes.subarray(offset + 46, offset + 46 + nameLength).toString('utf8');
-    const localOffset = bytes.readUInt32LE(offset + 42);
-    if (localOffset + 30 > bytes.length || bytes.readUInt32LE(localOffset) !== 0x04034b50)
-      invalid('손상된 xlsx 파일입니다.');
-    const headerLength = 30 + bytes.readUInt16LE(localOffset + 26) + bytes.readUInt16LE(localOffset + 28);
-    const compressedSize = bytes.readUInt32LE(offset + 20);
-    const dataStart = localOffset + headerLength;
-    if (dataStart + compressedSize > bytes.length) invalid('손상된 xlsx 파일입니다.');
-    const compressed = bytes.subarray(dataStart, dataStart + compressedSize);
-    const method = central.readUInt16LE(10);
-    let actual = -1;
-    try {
-      // maxOutputLength also rejects forged central-directory sizes before ExcelJS.
-      actual =
-        method === 0
-          ? compressed.length
-          : method === 8
-            ? inflateRawSync(compressed, { maxOutputLength: Math.max(1, MAX_XML - total + size) }).length
-            : -1;
-    } catch {
-      tooLarge();
+  const names = new Set<string>();
+  const ranges: { start: number; end: number }[] = [];
+  const checkExtra = (start: number, length: number) => {
+    const finish = start + length;
+    while (start < finish) {
+      if (start + 4 > finish) corrupt();
+      const kind = bytes.readUInt16LE(start);
+      const size = bytes.readUInt16LE(start + 2);
+      // ZIP64 is not needed for bounded imports.
+      if (kind === 1 || start + 4 + size > finish) corrupt();
+      start += 4 + size;
     }
-    if (actual !== size) invalid('손상된 xlsx 파일입니다.');
+  };
+  for (let i = 0; i < count; i++) {
+    if (offset + 46 > end || bytes.readUInt32LE(offset) !== 0x02014b50) corrupt();
+    const flags = bytes.readUInt16LE(offset + 8);
+    const method = bytes.readUInt16LE(offset + 10);
+    const size = bytes.readUInt32LE(offset + 24);
+    const compressedSize = bytes.readUInt32LE(offset + 20);
+    const crc = bytes.readUInt32LE(offset + 16);
+    const nameLength = bytes.readUInt16LE(offset + 28);
+    const extraLength = bytes.readUInt16LE(offset + 30);
+    const length = 46 + nameLength + extraLength + bytes.readUInt16LE(offset + 32);
+    if (
+      offset + length > end ||
+      flags & ~0x80e ||
+      ![0, 8].includes(method) ||
+      bytes.readUInt16LE(offset + 34)
+    )
+      corrupt();
+    if (size > maxExpandedBytes - total) tooLarge();
+    const rawName = bytes.subarray(offset + 46, offset + 46 + nameLength);
+    const name = rawName.toString('utf8');
+    if (
+      !name ||
+      names.has(name) ||
+      name.includes('\\') ||
+      name.startsWith('/') ||
+      name.split('/').includes('..')
+    )
+      corrupt();
+    names.add(name);
+    checkExtra(offset + 46 + nameLength, extraLength);
+    const localOffset = bytes.readUInt32LE(offset + 42);
+    if (localOffset + 30 > directoryStart || bytes.readUInt32LE(localOffset) !== 0x04034b50) corrupt();
+    const localNameLength = bytes.readUInt16LE(localOffset + 26);
+    const localExtraLength = bytes.readUInt16LE(localOffset + 28);
+    const dataStart = localOffset + 30 + localNameLength + localExtraLength;
+    const dataEnd = dataStart + compressedSize;
+    if (
+      dataEnd > directoryStart ||
+      bytes.readUInt16LE(localOffset + 6) !== flags ||
+      bytes.readUInt16LE(localOffset + 8) !== method ||
+      localNameLength !== nameLength ||
+      !bytes.subarray(localOffset + 30, localOffset + 30 + localNameLength).equals(rawName)
+    )
+      corrupt();
+    checkExtra(localOffset + 30 + localNameLength, localExtraLength);
+    const descriptor = Boolean(flags & 8);
+    for (const [position, expected] of [
+      [14, crc],
+      [18, compressedSize],
+      [22, size],
+    ]) {
+      const localValue = bytes.readUInt32LE(localOffset + position);
+      if (localValue !== expected && !(descriptor && localValue === 0)) corrupt();
+    }
+    let entryEnd = dataEnd;
+    if (descriptor) {
+      if (entryEnd + 12 > directoryStart) corrupt();
+      if (bytes.readUInt32LE(entryEnd) === 0x08074b50) entryEnd += 4;
+      if (
+        entryEnd + 12 > directoryStart ||
+        bytes.readUInt32LE(entryEnd) !== crc ||
+        bytes.readUInt32LE(entryEnd + 4) !== compressedSize ||
+        bytes.readUInt32LE(entryEnd + 8) !== size
+      )
+        corrupt();
+      entryEnd += 12;
+    }
+    if (ranges.some((range) => localOffset < range.end && entryEnd > range.start)) corrupt();
+    ranges.push({ start: localOffset, end: entryEnd });
+    const compressed = bytes.subarray(dataStart, dataEnd);
+    const chunks: Buffer[] = [];
+    let actual = 0;
+    const accept = (chunk: Buffer) => {
+      total += chunk.length;
+      actual += chunk.length;
+      if (total > maxExpandedBytes) tooLarge();
+      chunks.push(chunk);
+    };
+    if (method === 0) accept(compressed);
+    else {
+      const inflater = createInflateRaw({ chunkSize: 16 * 1024 });
+      inflater.end(compressed);
+      try {
+        for await (const chunk of inflater) accept(chunk as Buffer);
+        if (inflater.bytesWritten !== compressedSize) corrupt();
+      } finally {
+        inflater.destroy();
+      }
+    }
+    const expanded = Buffer.concat(chunks, actual);
+    if (actual !== size || crc32(expanded) !== crc) corrupt();
     const header = Buffer.from(bytes.subarray(localOffset, dataStart));
-    header.writeUInt16LE(header.readUInt16LE(6) & ~8, 6);
-    central.writeUInt16LE(central.readUInt16LE(8) & ~8, 8);
-    central.copy(header, 14, 16, 28); // CRC, compressed size, uncompressed size.
-    entries.push({ name, local: Buffer.concat([header, compressed]), central });
+    const central = Buffer.from(bytes.subarray(offset, offset + length));
+    header.writeUInt16LE(flags & 0x800, 6);
+    central.writeUInt16LE(flags & 0x800, 8);
+    header.writeUInt16LE(0, 8);
+    central.writeUInt16LE(0, 10);
+    header.writeUInt32LE(crc, 14);
+    header.writeUInt32LE(actual, 18);
+    header.writeUInt32LE(actual, 22);
+    central.writeUInt32LE(actual, 20);
+    central.writeUInt32LE(actual, 24);
+    entries.push({ name, local: Buffer.concat([header, expanded]), central });
     offset += length;
   }
-  // ExcelJS 4's deferred-sheet path can lose subsequent ZIP entries while it
-  // awaits temporary-file writes on Node 24. Put metadata before worksheets so
-  // WorkbookReader can stream rows directly and never creates those temp files.
+  if (offset !== end) corrupt();
+  ranges.sort((a, b) => a.start - b.start);
+  if (
+    ranges[0].start !== 0 ||
+    ranges.at(-1)!.end !== directoryStart ||
+    ranges.some((range, index) => index > 0 && ranges[index - 1].end !== range.start)
+  )
+    corrupt();
+  // Metadata first avoids ExcelJS's deferred-sheet temporary-file path.
   const priority = (name: string) =>
     name === 'xl/_rels/workbook.xml.rels'
       ? 0
@@ -114,13 +214,20 @@ function textCell(value: ExcelJS.CellValue): { text: string; error?: string } {
 function blankSheet(name: string): SheetData {
   return { name, rows: [], header_row: 1, mapping: {}, cell_errors: {} };
 }
-export async function readXlsx(bytes: Buffer, selected: number, catalog = false): Promise<SheetData[]> {
+export async function readXlsx(
+  bytes: Buffer,
+  selected: number,
+  catalog = false,
+  maxExpandedBytes = MAX_XML,
+): Promise<SheetData[]> {
   let input: Readable | undefined;
   const sheets: SheetData[] = [];
   let failure: unknown;
   let storedBytes = 0;
   try {
-    input = Readable.from([orderedArchive(bytes)], { objectMode: false });
+    input = Readable.from([await orderedArchive(bytes, Math.min(MAX_XML, maxExpandedBytes))], {
+      objectMode: false,
+    });
     const reader = new ExcelJS.stream.xlsx.WorkbookReader(input, {
       worksheets: 'emit',
       sharedStrings: 'cache',

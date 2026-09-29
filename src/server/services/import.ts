@@ -7,7 +7,7 @@ import { and, desc, eq, inArray, lt, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { importJobs, importPresets, vehicleUses, chargeLines, trips } from '../db/schema';
 import type { Context } from '../context';
-import { accessibleUseFilter, assertActive, assertProjectAccess } from '../authz';
+import { accessibleProjectIds, accessibleUseFilter, assertActive, assertProjectAccess } from '../authz';
 import { AppError, invalid, notFound } from '../errors';
 import { audit } from '../audit';
 import { computeAmount } from '../domain/money';
@@ -87,8 +87,14 @@ export function suggestMapping(headers: string[]): ImportMapping {
 function sourcePath(id: string) {
   return path.join(process.env.STORAGE_DIR ?? 'storage', 'imports', `${z.string().uuid().parse(id)}.xlsx`);
 }
-export async function uploadImport(ctx: Context, fileName: string, bytes: Buffer) {
+export async function assertImportUploadAccess(ctx: Context) {
   await manager(ctx);
+  const ids = await accessibleProjectIds(ctx);
+  if (ids !== null && ids.length === 0)
+    throw new AppError('FORBIDDEN', '배정된 현장이 없어 파일을 가져올 수 없습니다. 관리자에게 문의하세요.');
+}
+export async function uploadImport(ctx: Context, fileName: string, bytes: Buffer) {
+  await assertImportUploadAccess(ctx);
   if (!/\.(xlsx|csv)$/i.test(fileName) || fileName.length > 255)
     invalid('xlsx 또는 UTF-8 csv 파일을 선택하세요.');
   if (!bytes.length || bytes.length > 10 * 1024 * 1024)
