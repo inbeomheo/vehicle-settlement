@@ -171,9 +171,8 @@ async function revision(ctx: Context, use: Use) {
     .returning();
   return r;
 }
-export async function contentChanged(ctx: Context, before: Use) {
+async function invalidateReview(ctx: Context, before: Use, nextStatus: Use['review_status']) {
   await assertUnlocked(ctx, before.id);
-  const nextStatus = reviewAfterEdit(before.review_status, ctx.user.role === 'DRIVER');
   if (['APPROVED', 'SUBMITTED'].includes(before.review_status)) {
     await ctx.db
       .update(useRevisions)
@@ -214,7 +213,12 @@ export async function contentChanged(ctx: Context, before: Use) {
     })
     .where(eq(vehicleUses.id, before.id))
     .returning();
-  if (autoSubmit) {
+  return after;
+}
+export async function contentChanged(ctx: Context, before: Use) {
+  const nextStatus = reviewAfterEdit(before.review_status, ctx.user.role === 'DRIVER');
+  const after = await invalidateReview(ctx, before, nextStatus);
+  if (nextStatus === 'SUBMITTED') {
     await assertFormFieldsSatisfied(ctx, after);
     await revision(ctx, after);
   }
@@ -891,8 +895,7 @@ export async function cancelUse(ctx: Context, id: string, raw: z.input<typeof re
     await assertUnlocked(tx, id);
     if (before.operation_status === 'CANCELED') invalid('이미 취소된 사용 건입니다.');
     await tx.db.update(vehicleUses).set({ operation_status: 'CANCELED' }).where(eq(vehicleUses.id, id));
-    await contentChanged(tx, before);
-    await tx.db.update(vehicleUses).set({ review_status: 'DRAFT' }).where(eq(vehicleUses.id, id));
+    await invalidateReview(tx, before, 'DRAFT');
     await tx.db
       .update(useRevisions)
       .set({ decision: 'SUPERSEDED', updated_at: new Date() })
