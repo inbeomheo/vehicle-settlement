@@ -1,3 +1,5 @@
+import { databaseSchema, databaseSchemas, migrationsSchema } from '../src/server/db/config';
+import { storageDriver } from '../src/server/storage';
 import { cp, mkdir, readFile, rename, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -13,11 +15,19 @@ import {
   verifyDatabase,
   verifyManifest,
   type LogicalBackup,
+  resetAppSchema,
 } from './backup-common';
 
 export async function restore(options: { directory: string; url?: string; storage?: string }) {
   const dir = path.resolve(options.directory);
   const manifest = await verifyManifest(dir); // Complete before changing any target data.
+  if (
+    (manifest.db_schema ?? 'public') !== databaseSchema() ||
+    (manifest.storage_driver ?? 'local') !== storageDriver()
+  )
+    throw new Error('백업과 대상 DB_SCHEMA·STORAGE_DRIVER가 다릅니다. 같은 설정으로 복구하세요.');
+  if (process.env.DB_SCHEMA && manifest.format === 'pg-custom')
+    throw new Error('전용 스키마 복구는 앱 논리 백업을 사용하세요.');
   const url = options.url ?? defaultDatabaseUrl();
   const storage = path.resolve(options.storage ?? process.env.STORAGE_DIR ?? 'storage');
   if (dir === storage || dir.startsWith(storage + path.sep) || storage.startsWith(dir + path.sep))
@@ -33,7 +43,7 @@ export async function restore(options: { directory: string; url?: string; storag
   let databaseCommitted = false;
   try {
     for (const table of await tableList(client)) {
-      if (table.schemaname === 'drizzle') continue;
+      if (table.schemaname === migrationsSchema() && table.tablename === '__drizzle_migrations') continue;
       if (
         (await client.query(`SELECT 1 FROM ${tableName(table.schemaname, table.tablename)} LIMIT 1`)).rowCount
       )
@@ -63,11 +73,15 @@ export async function restore(options: { directory: string; url?: string; storag
       const saved = JSON.parse(await readFile(path.join(dir, 'database.json'), 'utf8')) as LogicalBackup;
       if (saved.version !== 1) throw new Error('지원하지 않는 논리 백업 버전입니다.');
       await client.query('BEGIN');
+      if (
+        saved.tables.some((table) => !databaseSchemas().includes(table.schema)) ||
+        saved.sequences.some((sequence) => !databaseSchemas().includes(sequence.schema))
+      )
+        throw new Error('백업에 대상 범위 밖 스키마가 있습니다.');
+      await resetAppSchema(client);
+      if (!process.env.DB_SCHEMA) await client.query('CREATE SCHEMA drizzle');
       await client.query(
-        'DROP SCHEMA IF EXISTS public CASCADE; DROP SCHEMA IF EXISTS drizzle CASCADE; CREATE SCHEMA public; CREATE SCHEMA drizzle',
-      );
-      await client.query(
-        'CREATE TABLE drizzle.__drizzle_migrations (id SERIAL PRIMARY KEY, hash text NOT NULL, created_at bigint)',
+        `CREATE TABLE ${tableName(migrationsSchema(), '__drizzle_migrations')} (id SERIAL PRIMARY KEY, hash text NOT NULL, created_at bigint)`,
       );
       for (const migration of saved.migrations)
         for (const statement of migration.sql.split('--> statement-breakpoint'))
@@ -75,7 +89,8 @@ export async function restore(options: { directory: string; url?: string; storag
       // Restore cyclic FKs without superuser-only replication settings, then validate every FK.
       const constraints = (
         await client.query(
-          "SELECT n.nspname AS schema, t.relname AS table, c.conname AS name, pg_get_constraintdef(c.oid) AS definition FROM pg_constraint c JOIN pg_class t ON t.oid=c.conrelid JOIN pg_namespace n ON n.oid=t.relnamespace WHERE c.contype='f' AND n.nspname='public'",
+          "SELECT n.nspname AS schema, t.relname AS table, c.conname AS name, pg_get_constraintdef(c.oid) AS definition FROM pg_constraint c JOIN pg_class t ON t.oid=c.conrelid JOIN pg_namespace n ON n.oid=t.relnamespace WHERE c.contype='f' AND n.nspname=$1",
+          [databaseSchema()],
         )
       ).rows;
       for (const c of constraints)
@@ -114,9 +129,7 @@ export async function restore(options: { directory: string; url?: string; storag
     if (nativeStarted || databaseCommitted) {
       try {
         await client.query('BEGIN');
-        await client.query(
-          'DROP SCHEMA IF EXISTS public CASCADE; DROP SCHEMA IF EXISTS drizzle CASCADE; CREATE SCHEMA public',
-        );
+        await resetAppSchema(client);
         await client.query('COMMIT');
       } catch (cleanupError) {
         await client.query('ROLLBACK').catch(() => {});

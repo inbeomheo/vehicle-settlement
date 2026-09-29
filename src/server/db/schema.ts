@@ -14,8 +14,28 @@ import {
   uniqueIndex,
   index,
   check,
+  customType,
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
+
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({ dataType: () => 'bytea' });
+export const evidenceBlobs = pgTable(
+  'evidence_blobs',
+  {
+    storage_key: text().primaryKey(),
+    bytes: bytea().notNull(),
+    size: integer().notNull(),
+    sha256: text().notNull(),
+    created_at: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    check(
+      'evidence_blobs_size_check',
+      sql`${table.size} >= 0 AND octet_length(${table.bytes}) = ${table.size}`,
+    ),
+    check('evidence_blobs_hash_check', sql`${table.sha256} ~ '^[a-f0-9]{64}$'`),
+  ],
+);
 
 export const roleEnum = pgEnum('user_role', ['DRIVER', 'SITE_MANAGER', 'SETTLEMENT_MANAGER', 'ADMIN']);
 export const userStatusEnum = pgEnum('user_status', ['ACTIVE', 'DISABLED']);

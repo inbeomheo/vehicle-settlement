@@ -1,3 +1,4 @@
+import { uploadLimit, uploadLimitMessage } from '../upload-limits';
 import { passwordWithinByteLimit } from '../auth/password';
 import { z } from 'zod';
 import {
@@ -115,7 +116,7 @@ export const evidenceSchema = z
       .number()
       .int()
       .positive()
-      .max(20 * 1024 * 1024)
+      .refine((size) => size <= uploadLimit(), { error: () => uploadLimitMessage() })
       .optional(),
     sha256: z
       .string()

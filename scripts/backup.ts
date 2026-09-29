@@ -1,3 +1,5 @@
+import { databaseSchemas } from '../src/server/db/config';
+import { storageDriver } from '../src/server/storage';
 import { cp, mkdir, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -35,8 +37,8 @@ export async function backup(options: {
     await client.query(
       `LOCK TABLE ${tables.map((t) => tableName(t.schemaname, t.tablename)).join(',')} IN SHARE MODE`,
     );
-    const dump = options.logical ? null : await postgresBinary('pg_dump');
-    const restore = options.logical ? null : await postgresBinary('pg_restore');
+    const dump = options.logical || process.env.DB_SCHEMA ? null : await postgresBinary('pg_dump');
+    const restore = options.logical || process.env.DB_SCHEMA ? null : await postgresBinary('pg_restore');
     const format = dump && restore ? 'pg-custom' : 'app-logical-v1';
     if (dump && restore) {
       const snapshot = (await client.query('SELECT pg_export_snapshot() AS id')).rows[0].id;
@@ -46,6 +48,7 @@ export async function backup(options: {
           '--format=custom',
           '--no-owner',
           '--no-acl',
+          ...databaseSchemas().map((name) => `--schema=${name}`),
           `--snapshot=${snapshot}`,
           '--file',
           path.join(partial, 'database.dump'),
@@ -60,8 +63,10 @@ export async function backup(options: {
     }
     await mkdir(path.join(partial, 'storage'), { mode: 0o700 });
     try {
-      await inventory(storage); // Reject links before copying outside the storage tree.
-      await cp(storage, path.join(partial, 'storage'), { recursive: true, dereference: false });
+      if (storageDriver() === 'local') {
+        await inventory(storage); // Reject links before copying outside the storage tree.
+        await cp(storage, path.join(partial, 'storage'), { recursive: true, dereference: false });
+      }
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
       // Missing storage is valid only for a database without uploaded files; verified below.

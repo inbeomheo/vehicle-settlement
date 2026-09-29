@@ -1,6 +1,7 @@
 import type { NextConfig } from 'next';
 const config: NextConfig = {
   serverExternalPackages: ['pg', 'bcryptjs'],
+  outputFileTracingIncludes: { '/api/statements/*/export.pdf': ['./assets/fonts/**/*'] },
   async headers() {
     return [
       {
