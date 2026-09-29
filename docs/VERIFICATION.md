@@ -64,14 +64,14 @@ W6: Vitest **46개**, Playwright **5개**. W6의 초기 보고서는 당시 work
 | 11 | `W7-operations.test.ts`, 전체 E2E teardown | 개발 DB 2종만 검사 → 6종 데이터 생성 감지 및 전후 비교 |
 | 12 | `W7-ui.test.ts`, `W7-display.test.ts` | 2.500 원문 표시 → 명세 2.5/사용대장 1,234.5, Excel 숫자/서식·PDF 모델, 저장 snapshot 유지 |
 | 13 | `W7-ui.test.ts`, `W7-display.test.ts` | 경로 반복·금액 없음 → 경로/운행 수, 기본 300,000·추가 5,000·합계 305,000·요청비 표시 |
-| 14 | `W7-uses.test.ts`, `W7-driver.spec.ts` | 동일 날짜 ID 정렬·금액 미제공 → 날짜/입력순, 본인 PAYABLE 금액·보조 복사 버튼·360px |
+| 14 | `W7-uses.test.ts`, `W7-driver.spec.ts` | 동일 날짜 ID 정렬·금액 미제공 → 날짜/입력순·동시각 채번순(99,999→100,000), 본인 PAYABLE 금액·보조 복사 버튼·360px |
 
-통합 파일명은 `tests/integration/`, 브라우저 파일명은 `tests/e2e/` 기준이다. W7: Vitest **5파일 / 21개**, Playwright **2파일 / 2개**.
-수정 전 실패 로그: `.data/w7-qa/red-import-uses.log`, `red-cp949.log`, `red-ui.log`, `red-operations-ui.log`, `red-display.log`, `red-e2e.log`. 모두 Git 제외.
+통합 파일명은 `tests/integration/`, 브라우저 파일명은 `tests/e2e/` 기준이다. W7: Vitest **5파일 / 22개**, Playwright **2파일 / 2개**.
+수정 전 실패 로그: `.data/w7-qa/red-import-uses.log`, `red-cp949.log`, `red-ui.log`, `red-operations-ui.log`, `red-display.log`, `red-e2e.log`, `red-order-tie.log`. 모두 Git 제외.
 
 ## 최종 실행 결과
 
-2026-09-29 14:21~14:24 KST 실행. 다음 명령 모두 종료 코드 0:
+2026-09-29 14:26~14:29 KST 실행. 다음 명령 모두 종료 코드 0:
 
 ```sh
 npm run typecheck
@@ -86,7 +86,7 @@ npm run test:e2e
 | --- | --- |
 | `npm run typecheck` | 통과 |
 | `npm run lint` | 통과 |
-| `npm test` | **27파일 / 169개 통과** (기존 W1~W6 148 + W7 21) |
+| `npm test` | **27파일 / 170개 통과** (기존 W1~W6 148 + W7 22) |
 | `npm run build` | Next.js 프로덕션 빌드 통과 |
 | `npm run format:check` | 통과 |
 | `npm run test:e2e` | **9파일 / 15개 통과** (기존 13 + W7 2), 1.5분 |
@@ -105,7 +105,7 @@ npm run test:e2e
 | import_jobs | 0 | 0 |
 
 로그: `.data/w7-qa/vitest-final.log`, `build-final.log`, `format-final.log`, `e2e-final.log` (Git 제외).
-코드·문서 커밋 후 빌드를 다시 실행하여 `git status --porcelain`이 비어 있고 `git diff --exit-code`가 성공하는지 최종 확인한다.
+최종 정렬 보완과 코드·문서 커밋 후 재빌드에서도 `git status --porcelain` 출력 없음·`git diff --exit-code` 성공을 확인했다. 재빌드 로그: `.data/w7-qa/build-clean.log`.
 
 ## 추가 확인과 한계
 
