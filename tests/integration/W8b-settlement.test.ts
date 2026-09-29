@@ -14,6 +14,7 @@ import { renderStatementPdf } from '../../src/server/export/statement-pdf';
 import { StatementItems } from '../../src/app/m/statements/statement-items';
 import { chargeTypeLabel, chargeUnitLabel } from '../../src/components/manager/charge-display';
 import { testDatabase } from '../helpers/database';
+import { extractPdfText } from '../helpers/pdf';
 import { approved, confirmed, draft, scenario } from './W4-fixtures';
 
 vi.stubGlobal('React', React);
@@ -27,7 +28,7 @@ describe('W8b 비용 종류와 확정 출력', () => {
       s,
       {
         charge_lines: [
-          { charge_type: 'BASE', billing_unit: 'PER_DAY' },
+          { charge_type: 'BASE', billing_unit: 'PER_DAY', quantity: '1.25' },
           ...extraTypes.map((charge_type) => ({
             charge_type,
             billing_unit: 'PER_DAY' as const,
@@ -36,7 +37,7 @@ describe('W8b 비용 종류와 확정 출력', () => {
           })),
         ],
       },
-      'TAX_EXEMPT',
+      'VAT_EXCLUDED',
     );
     const candidates = await statementCandidates(s.adminCtx, {
       direction: 'PAYABLE',
@@ -57,7 +58,7 @@ describe('W8b 비용 종류와 확정 출력', () => {
     await workbook.xlsx.load((await renderStatementXlsx(model)) as unknown as ExcelJS.Buffer);
     const sheet = workbook.worksheets[0];
     expect(sheet.getCell('N10').value).toBe('비용 종류');
-    expect(model.grand_total).toBe(306000);
+    expect(model.grand_total).toBe(419100);
     for (const [index, row] of model.rows.entries()) {
       const values = rowValues(row);
       expect(values[exportHeaders.indexOf('비용 종류')]).toBe(chargeTypeLabel(row.charge_type));
@@ -68,7 +69,21 @@ describe('W8b 비용 종류와 확정 출력', () => {
       expect(markup).toContain(chargeTypeLabel(row.charge_type));
     }
     const pdf = await renderStatementPdf(model);
-    expect(pdf.subarray(0, 5).toString()).toBe('%PDF-');
+    const text = extractPdfText(pdf);
+    // Independent fixture expectations: 1.25 × 300,000 + six 1,000-won extras, VAT 10%.
+    // Do not reuse the export model, rowValues or display helpers as the oracle.
+    expect(text).toMatch(/문서번호\s+PAY-202609-0001\b/);
+    expect(text).toMatch(/공급가 합계\s+381,000원\s+세액 합계\s+38,100원/);
+    expect(text).toMatch(/총액\s+419,100원/);
+    const rows = text.split('\n').filter((line) => /^2026-09-15\s/.test(line));
+    expect(rows).toHaveLength(7);
+    const base = rows.find((line) => line.includes('기본운임'));
+    expect(base).toMatch(/일대\s+1\.25\s+300,000\s+375,000\s+37,500\s+기본운임\s*$/);
+    for (const label of ['대기료', '통행료', '경유비', '취소·회차비', '실비', '기타']) {
+      const matches = rows.filter((line) => line.trimEnd().endsWith(label));
+      expect(matches).toHaveLength(1);
+      expect(matches[0]).toMatch(/건\s+1\s+-\s+1,000\s+100\s+현장 추가비\s+/);
+    }
     if (process.env.W8B_RENDER_QA) {
       await mkdir('.data/w8b-qa', { recursive: true });
       await writeFile('.data/w8b-qa/charge-types.pdf', pdf);
