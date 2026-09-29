@@ -1,3 +1,4 @@
+import { formatQuantity } from '../../shared/quantity';
 import ExcelJS from 'exceljs';
 import type { Context } from '../context';
 import { getLedger } from './ledger';
@@ -67,7 +68,7 @@ export async function exportLedger(ctx: Context, query: unknown) {
       row.driver_name,
       row.plate_no,
       row.vehicle_type,
-      row.tonnage,
+      formatQuantity(row.tonnage),
       row.payee_name,
       row.origin,
       row.destination,

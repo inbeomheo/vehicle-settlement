@@ -33,7 +33,7 @@ export function useBootstrap(mode: Mode) {
         activateUser(user.id);
         const [lookups, recent] = await Promise.all([
           api<Lookups>('/api/lookups'),
-          api<UseList>('/api/uses?pageSize=100&sort=created_at'),
+          api<UseList>('/api/uses?pageSize=100&sort=use_date'),
         ]);
         if (!alive || activeUser() !== user.id || localStorage.getItem(LOGGED_OUT)) return;
         const boot = { user, lookups, recent, cachedAt: Date.now() };

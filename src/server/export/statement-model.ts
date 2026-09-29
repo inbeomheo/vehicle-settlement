@@ -1,3 +1,4 @@
+import { formatQuantity } from '../../shared/quantity';
 import type { Context } from '../context';
 import { getStatement, type ItemSnapshot } from '../services/statements';
 export const billingLabels: Record<string, string> = {
@@ -81,7 +82,7 @@ export function rowValues(row: StatementExportModel['rows'][number]): (string | 
     row.cargo_desc,
     row.trip_count,
     billingLabels[row.billing_unit] ?? row.billing_unit,
-    row.quantity,
+    row.quantity === null ? null : formatQuantity(row.quantity),
     row.unit_price,
     row.supply_amount,
     row.tax_amount,

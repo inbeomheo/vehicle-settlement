@@ -1,4 +1,5 @@
 'use client';
+import { formatQuantity } from '@/shared/quantity';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
@@ -163,7 +164,7 @@ export default function StatementPage() {
                     <td className="max-w-56 whitespace-pre-wrap p-3">{s.cargo_desc}</td>
                     <td className="p-3">{s.trip_count}</td>
                     <td className="p-3">{billingLabels[s.billing_unit]}</td>
-                    <td className="p-3">{s.quantity ?? '-'}</td>
+                    <td className="p-3">{formatQuantity(s.quantity)}</td>
                     <td className="p-3">{money(s.unit_price)}</td>
                     <td className="p-3">{money(item.supply_amount)}</td>
                     <td className="p-3">{money(item.tax_amount)}</td>

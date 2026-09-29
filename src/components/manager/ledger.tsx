@@ -369,8 +369,14 @@ export function ReviewInbox({ initialTab = 'SUBMITTED' }: { initialTab?: string 
               <p className="mt-1 text-sm text-slate-600">
                 {row.driver_name} · {row.plate_no} · {row.payee_name}
               </p>
+              <p className="mt-2 text-sm">{row.route_summary}</p>
               <p className="mt-2 text-sm">
-                {row.origin ?? '경로 미입력'} → {row.destination ?? '—'}
+                기본운임 {money(row.review_base_amount)} · 추가비 {money(row.review_extra_amount)}
+                <strong className="mt-1 block">합계 {money(row.review_total_amount)}</strong>
+              </p>
+              <p className="mt-1 text-xs text-slate-500">
+                승인액 우선 · 미승인 항목은 계산액/요청액 ·{' '}
+                {row.has_requested_extra ? '요청 추가비 있음' : '미검수 요청 추가비 없음'}
               </p>
               <p className="mt-2 text-xs text-slate-500">
                 {row.evidence_missing ? '필수 증빙 누락' : `증빙 ${row.evidence_count}개`} ·{' '}

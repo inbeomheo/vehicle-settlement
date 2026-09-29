@@ -1,4 +1,5 @@
 import { Dashboard } from '@/components/manager/dashboard';
-export default function Page() {
-  return <Dashboard />;
+import { pageUser } from '@/server/auth/page';
+export default async function Page() {
+  return <Dashboard role={(await pageUser()).role} />;
 }

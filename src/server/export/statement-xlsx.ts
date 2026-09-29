@@ -1,3 +1,4 @@
+import Decimal from 'decimal.js';
 import ExcelJS from 'exceljs';
 import { exportHeaders, rowValues, type StatementExportModel } from './statement-model';
 export async function renderStatementXlsx(model: StatementExportModel) {
@@ -67,7 +68,10 @@ export async function renderStatementXlsx(model: StatementExportModel) {
       };
       cell.border = { bottom: { style: 'hair', color: { argb: 'FFDDE4EB' } } };
       if (col >= 10 && col <= 12) cell.numFmt = '#,##0"원"';
-      if (col === 9) cell.numFmt = '0.###';
+      if (col === 9) {
+        const places = new Decimal(source.quantity ?? 0).decimalPlaces();
+        cell.numFmt = '#,##0' + (places ? '.' + '0'.repeat(places) : '');
+      }
     });
   }
   sheet.addRow([]);

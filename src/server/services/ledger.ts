@@ -1,3 +1,5 @@
+import { sumMoney } from '../domain/money';
+import { formatQuantity } from '../../shared/quantity';
 import { sql, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Context } from '../context';
@@ -51,6 +53,18 @@ export type LedgerRow = {
   cargo_desc: string | null;
   creator_name: string;
   actor_names: Record<string, string>;
+  route_summary: string;
+  trip_details: {
+    origin: string;
+    destination: string;
+    status: string;
+    quantity: string | null;
+    quantity_unit: string | null;
+  }[];
+  review_base_amount: number | null;
+  review_extra_amount: number | null;
+  review_total_amount: number | null;
+  has_requested_extra: boolean;
   origin: string | null;
   destination: string | null;
   billing_units: string[];
@@ -97,7 +111,7 @@ export async function ledgerBase(ctx: Context) {
     (SELECT COALESCE(jsonb_object_agg(actor.id::text,actor.name),'{}'::jsonb) FROM users actor
       WHERE actor.id=vehicle_uses.created_by_user_id OR EXISTS (SELECT 1 FROM use_revisions r
         WHERE r.vehicle_use_id=vehicle_uses.id AND (r.submitted_by=actor.id OR r.decided_by=actor.id))) AS actor_names,
-    t.origin, t.destination, t.performance, c.billing_units, c.base_amount, c.extra_amount, c.total_amount, c.receivable_amount,
+    t.origin, t.destination, t.performance, t.trip_details, c.review_base_amount, c.review_extra_amount, COALESCE(c.has_requested_extra,false) AS has_requested_extra, c.billing_units, c.base_amount, c.extra_amount, c.total_amount, c.receivable_amount,
     COALESCE(e.evidence_count,0)::int AS evidence_count, ${missingEvidenceSql} AS evidence_missing,
     CASE WHEN c.payable_count=0 OR c.locked_count=0 THEN 'UNSETTLED' WHEN c.locked_count=c.payable_count THEN 'SETTLED' ELSE 'PARTIAL' END AS settlement_status,
     CASE WHEN c.locked_count=0 THEN 'NOT_SETTLED' WHEN c.paid_count=0 THEN 'UNPAID' WHEN c.paid_count=c.locked_count THEN 'PAID' ELSE 'PARTIAL' END AS payment_status,
@@ -106,11 +120,15 @@ export async function ledgerBase(ctx: Context) {
     JOIN projects p ON p.id=vehicle_uses.project_id
     JOIN users u ON u.id=vehicle_uses.created_by_user_id
     LEFT JOIN work_types w ON w.id=vehicle_uses.work_type_id
-    LEFT JOIN LATERAL (SELECT string_agg(origin,' / ' ORDER BY seq) AS origin, string_agg(destination,' / ' ORDER BY seq) AS destination,
+    LEFT JOIN LATERAL (SELECT jsonb_agg(jsonb_build_object('origin',origin,'destination',destination,'status',status,'quantity',quantity::text,'quantity_unit',quantity_unit) ORDER BY seq) AS trip_details, string_agg(origin,' / ' ORDER BY seq) AS origin, string_agg(destination,' / ' ORDER BY seq) AS destination,
       count(*) FILTER (WHERE status='COMPLETED')::text || '회 운행' || COALESCE(' · ' || string_agg(CASE WHEN quantity IS NOT NULL THEN quantity::text || COALESCE(quantity_unit,'') END, ' / ' ORDER BY seq),'') AS performance
       FROM trips WHERE vehicle_use_id=vehicle_uses.id) t ON true
     LEFT JOIN LATERAL (SELECT count(*) AS evidence_count FROM evidence WHERE vehicle_use_id=vehicle_uses.id AND deleted_at IS NULL AND replaced_by_id IS NULL AND upload_status='UPLOADED') e ON true
-    LEFT JOIN LATERAL (SELECT array_agg(DISTINCT billing_unit::text) FILTER (WHERE direction='PAYABLE') AS billing_units,
+    LEFT JOIN LATERAL (SELECT
+      CASE WHEN bool_or(direction='PAYABLE' AND charge_type='BASE' AND line_review_status<>'REJECTED' AND COALESCE(approved_amount,computed_amount) IS NULL) THEN NULL ELSE sum(COALESCE(approved_amount,computed_amount)) FILTER (WHERE direction='PAYABLE' AND charge_type='BASE' AND line_review_status<>'REJECTED') END AS review_base_amount,
+      CASE WHEN bool_or(direction='PAYABLE' AND charge_type<>'BASE' AND line_review_status<>'REJECTED' AND COALESCE(approved_amount,requested_amount,computed_amount) IS NULL) THEN NULL ELSE COALESCE(sum(COALESCE(approved_amount,requested_amount,computed_amount)) FILTER (WHERE direction='PAYABLE' AND charge_type<>'BASE' AND line_review_status<>'REJECTED'),0) END AS review_extra_amount,
+      bool_or(direction='PAYABLE' AND charge_type<>'BASE' AND requested_amount IS NOT NULL AND line_review_status='PENDING') AS has_requested_extra,
+      array_agg(DISTINCT billing_unit::text) FILTER (WHERE direction='PAYABLE') AS billing_units,
       sum(approved_amount) FILTER (WHERE direction='PAYABLE' AND line_review_status='APPROVED' AND charge_type='BASE') AS base_amount,
       sum(approved_amount) FILTER (WHERE direction='PAYABLE' AND line_review_status='APPROVED' AND charge_type<>'BASE') AS extra_amount,
       sum(approved_amount) FILTER (WHERE direction='PAYABLE' AND line_review_status='APPROVED') AS total_amount,
@@ -169,9 +187,32 @@ export async function getLedger(ctx: Context, raw: unknown, exportAll = false): 
     return number;
   };
   const rows = resultRow.rows as LedgerRow[];
-  for (const row of rows)
-    for (const key of ['base_amount', 'extra_amount', 'total_amount', 'receivable_amount'] as const)
+  for (const row of rows) {
+    const details = row.trip_details ?? [];
+    const routes = [...new Set(details.map((trip) => `${trip.origin} → ${trip.destination}`))];
+    row.route_summary = routes.length
+      ? `${routes[0]}${details.length > 1 ? ` 외 ${details.length - 1}회` : ''}${routes.length > 1 ? ` · 고유 경로 ${routes.length}개` : ''}`
+      : '경로 미입력';
+    row.performance =
+      `${details.filter((trip) => trip.status === 'COMPLETED').length}회 운행` +
+      details
+        .filter((trip) => trip.quantity !== null)
+        .map((trip) => ` · ${formatQuantity(trip.quantity)}${trip.quantity_unit ?? ''}`)
+        .join('');
+    for (const key of [
+      'base_amount',
+      'extra_amount',
+      'total_amount',
+      'receivable_amount',
+      'review_base_amount',
+      'review_extra_amount',
+    ] as const)
       if (row[key] !== null) row[key] = safeMoney(row[key]);
+    row.review_total_amount =
+      row.review_base_amount === null || row.review_extra_amount === null
+        ? null
+        : sumMoney([row.review_base_amount, row.review_extra_amount]);
+  }
   return {
     rows,
     page: exportAll ? 1 : q.page,

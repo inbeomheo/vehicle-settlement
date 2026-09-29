@@ -394,7 +394,7 @@ async function saveCharges(
         : null;
     const unit = input.billing_unit ?? existing?.billing_unit ?? rate?.billing_unit ?? 'PER_DAY';
     const q = ['PER_DAY', 'HALF_DAY', 'MONTHLY', 'LUMP_SUM'].includes(unit)
-      ? (input.quantity ?? '1')
+      ? (input.quantity ?? existing?.quantity ?? '1')
       : input.quantity !== undefined
         ? input.quantity
         : (existing?.quantity ?? null);
@@ -895,9 +895,41 @@ export async function listUses(ctx: Context, raw: unknown = {}) {
     .select()
     .from(vehicleUses)
     .where(filter)
-    .orderBy(order(vehicleUses[q.sort]), order(vehicleUses.id))
+    .orderBy(order(vehicleUses[q.sort]), asc(vehicleUses.created_at), asc(vehicleUses.id))
     .limit(q.pageSize)
     .offset((q.page - 1) * q.pageSize);
+  const baseAmounts = rows.length
+    ? await ctx.db
+        .select({
+          use_id: chargeLines.vehicle_use_id,
+          amount: chargeLines.computed_amount,
+          approved: chargeLines.approved_amount,
+          status: chargeLines.line_review_status,
+        })
+        .from(chargeLines)
+        .where(
+          and(
+            inArray(
+              chargeLines.vehicle_use_id,
+              rows.map((r) => r.id),
+            ),
+            eq(chargeLines.direction, 'PAYABLE'),
+            eq(chargeLines.charge_type, 'BASE'),
+            isNull(chargeLines.deleted_at),
+            ne(chargeLines.line_review_status, 'REJECTED'),
+          ),
+        )
+    : [];
+  const displayRows = rows.map((row) => {
+    const lines = baseAmounts.filter((line) => line.use_id === row.id);
+    const amounts = lines.map((line) => line.approved ?? line.amount);
+    return {
+      ...row,
+      payable_base_amount:
+        !amounts.length || amounts.some((amount) => amount === null) ? null : sumMoney(amounts),
+      payable_base_approved: lines.length > 0 && lines.every((line) => line.status === 'APPROVED'),
+    };
+  });
   const [{ total }] = await ctx.db
     .select({ total: sql<number>`count(*)::int` })
     .from(vehicleUses)
@@ -927,7 +959,7 @@ export async function listUses(ctx: Context, raw: unknown = {}) {
         .map((a) => a.amount),
     );
   return redactForDriver(ctx, {
-    rows,
+    rows: displayRows,
     page: q.page,
     pageSize: q.pageSize,
     total,

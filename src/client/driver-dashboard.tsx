@@ -20,7 +20,7 @@ export function DriverDashboard() {
     const refresh = () => {
       void listDrafts(data.user.id).then(setDrafts);
       if (navigator.onLine) {
-        void api<UseList>('/api/uses?pageSize=20&sort=created_at')
+        void api<UseList>('/api/uses?pageSize=20&sort=use_date')
           .then(setList)
           .catch(() => {});
         void api<UseList>(`/api/uses?from=${todaySeoul()}&to=${todaySeoul()}&pageSize=1`)
@@ -178,7 +178,7 @@ export function DriverDashboard() {
         </Section>
       )}
       <Section title="내 운행 목록">
-        <p className="mb-4 text-sm text-slate-500">전체 {list.total}건 · 최근 입력순</p>
+        <p className="mb-4 text-sm text-slate-500">전체 {list.total}건 · 사용일 최신순 · 같은 날 입력순</p>
         {list.rows.length === 0 ? (
           <p className="py-8 text-center text-slate-500">등록된 운행이 없습니다. 첫 운행을 등록해 주세요.</p>
         ) : (
@@ -196,6 +196,15 @@ export function DriverDashboard() {
                     {String(row.snapshot.project_name)} · {String(row.snapshot.plate_no)}
                   </p>
                   <p className="mt-1 text-sm text-slate-600">{row.cargo_desc || '운반 내용 없음'}</p>
+                  <p className="mt-2 text-sm font-semibold">
+                    기본 금액 (본인 지급분){' '}
+                    {row.payable_base_amount == null
+                      ? '미확정'
+                      : `${row.payable_base_amount.toLocaleString('ko-KR')}원`}
+                    <span className="ml-2 text-xs font-normal text-slate-500">
+                      {row.payable_base_approved ? '승인 공급가' : '검수 전 계산액'}
+                    </span>
+                  </p>
                   <p className="mt-1 text-xs text-slate-400">
                     {row.use_no}
                     {row.entered_as === 'PROXY' ? ' · 대리 입력' : ''}
@@ -203,7 +212,7 @@ export function DriverDashboard() {
                 </a>
                 <button
                   type="button"
-                  className={`${button} mt-3 w-full`}
+                  className="mt-3 min-h-11 px-2 text-sm text-slate-600 underline underline-offset-4"
                   disabled={busy}
                   onClick={() => {
                     void copy(row.id);
@@ -221,9 +230,7 @@ export function DriverDashboard() {
             className={`${button} mt-4 w-full`}
             onClick={async () => {
               try {
-                const next = await api<UseList>(
-                  `/api/uses?pageSize=20&sort=created_at&page=${list.page + 1}`,
-                );
+                const next = await api<UseList>(`/api/uses?pageSize=20&sort=use_date&page=${list.page + 1}`);
                 setList({ ...next, rows: [...list.rows, ...next.rows] });
               } catch (e) {
                 setMessage(e instanceof Error ? e.message : '목록 조회 실패');

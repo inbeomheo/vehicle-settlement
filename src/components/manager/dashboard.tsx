@@ -1,7 +1,9 @@
 'use client';
 import Link from 'next/link';
 import { Empty, Heading, Notice, money, panelClass, useRemote, secondaryClass } from './common';
-export function Dashboard() {
+import { canSettle } from '@/server/auth/manager-access';
+import type { Context } from '@/server/context';
+export function Dashboard({ role }: { role: Context['user']['role'] }) {
   const { data, error, loading, refresh } = useRemote<Record<string, number>>('/api/dashboard');
   const cards = [
     ['검수 대기', 'review_pending', '/m/review?tab=SUBMITTED', false],
@@ -28,26 +30,39 @@ export function Dashboard() {
       ) : (
         data && (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {cards.map(([title, key, href, isMoney]) => (
-              <Link
-                key={key}
-                href={href}
-                className={`${panelClass} group flex min-h-40 flex-col justify-between hover:border-blue-400`}
-              >
-                <span className="text-sm font-medium text-slate-600">{title}</span>
-                <strong className="my-3 text-3xl tracking-tight">
-                  {isMoney ? money(data[key]) : `${data[key]}건`}
-                </strong>
-                <span className="text-xs text-slate-500">
-                  {key === 'unpaid_amount'
-                    ? `확정·미지급 명세 ${data.unpaid_count}건 · 부가세 포함`
-                    : key === 'unsettled_approved_amount'
-                      ? '승인·미잠금 지급 공급가'
-                      : '목록 보기'}{' '}
-                  <span aria-hidden>↗</span>
-                </span>
-              </Link>
-            ))}
+            {cards.map(([title, key, href, isMoney]) => {
+              const linked = key !== 'unpaid_amount' || canSettle(role);
+              const content = (
+                <>
+                  <span className="text-sm font-medium text-slate-600">{title}</span>
+                  <strong className="my-3 text-3xl tracking-tight">
+                    {isMoney ? money(data[key]) : `${data[key]}건`}
+                  </strong>
+                  <span className="text-xs text-slate-500">
+                    {key === 'unpaid_amount'
+                      ? `확정·미지급 명세 ${data.unpaid_count}건 · 부가세 포함`
+                      : key === 'unsettled_approved_amount'
+                        ? '승인·미잠금 지급 공급가'
+                        : '목록 보기'}{' '}
+                    {linked ? (
+                      <span aria-hidden>↗</span>
+                    ) : (
+                      <span className="mt-1 block">정산 담당자 확인</span>
+                    )}
+                  </span>
+                </>
+              );
+              const className = `${panelClass} flex min-h-40 flex-col justify-between`;
+              return linked ? (
+                <Link key={key} href={href} className={`${className} hover:border-blue-400`}>
+                  {content}
+                </Link>
+              ) : (
+                <div key={key} className={className}>
+                  {content}
+                </div>
+              );
+            })}
           </div>
         )
       )}
