@@ -16,7 +16,7 @@ export function ReadOnlyUse({ use }: { use: UseDetail }) {
             ['운행 상태', operationLabels[use.operation_status]],
           ].map(([label, value]) => (
             <div key={label}>
-              <dt className="text-sm text-slate-500">{label}</dt>
+              <dt className="text-sm text-slate-600">{label}</dt>
               <dd className="break-words font-medium">{value}</dd>
             </div>
           ))}

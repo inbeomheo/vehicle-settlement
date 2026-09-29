@@ -23,6 +23,7 @@ export const button = `${buttonBase} border-slate-300 bg-white`;
 export const primary = `${buttonBase} border-blue-700 bg-blue-700 text-white`;
 export const FixContext = createContext<{ target: string; message: string }[]>([]);
 export const ValidationContext = createContext<FormError[]>([]);
+const GroupFeedbackContext = createContext<readonly string[]>([]);
 export function FormContexts({
   fixes,
   modes,
@@ -64,7 +65,10 @@ export function Field({
   revealTarget?: string;
 }) {
   const inputId = useId();
-  const errors = useContext(ValidationContext).filter((error) => error.target === target);
+  const groupFeedback = useContext(GroupFeedbackContext);
+  const errors = useContext(ValidationContext).filter(
+    (error) => error.target.replace(/^use\./, '') === target,
+  );
   const errorId = `${inputId}-error`;
   const fixes = useContext(FixContext).filter(
     (f) => target && (f.target === target || f.target === `use.${target}`),
@@ -83,6 +87,11 @@ export function Field({
   )
     return null;
   const required = !!key && modes[key] === 'REQUIRED';
+  const feedback = [
+    ...groupFeedback,
+    errors.length ? errorId : '',
+    ...fixes.map((_, index) => `${inputId}-fix-${index}`),
+  ].filter(Boolean);
   return (
     <div data-fix-target={target} className="min-w-0 scroll-mt-8">
       <label htmlFor={inputId} className="mb-2 block text-sm font-semibold text-slate-700">
@@ -101,10 +110,19 @@ export function Field({
             {
               id: inputId,
               ...(required ? { 'aria-required': true } : {}),
-              ...(errors.length
+              ...(feedback.length
                 ? {
                     'aria-invalid': true,
-                    'aria-describedby': errorId,
+                    'aria-describedby': [
+                      (children as ReactElement<{ 'aria-describedby'?: string }>).props['aria-describedby'],
+                      ...feedback,
+                    ]
+                      .filter(Boolean)
+                      .join(' '),
+                  }
+                : {}),
+              ...(errors.length
+                ? {
                     style: {
                       ...(children as ReactElement<{ style?: CSSProperties }>).props.style,
                       borderColor: '#b91c1c',
@@ -122,7 +140,11 @@ export function Field({
       )}
       {hidden && <HiddenFieldNotice />}
       {fixes.map((f, i) => (
-        <p key={i} className="mt-2 rounded-lg bg-amber-50 p-2 text-sm font-semibold text-amber-900">
+        <p
+          key={i}
+          id={`${inputId}-fix-${i}`}
+          className="mt-2 rounded-lg bg-amber-50 p-2 text-sm font-semibold text-amber-900"
+        >
           보완 요청: {f.message}
         </p>
       ))}
@@ -133,11 +155,16 @@ export function Section({
   title,
   children,
   target,
+  feedbackId,
 }: {
   title: string;
   children: ReactNode;
   target?: string;
+  feedbackId?: string;
 }) {
+  const sectionId = useId();
+  const parentFeedback = useContext(GroupFeedbackContext);
+  const descriptionId = feedbackId ?? `${sectionId}-feedback`;
   const errors = useContext(ValidationContext).filter(
     (error) => error.target === target && target !== 'evidence',
   );
@@ -148,23 +175,34 @@ export function Section({
         (target === 'charges' && f.target === 'extra_charges') ||
         (target.startsWith('charge:') && f.target.startsWith(`${target}.`))),
   );
+  const groupFeedback =
+    errors.length > 0 ||
+    fixes.some((fix) => fix.target === target || (target === 'charges' && fix.target === 'extra_charges'));
   return (
     <section
       data-fix-target={target}
+      tabIndex={-1}
+      aria-describedby={errors.length || fixes.length ? descriptionId : undefined}
       className={`scroll-mt-6 rounded-2xl border bg-white p-4 shadow-sm sm:p-6 ${errors.length ? 'border-red-700' : 'border-slate-200'}`}
     >
       <h2 className="mb-5 text-lg font-bold">{title}</h2>
-      {errors.map((error, index) => (
-        <p key={index} className="mb-4 font-semibold text-red-700">
-          {error.reason}
-        </p>
-      ))}
-      {fixes.map((f, i) => (
-        <p key={i} className="mb-4 rounded-xl bg-amber-50 p-3 text-amber-900">
-          보완 요청: {f.message}
-        </p>
-      ))}
-      {children}
+      <div id={descriptionId}>
+        {errors.map((error, index) => (
+          <p key={index} className="mb-4 font-semibold text-red-700">
+            {error.reason}
+          </p>
+        ))}
+        {fixes.map((f, i) => (
+          <p key={i} className="mb-4 rounded-xl bg-amber-50 p-3 text-amber-900">
+            보완 요청: {f.message}
+          </p>
+        ))}
+      </div>
+      <GroupFeedbackContext.Provider
+        value={groupFeedback ? [...parentFeedback, descriptionId] : parentFeedback}
+      >
+        {children}
+      </GroupFeedbackContext.Provider>
     </section>
   );
 }
