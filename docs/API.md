@@ -115,3 +115,12 @@
 commit은 generic 응답 캐시를 사용하지 않는다. job 행 잠금 + 가져오기 공통 advisory lock + source_row_hash unique로 멱등성을 제공하며 매 요청에서 현재 권한을 검사한다. 프리셋 저장은 공용 Idempotency-Key 래퍼를 쓴다. upload/preview는 새 파일 및 재검증 요청으로 취급한다. 예상하지 못한 commit 실패는 전체 rollback하여 PREVIEW에서 재시도할 수 있다.
 
 W7: 캐시 결과가 없는 수식/오류 셀은 매핑된 열에서만 해당 행 오류다. 동일 내용의 파일 내 발생 순번을 해시에 포함하여 실제 반복행을 보존하며, `excluded_rows`는 확정 때도 적용한다. UTF-8이 아닌 CSV는 422와 UTF-8 저장 안내를 반환한다. 기존 W5 작업의 바이트 기반 해시는 유지하고 유사 경로 경고로 확인한다.
+
+
+## W9 입력 항목 설정
+
+- `GET /api/form-settings?project_id=<uuid>`: 현장 접근 권한 검사 후 `{data:{project_id,modes:{[field_key]:"HIDDEN"|"OPTIONAL"|"REQUIRED"}}}`. DRIVER는 기사 모드, 나머지는 담당자 모드만 반환한다.
+- `GET /api/admin/form-fields?project_id=<uuid>`: ADMIN 전용. query 생략은 회사 기본. `{data:{project_id,fields:[{field_key,driver_mode,manager_mode,version}],company:{driver,manager},effective:{driver,manager}}}`. 설정 없는 항목은 mode=null, version=0이다.
+- `PUT /api/admin/form-fields`: ADMIN 전용, 멱등 키 지원. `{project_id:null|uuid,fields:[{field_key,driver_mode:null|mode,manager_mode:null|mode,version}]}`. 변경할 항목만 보내며 각 행의 두 역할 모드를 함께 보낸다. null은 상위 기본 따름. 저장 후 위 GET 형식 반환. 다중 항목은 원자적으로 저장·감사 기록하며 버전 충돌은 `409 VERSION_CONFLICT`, `details.current`에 최신 설정을 반환한다.
+- `field_key`: `end_date`, `work_type`, `requester`, `cargo_desc`, `operation_status`, `notes`, `via`, `cargo`, `quantity`, `quantity_unit`, `hours`, `depart_at`, `arrive_at`, `trip_status`, `is_empty_return`, `trip_notes`, `extra_charges`. 고정 필수 항목은 설정할 수 없다.
+- 사용 제출의 설정 필수 누락은 `422 SUBMIT_BLOCKED`, `details.fields:[{target,reason}]`. reason과 message에 한국어 항목 이름을 포함한다. DRAFT 저장·HIDDEN의 기존 값은 허용한다.

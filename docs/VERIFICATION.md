@@ -114,3 +114,37 @@ npm run test:e2e
 - PDF를 Poppler로 PNG 렌더링·텍스트 추출하여 `2.5`, 750,000원 합계, 한글·표·꼬리말을 확인했다. QA 파일은 `.data/w7-qa/quantity.pdf/png/txt`, `review-mobile.png`, `dashboard-mobile.png`, `test-results/W7-driver-360px.png`이며 Git 제외다.
 - 네이티브 `pg_restore` 성공 경계 이후 실패는 실행 경계 대역 + 실제 PG로 검증했다. 설치 바이너리를 통한 native 전체 성공 리허설은 기존 W5와 동일하게 별도 운영 환경에서 수행할 항목이다. 논리 백업 전체 복구는 실제 실행했다.
 - XLSX 수식은 계산하지 않는다. CSV 자동 CP949 변환·대용량 비동기 작업은 지원하지 않는다. W5 과거 바이트 해시는 소급 변경하지 않으며 중복 의심 경고에서 개별 제외할 수 있다.
+
+
+## W9 — 입력 항목 설정 최종 검증 (2026-09-29)
+
+`main`, PostgreSQL 54329, `.env` PORT 기본값인 **3000**에서 실행했다. E2E는 기존처럼 `vehicle_e2e`·`.data/e2e-storage`를 사용한다. 아래 명령을 **순서대로** 실행해 모두 종료 코드 0을 확인했다.
+
+| 명령 | 결과 |
+| --- | --- |
+| `npm run typecheck` | 통과 |
+| `npm run lint` | 통과 |
+| `npm test` | **33파일 / 210개 통과** (W9 신규 10개 포함, 실제 PostgreSQL) |
+| `npm run build` | Next.js 프로덕션 빌드 통과 |
+| `npm run format:check` | 통과 |
+| `npm run test:e2e` | **16파일 / 40개 통과**, 2.7분 (W9 신규 390px 4개 포함) |
+| `npm run db:migrate` | 개발 DB에 W9 마이그레이션 적용 완료 |
+
+W9 요구별 근거:
+
+| 요구 | 검증 |
+| --- | --- |
+| 요청자 없는 기본 기사 제출 | `W9-form-settings.test.ts` 기본값 테스트, `W9-form-settings.spec.ts` 최소 폼 사진 제출 |
+| 요청자 REQUIRED → 한국어 SUBMIT_BLOCKED / 임시저장 허용 | 실제 서비스·클라이언트 공통 검사와 열린 기사 폼 제출 전 안내 |
+| 현장 A 재정의, B 회사 기본 / 해제 | 서비스 항목·역할별 상속 및 모바일 관리자·기사 현장 전환 |
+| 버전 충돌 409 / 다중 항목 원자성 | 실제 동시 최초 저장, 오래된 재정의 버전, HTTP 409, 실패 batch의 응답·DB 모두 이전 값 유지 |
+| 기사·현장담당자 수정 403 / 권한 범위 | 직접 서비스·HTTP PUT/GET, 타 현장 404·배정 회수 |
+| 감사로그·멱등 | 저장/해제 before·after·변경자, 같은 키 재시도 1회 기록, 관리자 감사 조회 |
+| 필수 운행 항목·0/false·추가비 | 모든 회차 검사, 공백 경유 차단, 0·공차 아님 유효, 추가비 1건·숨김 기존 값 보존 |
+| 고정 필수·대리 입력 | 0건 운행·공백 경로·현장 증빙 차단, 담당자 자동 재제출 검사·실패 시 승인 보존 |
+| 오프라인 | IndexedDB 설정 캐시로 앱 재시작, 필수 경유 검사, 온라인 복귀 시 바뀐 요청자 정책으로 오류 복귀 후 재제출 |
+| 모바일·회귀 | W9 390px·기존 W2/W6/W7/W8 전체 통과, 숨김 입력 DOM 제외, 입력 16px·44px 이상 |
+
+최종 E2E의 개발 DB 업무 데이터 전후는 사용 **16→16**, 명세 **2→2**, 지급 **1→1**, 증빙 **14→14**, 감사 **89→89**, 가져오기 **0→0**이다. 신규 설정 테이블은 별도의 `db:migrate`로 적용했으며 기본 설정 행은 만들지 않았다. 전체 Vitest·E2E 로그에 pg `DeprecationWarning`은 없다. Next 개발 서버의 색상/exit-listener 경고는 기존 환경 진단이다.
+
+ego-browser 실제 기사·관리자 화면도 390px에서 가로 넘침 없이 확인했다. `.data/w9-qa/`에 `vitest-final.log`, `build-final.log`, `e2e-final.log`, `format-final.log`, `migrate.log`, `admin-390.png`, `driver-390.png`를 보관한다(Git 제외). 중간 빌드/E2E 동시 실행의 `.next` 충돌 결과는 최종 통과에 포함하지 않았다. 자세한 구현·판단·공용 파일 범위는 [W9 보고서](reports/W9.md)에 있다.
