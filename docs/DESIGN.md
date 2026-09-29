@@ -184,7 +184,7 @@ scripts/             db 시작, 시드, 백업/복구
 - `audit_logs`: id, at, user_id, action, entity_type, entity_id, before jsonb, after jsonb, reason, request_id
 - `idempotency_keys`: id, user_id, key, route, request_hash, status_code, response_body jsonb, created_at; unique(user_id, key)
 - `import_jobs`: id, file_name, status(`PREVIEW`|`COMMITTED`|`FAILED`), mapping jsonb, summary jsonb, rows jsonb, created_by, committed_at
-- `company_settings` (단일 행): 회사명, 사업자번호, 주소, 대표자, 기본 세금모드, 정산 담당 연락처
+- `company_settings` (단일 행): id, name(회사명), biz_no(사업자번호), address(주소), representative(대표자), default_tax_mode(기본 세금모드), settlement_contact(정산 담당 연락처)
 
 ## 6. 업무 규칙 (반드시 테스트로 증명)
 
@@ -223,7 +223,7 @@ scripts/             db 시작, 시드, 백업/복구
 ## 7. API 규칙
 
 - JSON. 성공 `{ data }`, 실패 `{ error: { code, message, details? } }`.
-- 코드: `UNAUTHENTICATED`(401), `FORBIDDEN`(403), `NOT_FOUND`(404; 접근불가 포함), `VALIDATION_FAILED`(422), `VERSION_CONFLICT`(409), `STATEMENT_LOCKED`(409), `CONFIRM_BLOCKED`(422), `SUBMIT_BLOCKED`(422), `IDEMPOTENCY_MISMATCH`(422).
+- 코드: `UNAUTHENTICATED`(401), `FORBIDDEN`(403), `NOT_FOUND`(404; 접근불가 포함), `VALIDATION_FAILED`(422), `VERSION_CONFLICT`(409), `STATEMENT_LOCKED`(409), `CONFIRM_BLOCKED`(422), `SUBMIT_BLOCKED`(422), `IDEMPOTENCY_MISMATCH`(422). 예상하지 못한 서버 오류는 `INTERNAL_ERROR`(500; 내부 상세 비공개).
 - 모든 mutation 은 `withRoute(handler, { idempotent: true })` 같은 공용 래퍼 사용 (`src/server/http.ts`): 세션 → 사용자 상태 확인 → zod → 서비스 → 감사로그.
 - 목록 API는 `page`, `pageSize`, 정렬, 필터를 받고 `{ data: { rows, page, pageSize, total, totals: { pageSum, filteredSum } } }` 처럼 **현재 페이지 합계와 전체 검색결과 합계를 구분**해 반환.
 
@@ -268,3 +268,7 @@ scripts/             db 시작, 시드, 백업/복구
 - 커밋은 논리 단위로, 메시지는 한국어 또는 영어, 끝에 `Co-Authored-By` 불필요.
 - 완료 전 `npm run typecheck && npm run lint && npm test` 통과.
 - 사용자 표시 문구는 한국어.
+
+## 11. W1 세부 입력 계약
+
+필드·enum·업무 모델은 위 정의를 유지한다. 중첩 배열 저장 방식, 입력 JSON, 버전 대상, 응답 합계, 증빙 재전송 및 워커 간 잠금 순서는 [API.md](API.md)에 명시한다. W1의 모듈·테스트 헬퍼 사용법과 검증 결과는 [reports/W1.md](reports/W1.md)에 있다.
