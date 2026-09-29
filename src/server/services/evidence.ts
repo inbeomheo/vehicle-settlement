@@ -3,8 +3,14 @@ import { readBoundedBody } from '../request-body';
 import { and, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdir, readFile, writeFile, unlink } from 'node:fs/promises';
-import path from 'node:path';
+import {
+  storageDriver,
+  writeStoredFile,
+  readStoredFile,
+  deleteStoredFile,
+  verifyStoredBytes,
+} from '../storage';
+import { uploadLimit, uploadLimitMessage } from '../upload-limits';
 import { evidence, trips, useRevisions } from '../db/schema';
 import type { Context } from '../context';
 import { audit } from '../audit';
@@ -12,11 +18,6 @@ import { AppError, invalid, notFound } from '../errors';
 import { assertUnlocked, atomic, contentChanged, rawUse, rawDetail } from './uses';
 import { evidenceSchema } from './schemas';
 export const MAX_UPLOAD_SIZE = 20 * 1024 * 1024;
-const root = () => path.resolve(process.env.STORAGE_DIR ?? 'storage');
-function storagePath(key: string) {
-  if (!/^[a-f0-9-]{36}\/[a-f0-9-]{36}$/.test(key)) invalid('파일 경로가 올바르지 않습니다.');
-  return path.join(root(), key);
-}
 function publicEvidence(row: typeof evidence.$inferSelect) {
   const { storage_key: _key, ...out } = row;
   void _key;
@@ -97,7 +98,7 @@ function validMagic(bytes: Buffer, mime: string) {
 }
 export async function readUpload(request: Request) {
   if (!request.body) invalid('파일 내용이 없습니다.');
-  return readBoundedBody(request, MAX_UPLOAD_SIZE, '파일은 20MB 이하만 업로드할 수 있습니다.');
+  return readBoundedBody(request, uploadLimit(), uploadLimitMessage());
 }
 export async function markUploadFailed(ctx: Context, id: string, reason: string) {
   return atomic(ctx, async (tx) => {
@@ -125,8 +126,8 @@ export async function uploadEvidence(ctx: Context, id: string, bytes: Buffer, mi
         invalid('업로드한 파일 변경은 증빙 교체를 이용하세요.');
       }
       const failure =
-        bytes.length === 0 || bytes.length > MAX_UPLOAD_SIZE
-          ? '파일은 1바이트 이상 20MB 이하여야 합니다.'
+        bytes.length === 0 || bytes.length > uploadLimit()
+          ? `파일은 1바이트 이상이어야 합니다. ${uploadLimitMessage()}`
           : mime !== file.mime || bytes.length !== file.size || !validMagic(bytes, mime)
             ? '파일 형식 또는 크기가 메타정보와 다릅니다.'
             : file.sha256 && file.sha256 !== hash
@@ -150,10 +151,8 @@ export async function uploadEvidence(ctx: Context, id: string, bytes: Buffer, mi
         return { failure };
       }
       const key = `${use.id}/${randomUUID()}`;
-      const dest = storagePath(key);
-      await mkdir(path.dirname(dest), { recursive: true });
-      await writeFile(dest, bytes, { flag: 'wx', mode: 0o600 });
-      written = dest;
+      await writeStoredFile(tx.db, key, bytes);
+      if (storageDriver() === 'local') written = key;
       const [after] = await tx.db
         .update(evidence)
         .set({
@@ -174,7 +173,7 @@ export async function uploadEvidence(ctx: Context, id: string, bytes: Buffer, mi
     if (result.failure) invalid(result.failure);
     return result.row!;
   } catch (error) {
-    if (written) await unlink(written).catch(() => {});
+    if (written) await deleteStoredFile(ctx.db, written).catch(() => {});
     if (
       error &&
       typeof error === 'object' &&
@@ -188,7 +187,8 @@ export async function uploadEvidence(ctx: Context, id: string, bytes: Buffer, mi
 export async function downloadEvidence(ctx: Context, id: string) {
   const { file } = await accessibleEvidence(ctx, id, false, true);
   if (file.upload_status !== 'UPLOADED' || !file.storage_key) notFound();
-  const bytes = await readFile(storagePath(file.storage_key)).catch(() => notFound());
+  const bytes = await readStoredFile(ctx.db, file.storage_key).catch(() => notFound());
+  if (file.sha256 && file.size !== null) verifyStoredBytes(bytes, file.size, file.sha256);
   return { file: publicEvidence(file), bytes };
 }
 export async function deleteEvidence(ctx: Context, id: string, reason: string) {

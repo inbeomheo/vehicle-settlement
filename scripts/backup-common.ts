@@ -7,6 +7,10 @@ import { spawn } from 'node:child_process';
 import { Pool, type PoolClient } from 'pg';
 import { z } from 'zod';
 import { defaultDatabaseUrl } from '../src/server/db/client';
+import { databaseSchema, databaseSchemas, migrationsSchema, poolConfig } from '../src/server/db/config';
+import { drizzle } from 'drizzle-orm/node-postgres';
+import * as schema from '../src/server/db/schema';
+import { readStoredFile, storageDriver, verifyStoredBytes } from '../src/server/storage';
 
 export const digest = (bytes: Buffer | string) => createHash('sha256').update(bytes).digest('hex');
 export const quote = (name: string) => `"${name.replaceAll('"', '""')}"`;
@@ -15,6 +19,8 @@ export const manifestSchema = z.object({
   version: z.literal(1),
   created_at: z.iso.datetime(),
   format: z.enum(['pg-custom', 'app-logical-v1']),
+  db_schema: z.string().optional(),
+  storage_driver: z.enum(['local', 'db']).optional(),
   file_count: z.number().int().nonnegative(),
   files: z.array(
     z.object({
@@ -103,7 +109,7 @@ export async function runPostgres(binary: string, args: string[], url: string) {
   });
 }
 export async function connect(url = defaultDatabaseUrl()) {
-  const pool = new Pool({ connectionString: url, max: 2, connectionTimeoutMillis: 10000 });
+  const pool = new Pool({ ...poolConfig(url), max: 2, connectionTimeoutMillis: 10000 });
   try {
     const client = await pool.connect();
     return { pool, client };
@@ -115,16 +121,50 @@ export async function connect(url = defaultDatabaseUrl()) {
 export async function tableList(client: PoolClient) {
   return (
     await client.query<{ schemaname: string; tablename: string }>(
-      "SELECT schemaname, tablename FROM pg_tables WHERE schemaname IN ('public','drizzle') ORDER BY schemaname, tablename",
+      'SELECT schemaname, tablename FROM pg_tables WHERE schemaname = ANY($1) ORDER BY schemaname, tablename',
+      [databaseSchemas()],
     )
   ).rows;
+}
+// The deployment role owns objects, not CREATE privileges on the shared database.
+// Preserve the namespace and its ACL; never reset public/drizzle in scoped mode.
+export async function resetAppSchema(client: PoolClient) {
+  if (!process.env.DB_SCHEMA) {
+    await client.query(
+      'DROP SCHEMA IF EXISTS public CASCADE; DROP SCHEMA IF EXISTS drizzle CASCADE; CREATE SCHEMA public',
+    );
+    return;
+  }
+  for (const table of await tableList(client))
+    await client.query(`DROP TABLE IF EXISTS ${tableName(table.schemaname, table.tablename)} CASCADE`);
+  const enums = (
+    await client.query(
+      "SELECT typname FROM pg_type t JOIN pg_namespace n ON n.oid=t.typnamespace WHERE n.nspname=$1 AND t.typtype='e'",
+      [databaseSchema()],
+    )
+  ).rows;
+  for (const type of enums) await client.query(`DROP TYPE ${tableName(databaseSchema(), type.typname)}`);
+  const sequences = (
+    await client.query('SELECT sequencename FROM pg_sequences WHERE schemaname=$1', [databaseSchema()])
+  ).rows;
+  for (const sequence of sequences)
+    await client.query(`DROP SEQUENCE ${tableName(databaseSchema(), sequence.sequencename)}`);
+  const functions = (
+    await client.query(
+      'SELECT p.oid::regprocedure::text AS signature FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname=$1',
+      [databaseSchema()],
+    )
+  ).rows;
+  for (const fn of functions) await client.query(`DROP FUNCTION ${fn.signature}`);
 }
 export async function logicalDump(client: PoolClient): Promise<LogicalBackup> {
   const journal = JSON.parse(await readFile('drizzle/meta/_journal.json', 'utf8')) as {
     entries: { tag: string; when: number }[];
   };
   const applied = (
-    await client.query('SELECT hash, created_at FROM drizzle.__drizzle_migrations ORDER BY created_at')
+    await client.query(
+      `SELECT hash, created_at FROM ${tableName(migrationsSchema(), '__drizzle_migrations')} ORDER BY created_at`,
+    )
   ).rows;
   const migrations = await Promise.all(
     journal.entries.map(async (entry) => {
@@ -155,9 +195,9 @@ export async function logicalDump(client: PoolClient): Promise<LogicalBackup> {
   }
   const sequences: LogicalBackup['sequences'] = [];
   for (const s of (
-    await client.query(
-      "SELECT schemaname, sequencename FROM pg_sequences WHERE schemaname IN ('public','drizzle')",
-    )
+    await client.query('SELECT schemaname, sequencename FROM pg_sequences WHERE schemaname = ANY($1)', [
+      databaseSchemas(),
+    ])
   ).rows) {
     const value = (
       await client.query(`SELECT last_value::text, is_called FROM ${tableName(s.schemaname, s.sequencename)}`)
@@ -179,10 +219,21 @@ export async function verifyDatabase(client: PoolClient, storage: string) {
   ).rows;
   for (const row of evidence) {
     if (!row.sha256) throw new Error(`증빙 해시 없음: ${row.id}`);
-    const bytes = await readFile(safePath(storage, row.storage_key));
+    const bytes = await readStoredFile(drizzle(client, { schema }), row.storage_key, storage);
     if (digest(bytes) !== row.sha256 || bytes.length !== row.size)
       throw new Error(`증빙 파일 해시/크기 불일치: ${row.id}`);
   }
+  if (storageDriver() === 'db') {
+    const blobs = (await client.query('SELECT bytes, size, sha256 FROM evidence_blobs')).rows;
+    for (const blob of blobs) verifyStoredBytes(blob.bytes, blob.size, blob.sha256);
+  }
+  const imports = (
+    await client.query(
+      "SELECT rows->>'source_file' AS source FROM import_jobs WHERE rows->>'source_file' IS NOT NULL",
+    )
+  ).rows;
+  for (const row of imports)
+    await readStoredFile(drizzle(client, { schema }), `imports/${row.source}.xlsx`, storage);
   const orphan = await client.query(
     'SELECT e.id FROM evidence e LEFT JOIN vehicle_uses u ON u.id=e.vehicle_use_id WHERE u.id IS NULL',
   );
@@ -227,6 +278,8 @@ export async function writeManifest(dir: string, format: Manifest['format']) {
     version: 1,
     created_at: new Date().toISOString(),
     format,
+    db_schema: databaseSchema(),
+    storage_driver: storageDriver(),
     file_count: files.length,
     files,
   };

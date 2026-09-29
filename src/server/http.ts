@@ -1,3 +1,4 @@
+import { uploadLimit } from './upload-limits';
 import { readBoundedBody } from './request-body';
 import { createHash, randomUUID } from 'node:crypto';
 import { and, eq, sql } from 'drizzle-orm';
@@ -149,7 +150,7 @@ export function withRoute<T = undefined, A extends boolean = true>(
       let rawText = '';
       if (options.source === 'query') raw = Object.fromEntries(new URL(request.url).searchParams);
       else if (options.source !== 'none' && mutation) {
-        rawText = (await readBoundedBody(request, 2 * 1024 * 1024)).toString('utf8');
+        rawText = (await readBoundedBody(request, uploadLimit(2 * 1024 * 1024))).toString('utf8');
         try {
           raw = rawText ? JSON.parse(rawText) : {};
         } catch {

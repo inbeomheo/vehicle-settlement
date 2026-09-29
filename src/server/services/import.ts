@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { mkdir, readFile, writeFile, rm } from 'node:fs/promises';
-import path from 'node:path';
+import { storageDriver, writeStoredFile, readStoredFile, deleteStoredFile } from '../storage';
+import { uploadLimit, uploadLimitMessage } from '../upload-limits';
 import { boundedPayload, readCsv, readXlsx } from './import-file';
 import ExcelJS from 'exceljs';
 import { and, desc, eq, inArray, lt, sql } from 'drizzle-orm';
@@ -85,7 +85,7 @@ export function suggestMapping(headers: string[]): ImportMapping {
   return result;
 }
 function sourcePath(id: string) {
-  return path.join(process.env.STORAGE_DIR ?? 'storage', 'imports', `${z.string().uuid().parse(id)}.xlsx`);
+  return `imports/${z.string().uuid().parse(id)}.xlsx`;
 }
 export async function assertImportUploadAccess(ctx: Context) {
   await manager(ctx);
@@ -97,8 +97,8 @@ export async function uploadImport(ctx: Context, fileName: string, bytes: Buffer
   await assertImportUploadAccess(ctx);
   if (!/\.(xlsx|csv)$/i.test(fileName) || fileName.length > 255)
     invalid('xlsx 또는 UTF-8 csv 파일을 선택하세요.');
-  if (!bytes.length || bytes.length > 10 * 1024 * 1024)
-    invalid('파일이 너무 큽니다. 10MB 이하로 업로드하세요.');
+  if (!bytes.length || bytes.length > uploadLimit(10 * 1024 * 1024))
+    invalid(uploadLimitMessage(uploadLimit(10 * 1024 * 1024)));
   const xlsx = /\.xlsx$/i.test(fileName);
   const sheets = xlsx ? await readXlsx(bytes, -1, true) : readCsv(bytes);
   for (const sheet of sheets) {
@@ -118,12 +118,9 @@ export async function uploadImport(ctx: Context, fileName: string, bytes: Buffer
     preview: [],
     ...(xlsx ? { source_file: id } : {}),
   });
-  if (xlsx) {
-    await mkdir(path.dirname(sourcePath(id)), { recursive: true, mode: 0o700 });
-    await writeFile(sourcePath(id), bytes, { mode: 0o600 });
-  }
   try {
     return await atomic(ctx, async (tx) => {
+      if (xlsx) await writeStoredFile(tx.db, sourcePath(id), bytes);
       const [job] = await tx.db
         .insert(importJobs)
         .values({ id, file_name: fileName, created_by: tx.user.id, rows: payload })
@@ -132,7 +129,7 @@ export async function uploadImport(ctx: Context, fileName: string, bytes: Buffer
       return view(job, tx.user.name);
     });
   } catch (error) {
-    if (xlsx) await rm(sourcePath(id), { force: true });
+    if (xlsx && storageDriver() === 'local') await deleteStoredFile(ctx.db, sourcePath(id));
     throw error;
   }
 }
@@ -218,7 +215,10 @@ async function evaluate(ctx: Context, job: Job, raw: unknown) {
   const selection = previewSchema.parse(raw);
   const payload = job.rows as Payload;
   if (payload.source_file) {
-    const sheets = await readXlsx(await readFile(sourcePath(payload.source_file)), selection.sheet);
+    const sheets = await readXlsx(
+      await readStoredFile(ctx.db, sourcePath(payload.source_file)),
+      selection.sheet,
+    );
     payload.sheets[selection.sheet] = {
       ...sheets[selection.sheet],
       mapping: selection.mapping,
@@ -447,6 +447,8 @@ export async function deleteStaleImportPreviews(ctx: Context, input: unknown = {
       )
       .for('update');
     for (const job of jobs) {
+      const source = (job.rows as Payload).source_file;
+      if (source && storageDriver() === 'db') await deleteStoredFile(tx.db, sourcePath(source));
       await tx.db.delete(importJobs).where(eq(importJobs.id, job.id));
       await audit(
         tx,
@@ -462,7 +464,7 @@ export async function deleteStaleImportPreviews(ctx: Context, input: unknown = {
   });
   for (const job of deleted) {
     const source = (job.rows as Payload).source_file;
-    if (source) await rm(sourcePath(source), { force: true });
+    if (source && storageDriver() === 'local') await deleteStoredFile(ctx.db, sourcePath(source));
   }
   return { deleted: deleted.length };
 }

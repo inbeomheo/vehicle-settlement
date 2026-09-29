@@ -1,24 +1,24 @@
-CREATE TYPE "public"."billing_unit" AS ENUM('PER_TRIP', 'PER_DAY', 'HALF_DAY', 'MONTHLY', 'PER_HOUR', 'PER_TON', 'PER_M3', 'LUMP_SUM');--> statement-breakpoint
-CREATE TYPE "public"."charge_type" AS ENUM('BASE', 'WAITING', 'TOLL', 'EXTRA_STOP', 'CANCEL_FEE', 'EXPENSE', 'OTHER', 'ADJUSTMENT');--> statement-breakpoint
-CREATE TYPE "public"."counterparty_kind" AS ENUM('CARRIER', 'DRIVER_BUSINESS', 'CUSTOMER');--> statement-breakpoint
-CREATE TYPE "public"."revision_decision" AS ENUM('PENDING', 'APPROVED', 'NEEDS_FIX', 'SUPERSEDED');--> statement-breakpoint
-CREATE TYPE "public"."direction" AS ENUM('PAYABLE', 'RECEIVABLE');--> statement-breakpoint
-CREATE TYPE "public"."entered_as" AS ENUM('DRIVER_SELF', 'PROXY');--> statement-breakpoint
-CREATE TYPE "public"."evidence_kind" AS ENUM('PHOTO', 'RECEIPT', 'WEIGH_TICKET', 'CONFIRMATION', 'SLIP_NO', 'OTHER');--> statement-breakpoint
-CREATE TYPE "public"."evidence_policy" AS ENUM('PHOTO_REQUIRED', 'PHOTO_OR_ALTERNATIVE', 'NONE');--> statement-breakpoint
-CREATE TYPE "public"."import_status" AS ENUM('PREVIEW', 'COMMITTED', 'FAILED');--> statement-breakpoint
-CREATE TYPE "public"."inclusion" AS ENUM('INCLUDED', 'HELD');--> statement-breakpoint
-CREATE TYPE "public"."line_review_status" AS ENUM('PENDING', 'APPROVED', 'HELD', 'REJECTED');--> statement-breakpoint
-CREATE TYPE "public"."operation_status" AS ENUM('PLANNED', 'IN_PROGRESS', 'COMPLETED', 'CANCELED');--> statement-breakpoint
-CREATE TYPE "public"."payment_kind" AS ENUM('PAYMENT', 'RECEIPT');--> statement-breakpoint
-CREATE TYPE "public"."price_status" AS ENUM('PENDING', 'CONFIRMED');--> statement-breakpoint
-CREATE TYPE "public"."review_status" AS ENUM('DRAFT', 'SUBMITTED', 'NEEDS_FIX', 'APPROVED');--> statement-breakpoint
-CREATE TYPE "public"."user_role" AS ENUM('DRIVER', 'SITE_MANAGER', 'SETTLEMENT_MANAGER', 'ADMIN');--> statement-breakpoint
-CREATE TYPE "public"."rounding" AS ENUM('HALF_UP', 'DOWN', 'UP');--> statement-breakpoint
-CREATE TYPE "public"."statement_status" AS ENUM('DRAFT', 'CONFIRMED', 'CANCELED');--> statement-breakpoint
-CREATE TYPE "public"."tax_mode" AS ENUM('VAT_EXCLUDED', 'VAT_INCLUDED', 'TAX_EXEMPT');--> statement-breakpoint
-CREATE TYPE "public"."upload_status" AS ENUM('PENDING', 'UPLOADED', 'FAILED');--> statement-breakpoint
-CREATE TYPE "public"."user_status" AS ENUM('ACTIVE', 'DISABLED');--> statement-breakpoint
+CREATE TYPE "billing_unit" AS ENUM('PER_TRIP', 'PER_DAY', 'HALF_DAY', 'MONTHLY', 'PER_HOUR', 'PER_TON', 'PER_M3', 'LUMP_SUM');--> statement-breakpoint
+CREATE TYPE "charge_type" AS ENUM('BASE', 'WAITING', 'TOLL', 'EXTRA_STOP', 'CANCEL_FEE', 'EXPENSE', 'OTHER', 'ADJUSTMENT');--> statement-breakpoint
+CREATE TYPE "counterparty_kind" AS ENUM('CARRIER', 'DRIVER_BUSINESS', 'CUSTOMER');--> statement-breakpoint
+CREATE TYPE "revision_decision" AS ENUM('PENDING', 'APPROVED', 'NEEDS_FIX', 'SUPERSEDED');--> statement-breakpoint
+CREATE TYPE "direction" AS ENUM('PAYABLE', 'RECEIVABLE');--> statement-breakpoint
+CREATE TYPE "entered_as" AS ENUM('DRIVER_SELF', 'PROXY');--> statement-breakpoint
+CREATE TYPE "evidence_kind" AS ENUM('PHOTO', 'RECEIPT', 'WEIGH_TICKET', 'CONFIRMATION', 'SLIP_NO', 'OTHER');--> statement-breakpoint
+CREATE TYPE "evidence_policy" AS ENUM('PHOTO_REQUIRED', 'PHOTO_OR_ALTERNATIVE', 'NONE');--> statement-breakpoint
+CREATE TYPE "import_status" AS ENUM('PREVIEW', 'COMMITTED', 'FAILED');--> statement-breakpoint
+CREATE TYPE "inclusion" AS ENUM('INCLUDED', 'HELD');--> statement-breakpoint
+CREATE TYPE "line_review_status" AS ENUM('PENDING', 'APPROVED', 'HELD', 'REJECTED');--> statement-breakpoint
+CREATE TYPE "operation_status" AS ENUM('PLANNED', 'IN_PROGRESS', 'COMPLETED', 'CANCELED');--> statement-breakpoint
+CREATE TYPE "payment_kind" AS ENUM('PAYMENT', 'RECEIPT');--> statement-breakpoint
+CREATE TYPE "price_status" AS ENUM('PENDING', 'CONFIRMED');--> statement-breakpoint
+CREATE TYPE "review_status" AS ENUM('DRAFT', 'SUBMITTED', 'NEEDS_FIX', 'APPROVED');--> statement-breakpoint
+CREATE TYPE "user_role" AS ENUM('DRIVER', 'SITE_MANAGER', 'SETTLEMENT_MANAGER', 'ADMIN');--> statement-breakpoint
+CREATE TYPE "rounding" AS ENUM('HALF_UP', 'DOWN', 'UP');--> statement-breakpoint
+CREATE TYPE "statement_status" AS ENUM('DRAFT', 'CONFIRMED', 'CANCELED');--> statement-breakpoint
+CREATE TYPE "tax_mode" AS ENUM('VAT_EXCLUDED', 'VAT_INCLUDED', 'TAX_EXEMPT');--> statement-breakpoint
+CREATE TYPE "upload_status" AS ENUM('PENDING', 'UPLOADED', 'FAILED');--> statement-breakpoint
+CREATE TYPE "user_status" AS ENUM('ACTIVE', 'DISABLED');--> statement-breakpoint
 CREATE TABLE "audit_logs" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"at" timestamp with time zone DEFAULT now() NOT NULL,
@@ -404,53 +404,53 @@ CREATE TABLE "work_types" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-ALTER TABLE "audit_logs" ADD CONSTRAINT "audit_logs_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "charge_lines" ADD CONSTRAINT "charge_lines_vehicle_use_id_vehicle_uses_id_fk" FOREIGN KEY ("vehicle_use_id") REFERENCES "public"."vehicle_uses"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "charge_lines" ADD CONSTRAINT "charge_lines_trip_id_trips_id_fk" FOREIGN KEY ("trip_id") REFERENCES "public"."trips"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "charge_lines" ADD CONSTRAINT "charge_lines_counterparty_id_counterparties_id_fk" FOREIGN KEY ("counterparty_id") REFERENCES "public"."counterparties"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "charge_lines" ADD CONSTRAINT "charge_lines_rate_agreement_id_rate_agreements_id_fk" FOREIGN KEY ("rate_agreement_id") REFERENCES "public"."rate_agreements"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "charge_lines" ADD CONSTRAINT "charge_lines_adjusts_statement_id_statements_id_fk" FOREIGN KEY ("adjusts_statement_id") REFERENCES "public"."statements"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "charge_lines" ADD CONSTRAINT "charge_lines_locked_statement_id_statements_id_fk" FOREIGN KEY ("locked_statement_id") REFERENCES "public"."statements"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "driver_affiliations" ADD CONSTRAINT "driver_affiliations_driver_id_drivers_id_fk" FOREIGN KEY ("driver_id") REFERENCES "public"."drivers"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "driver_affiliations" ADD CONSTRAINT "driver_affiliations_counterparty_id_counterparties_id_fk" FOREIGN KEY ("counterparty_id") REFERENCES "public"."counterparties"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "drivers" ADD CONSTRAINT "drivers_default_vehicle_id_vehicles_id_fk" FOREIGN KEY ("default_vehicle_id") REFERENCES "public"."vehicles"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "evidence" ADD CONSTRAINT "evidence_vehicle_use_id_vehicle_uses_id_fk" FOREIGN KEY ("vehicle_use_id") REFERENCES "public"."vehicle_uses"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "evidence" ADD CONSTRAINT "evidence_trip_id_trips_id_fk" FOREIGN KEY ("trip_id") REFERENCES "public"."trips"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "evidence" ADD CONSTRAINT "evidence_uploaded_by_users_id_fk" FOREIGN KEY ("uploaded_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "evidence" ADD CONSTRAINT "evidence_replaced_by_id_evidence_id_fk" FOREIGN KEY ("replaced_by_id") REFERENCES "public"."evidence"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "idempotency_keys" ADD CONSTRAINT "idempotency_keys_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "import_jobs" ADD CONSTRAINT "import_jobs_created_by_users_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "invites" ADD CONSTRAINT "invites_driver_id_drivers_id_fk" FOREIGN KEY ("driver_id") REFERENCES "public"."drivers"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "invites" ADD CONSTRAINT "invites_used_by_user_id_users_id_fk" FOREIGN KEY ("used_by_user_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "invites" ADD CONSTRAINT "invites_created_by_users_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "payment_records" ADD CONSTRAINT "payment_records_statement_id_statements_id_fk" FOREIGN KEY ("statement_id") REFERENCES "public"."statements"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "payment_records" ADD CONSTRAINT "payment_records_recorded_by_users_id_fk" FOREIGN KEY ("recorded_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "payment_records" ADD CONSTRAINT "payment_records_voided_by_users_id_fk" FOREIGN KEY ("voided_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "project_assignments" ADD CONSTRAINT "project_assignments_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "project_assignments" ADD CONSTRAINT "project_assignments_project_id_projects_id_fk" FOREIGN KEY ("project_id") REFERENCES "public"."projects"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "rate_agreements" ADD CONSTRAINT "rate_agreements_counterparty_id_counterparties_id_fk" FOREIGN KEY ("counterparty_id") REFERENCES "public"."counterparties"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "rate_agreements" ADD CONSTRAINT "rate_agreements_project_id_projects_id_fk" FOREIGN KEY ("project_id") REFERENCES "public"."projects"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "sessions" ADD CONSTRAINT "sessions_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "statement_items" ADD CONSTRAINT "statement_items_statement_id_statements_id_fk" FOREIGN KEY ("statement_id") REFERENCES "public"."statements"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "statement_items" ADD CONSTRAINT "statement_items_charge_line_id_charge_lines_id_fk" FOREIGN KEY ("charge_line_id") REFERENCES "public"."charge_lines"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "statements" ADD CONSTRAINT "statements_counterparty_id_counterparties_id_fk" FOREIGN KEY ("counterparty_id") REFERENCES "public"."counterparties"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "statements" ADD CONSTRAINT "statements_confirmed_by_users_id_fk" FOREIGN KEY ("confirmed_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "statements" ADD CONSTRAINT "statements_canceled_by_users_id_fk" FOREIGN KEY ("canceled_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "statements" ADD CONSTRAINT "statements_created_by_users_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "statements" ADD CONSTRAINT "statements_replaces_statement_id_statements_id_fk" FOREIGN KEY ("replaces_statement_id") REFERENCES "public"."statements"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "trips" ADD CONSTRAINT "trips_vehicle_use_id_vehicle_uses_id_fk" FOREIGN KEY ("vehicle_use_id") REFERENCES "public"."vehicle_uses"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "use_revisions" ADD CONSTRAINT "use_revisions_vehicle_use_id_vehicle_uses_id_fk" FOREIGN KEY ("vehicle_use_id") REFERENCES "public"."vehicle_uses"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "use_revisions" ADD CONSTRAINT "use_revisions_submitted_by_users_id_fk" FOREIGN KEY ("submitted_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "use_revisions" ADD CONSTRAINT "use_revisions_decided_by_users_id_fk" FOREIGN KEY ("decided_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "users" ADD CONSTRAINT "users_driver_id_drivers_id_fk" FOREIGN KEY ("driver_id") REFERENCES "public"."drivers"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "vehicle_uses" ADD CONSTRAINT "vehicle_uses_project_id_projects_id_fk" FOREIGN KEY ("project_id") REFERENCES "public"."projects"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "vehicle_uses" ADD CONSTRAINT "vehicle_uses_work_type_id_work_types_id_fk" FOREIGN KEY ("work_type_id") REFERENCES "public"."work_types"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "vehicle_uses" ADD CONSTRAINT "vehicle_uses_driver_id_drivers_id_fk" FOREIGN KEY ("driver_id") REFERENCES "public"."drivers"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "vehicle_uses" ADD CONSTRAINT "vehicle_uses_vehicle_id_vehicles_id_fk" FOREIGN KEY ("vehicle_id") REFERENCES "public"."vehicles"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "vehicle_uses" ADD CONSTRAINT "vehicle_uses_payee_counterparty_id_counterparties_id_fk" FOREIGN KEY ("payee_counterparty_id") REFERENCES "public"."counterparties"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "vehicle_uses" ADD CONSTRAINT "vehicle_uses_customer_counterparty_id_counterparties_id_fk" FOREIGN KEY ("customer_counterparty_id") REFERENCES "public"."counterparties"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "vehicle_uses" ADD CONSTRAINT "vehicle_uses_approved_revision_id_use_revisions_id_fk" FOREIGN KEY ("approved_revision_id") REFERENCES "public"."use_revisions"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "vehicle_uses" ADD CONSTRAINT "vehicle_uses_created_by_user_id_users_id_fk" FOREIGN KEY ("created_by_user_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "audit_logs" ADD CONSTRAINT "audit_logs_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "charge_lines" ADD CONSTRAINT "charge_lines_vehicle_use_id_vehicle_uses_id_fk" FOREIGN KEY ("vehicle_use_id") REFERENCES "vehicle_uses"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "charge_lines" ADD CONSTRAINT "charge_lines_trip_id_trips_id_fk" FOREIGN KEY ("trip_id") REFERENCES "trips"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "charge_lines" ADD CONSTRAINT "charge_lines_counterparty_id_counterparties_id_fk" FOREIGN KEY ("counterparty_id") REFERENCES "counterparties"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "charge_lines" ADD CONSTRAINT "charge_lines_rate_agreement_id_rate_agreements_id_fk" FOREIGN KEY ("rate_agreement_id") REFERENCES "rate_agreements"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "charge_lines" ADD CONSTRAINT "charge_lines_adjusts_statement_id_statements_id_fk" FOREIGN KEY ("adjusts_statement_id") REFERENCES "statements"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "charge_lines" ADD CONSTRAINT "charge_lines_locked_statement_id_statements_id_fk" FOREIGN KEY ("locked_statement_id") REFERENCES "statements"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "driver_affiliations" ADD CONSTRAINT "driver_affiliations_driver_id_drivers_id_fk" FOREIGN KEY ("driver_id") REFERENCES "drivers"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "driver_affiliations" ADD CONSTRAINT "driver_affiliations_counterparty_id_counterparties_id_fk" FOREIGN KEY ("counterparty_id") REFERENCES "counterparties"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "drivers" ADD CONSTRAINT "drivers_default_vehicle_id_vehicles_id_fk" FOREIGN KEY ("default_vehicle_id") REFERENCES "vehicles"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "evidence" ADD CONSTRAINT "evidence_vehicle_use_id_vehicle_uses_id_fk" FOREIGN KEY ("vehicle_use_id") REFERENCES "vehicle_uses"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "evidence" ADD CONSTRAINT "evidence_trip_id_trips_id_fk" FOREIGN KEY ("trip_id") REFERENCES "trips"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "evidence" ADD CONSTRAINT "evidence_uploaded_by_users_id_fk" FOREIGN KEY ("uploaded_by") REFERENCES "users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "evidence" ADD CONSTRAINT "evidence_replaced_by_id_evidence_id_fk" FOREIGN KEY ("replaced_by_id") REFERENCES "evidence"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "idempotency_keys" ADD CONSTRAINT "idempotency_keys_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "import_jobs" ADD CONSTRAINT "import_jobs_created_by_users_id_fk" FOREIGN KEY ("created_by") REFERENCES "users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "invites" ADD CONSTRAINT "invites_driver_id_drivers_id_fk" FOREIGN KEY ("driver_id") REFERENCES "drivers"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "invites" ADD CONSTRAINT "invites_used_by_user_id_users_id_fk" FOREIGN KEY ("used_by_user_id") REFERENCES "users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "invites" ADD CONSTRAINT "invites_created_by_users_id_fk" FOREIGN KEY ("created_by") REFERENCES "users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "payment_records" ADD CONSTRAINT "payment_records_statement_id_statements_id_fk" FOREIGN KEY ("statement_id") REFERENCES "statements"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "payment_records" ADD CONSTRAINT "payment_records_recorded_by_users_id_fk" FOREIGN KEY ("recorded_by") REFERENCES "users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "payment_records" ADD CONSTRAINT "payment_records_voided_by_users_id_fk" FOREIGN KEY ("voided_by") REFERENCES "users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "project_assignments" ADD CONSTRAINT "project_assignments_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "project_assignments" ADD CONSTRAINT "project_assignments_project_id_projects_id_fk" FOREIGN KEY ("project_id") REFERENCES "projects"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "rate_agreements" ADD CONSTRAINT "rate_agreements_counterparty_id_counterparties_id_fk" FOREIGN KEY ("counterparty_id") REFERENCES "counterparties"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "rate_agreements" ADD CONSTRAINT "rate_agreements_project_id_projects_id_fk" FOREIGN KEY ("project_id") REFERENCES "projects"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "sessions" ADD CONSTRAINT "sessions_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "statement_items" ADD CONSTRAINT "statement_items_statement_id_statements_id_fk" FOREIGN KEY ("statement_id") REFERENCES "statements"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "statement_items" ADD CONSTRAINT "statement_items_charge_line_id_charge_lines_id_fk" FOREIGN KEY ("charge_line_id") REFERENCES "charge_lines"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "statements" ADD CONSTRAINT "statements_counterparty_id_counterparties_id_fk" FOREIGN KEY ("counterparty_id") REFERENCES "counterparties"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "statements" ADD CONSTRAINT "statements_confirmed_by_users_id_fk" FOREIGN KEY ("confirmed_by") REFERENCES "users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "statements" ADD CONSTRAINT "statements_canceled_by_users_id_fk" FOREIGN KEY ("canceled_by") REFERENCES "users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "statements" ADD CONSTRAINT "statements_created_by_users_id_fk" FOREIGN KEY ("created_by") REFERENCES "users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "statements" ADD CONSTRAINT "statements_replaces_statement_id_statements_id_fk" FOREIGN KEY ("replaces_statement_id") REFERENCES "statements"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "trips" ADD CONSTRAINT "trips_vehicle_use_id_vehicle_uses_id_fk" FOREIGN KEY ("vehicle_use_id") REFERENCES "vehicle_uses"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "use_revisions" ADD CONSTRAINT "use_revisions_vehicle_use_id_vehicle_uses_id_fk" FOREIGN KEY ("vehicle_use_id") REFERENCES "vehicle_uses"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "use_revisions" ADD CONSTRAINT "use_revisions_submitted_by_users_id_fk" FOREIGN KEY ("submitted_by") REFERENCES "users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "use_revisions" ADD CONSTRAINT "use_revisions_decided_by_users_id_fk" FOREIGN KEY ("decided_by") REFERENCES "users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "users" ADD CONSTRAINT "users_driver_id_drivers_id_fk" FOREIGN KEY ("driver_id") REFERENCES "drivers"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "vehicle_uses" ADD CONSTRAINT "vehicle_uses_project_id_projects_id_fk" FOREIGN KEY ("project_id") REFERENCES "projects"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "vehicle_uses" ADD CONSTRAINT "vehicle_uses_work_type_id_work_types_id_fk" FOREIGN KEY ("work_type_id") REFERENCES "work_types"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "vehicle_uses" ADD CONSTRAINT "vehicle_uses_driver_id_drivers_id_fk" FOREIGN KEY ("driver_id") REFERENCES "drivers"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "vehicle_uses" ADD CONSTRAINT "vehicle_uses_vehicle_id_vehicles_id_fk" FOREIGN KEY ("vehicle_id") REFERENCES "vehicles"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "vehicle_uses" ADD CONSTRAINT "vehicle_uses_payee_counterparty_id_counterparties_id_fk" FOREIGN KEY ("payee_counterparty_id") REFERENCES "counterparties"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "vehicle_uses" ADD CONSTRAINT "vehicle_uses_customer_counterparty_id_counterparties_id_fk" FOREIGN KEY ("customer_counterparty_id") REFERENCES "counterparties"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "vehicle_uses" ADD CONSTRAINT "vehicle_uses_approved_revision_id_use_revisions_id_fk" FOREIGN KEY ("approved_revision_id") REFERENCES "use_revisions"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "vehicle_uses" ADD CONSTRAINT "vehicle_uses_created_by_user_id_users_id_fk" FOREIGN KEY ("created_by_user_id") REFERENCES "users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "audit_entity_idx" ON "audit_logs" USING btree ("entity_type","entity_id");--> statement-breakpoint
 CREATE INDEX "charge_use_idx" ON "charge_lines" USING btree ("vehicle_use_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "company_singleton_unique" ON "company_settings" USING btree ((true));--> statement-breakpoint

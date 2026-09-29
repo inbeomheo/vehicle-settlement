@@ -112,3 +112,7 @@ npx tsx scripts/unlock-login.ts --ip unavailable
 감사로그의 사용 건 before/after, 제출본 snapshot, 현재 사용 건의 전체 증빙 목록을 사용 건 version 순으로 비교한다. 증빙이 없던 상태에서 처음 나타난 상태까지 같은 기사이고 버전 증가가 최대 2이며 그 구간에 상충하는 기사 관측이 없을 때만 귀속을 복원한다. 증빙 생성에 최소 1회, 기사를 바꿨다 되돌리는 데 최소 2회의 별도 version 증가가 필요하다는 서비스 계약을 이용한다. 제출 전 담당자 대리 업로드·업로더 역할 변경도 현재 계정과 무관하게 처리한다. 이력 부족·불일치·넓은 버전 공백은 null로 남겨 모든 기사에게 숨기며 담당자는 계속 조회한다. 감사 원문과 제출본은 고치지 않는다.
 
 `SELECT count(*) FROM evidence WHERE owner_driver_id IS NULL;`로 담당자 전용 잔여 건수를 확인할 수 있다. null을 현재 기사로 일괄 채우지 않는다. `evidence_owner_immutable` trigger는 기존 귀속(null 포함)과 부모 사용 건 변경을 금지한다. 신규 증빙은 서버 생성 경로에서 귀속을 저장한다. 기존 파일은 이전 귀속으로 보존하고 새 기사 증빙은 새로 생성한다. 숨겨진 유효 증빙은 계속 사용 건의 제출·정산 근거로 인정된다.
+
+## DEPLOY 전용 스키마·DB 파일 저장
+
+Vercel/Supabase 테스트 배포는 [DEPLOY](DEPLOY.md)의 환경·접속·백업/복구 절차를 따른다. DB_SCHEMA가 있으면 해당 스키마만 다루며 public/drizzle 초기화는 실행하지 않는다. STORAGE_DRIVER=db에서는 증빙과 XLSX 원본을 DB 백업에 포함하고 파일 드라이버로 무결성을 검증한다. JSON/증빙/가져오기 본문은 MAX_UPLOAD_BYTES로 추가 제한하며 Vercel 기본은 4MiB다. 로컬 미설정 한도는 위 F9 절과 동일하다.

@@ -57,6 +57,13 @@
       "when": 1790664000000,
       "tag": "0410_f10_evidence_owner",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790665000000,
+      "tag": "0500_deploy_evidence_blobs",
+      "breakpoints": true
     }
   ]
 }

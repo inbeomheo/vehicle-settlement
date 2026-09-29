@@ -293,3 +293,9 @@ scripts/             db 시작, 시드, 백업/복구
 `0410_f10_evidence_owner.sql`은 evidence에 nullable FK `owner_driver_id`를 추가한다. 서버는 증빙 생성 시 부모 사용 건을 잠그고 당시 driver_id를 기록한다. 업로더의 계정 역할/기사 연결 및 이후 사용 건 기사 변경에 영향을 받지 않으며 DB trigger로 귀속 기사·부모 사용 건 변경을 금지한다. 기존 자료는 버전 이력으로 입증되는 귀속만 복원하고 불명확하면 null(담당자 전용)로 유지한다.
 
 기사는 현재 사용 건·현장 접근 권한과 증빙의 `owner_driver_id = 본인 driver_id`를 모두 충족해야 한다. 제출·승인·정산 확정의 필수 증빙은 기존처럼 해당 사용 건의 유효 증빙 전체로 판단하며, 증빙 열람 가능 여부와 분리한다. 상세 응답은 제한된 현재 증빙의 건수와 필수 정책 충족 여부만 안내용으로 제공한다. [F10 보고서](reports/F10.md) 참조.
+
+## 16. DEPLOY 테스트 배포 확장
+
+사용자 DEPLOY 지시에 따라 DB_SCHEMA 지정 시 전용 스키마와 그 안의 마이그레이션 이력을 사용한다. 미설정 로컬의 public/drizzle 위치는 유지한다. 명시적으로 허용된 초기 SQL 두 파일의 public 한정자 제거 외 기존 업무 마이그레이션은 변경하지 않는다.
+
+`0500_deploy_evidence_blobs.sql`의 `evidence_blobs(storage_key pk, bytes bytea, size int, sha256 text, created_at timestamptz)`는 증빙·가져오기 XLSX 원본을 위한 저장 드라이버다. `STORAGE_DRIVER=db`일 때 업무 트랜잭션에 함께 저장하고, 기본 local은 기존 파일 저장을 유지한다. 증빙 논리 삭제·교체 이력·귀속·권한 계약은 유지한다. 환경·백업·복구·제약은 [DEPLOY](DEPLOY.md)를 따른다.
