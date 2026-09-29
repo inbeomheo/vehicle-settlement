@@ -111,7 +111,7 @@ scripts/             db 시작, 시드, 백업/복구
 **차량 사용 건(VehicleUse) 1 : N 운행(Trip), 1 : N 비용 항목(ChargeLine), 1 : N 증빙(Evidence).**
 
 - `vehicle_uses`
-  - id, use_no(unique, 예 `U-2609-00012`), client_request_id(unique, null 허용 — 생성 멱등)
+  - id, use_no(unique, 예 `U-2609-00012`), client_request_id(unique, null 허용 — 생성 멱등), create_request_hash(nullable SHA-256; 생성 요청 본문 일치 검사, F6)
   - use_date(실제 사용일, date), end_date(null; 월대 등 기간형)
   - project_id, work_type_id(null), requester(text), driver_id, vehicle_id
   - payee_counterparty_id (지급 대상; 기본값 = 사용일 기준 기사 소속), customer_counterparty_id(null; 고객 청구 대상)

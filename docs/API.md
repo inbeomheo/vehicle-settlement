@@ -7,7 +7,7 @@
 - 쿠키 `sid`: HttpOnly, SameSite=Lax, 30일. 운영에서는 Secure.
 - JSON 변경 요청: `Content-Type: application/json`. 재전송 시 동일 `Idempotency-Key`를 사용한다. 사용자별 키를 트랜잭션 advisory lock으로 직렬화하고 성공 응답을 저장한다. 같은 키에 경로·메서드·원문 body가 다르면 `422 IDEMPOTENCY_MISMATCH`.
 - 실패 응답은 저장하지 않는다. 수정한 요청은 새 키를 사용한다. 재생 때도 현재 사용자 상태·접근 권한을 재검사한다.
-- 생성에는 별도로 `client_request_id`를 권장한다. 같은 식별자는 동일 사용 건으로 수렴한다.
+- 생성에는 별도로 `client_request_id`를 권장한다. 생성 시 검증·기본값 적용 후 본문의 SHA-256을 보관한다. 같은 식별자·같은 본문은 동일 사용 건으로 수렴하고, 다른 본문은 헤더 멱등 키가 달라도 `422 IDEMPOTENCY_MISMATCH`다. 해시는 후속 PATCH로 바뀌지 않는다. 해시가 없는 기존 건은 본문 일치를 증명할 수 없어 새 헤더 키의 생성 재요청을 422로 거부하며 기존 상세에서 PATCH한다(이미 저장된 헤더 멱등 응답 재생은 유지).
 - `version`: **vehicle_uses.version**. PATCH와 submit/approve/request-fix/confirm-by-driver/cancel, 라인 검수 모두 최신 사용 건 버전이 필요하다. 충돌은 `409 VERSION_CONFLICT`, `details.current_version`에 현재 버전을 제공한다.
 - 증빙 변경도 부모 사용 건 version을 증가시킨다. 업로드 완료 뒤 사용 상세를 다시 조회한다. 실패 상태만 변경하거나 동일 파일을 재전송한 경우에는 내용 버전을 증가시키지 않는다.
 - 수량은 `"1"`, `"2.500"` 같은 음이 아닌 decimal 문자열. 원 단위 정수 금액만 허용한다. 서버 금액·단가·승인액 필드를 일반 저장 요청에 넣으면 422다.
@@ -48,7 +48,7 @@
 - 운행 필드: `id?`, `seq`, `status?`(기본 COMPLETED), `origin`, `destination`, `via?`, `depart_at?`, `arrive_at?`, `cargo_desc?`, `quantity?`, `quantity_unit?`, `hours?`, `is_empty_return?`, `notes?`, `client_row_id?`.
 - 비용 필드: `id?`, `trip_id?`, `direction?`(기본 PAYABLE), `charge_type`, `billing_unit?`, `quantity?`, `requested_amount?`, `reason?`, `included_in_base?`. 추가비는 requested_amount와 reason 필수. 일반 저장에서 ADJUSTMENT 생성은 지원하지 않는다(W4 소유).
 - BASE 고정형 단위는 수량 기본 1. PER_TRIP 등의 수량 미입력은 null/PENDING이며 운행 수로 저장하지 않는다. 계약 변경 시 이번 요청의 숫자 수량을 우선한다(일대 3일·명시적 0 포함). 수량을 생략하면 이전 수량을 재사용하지 않고 고정형은 1, 실적형은 null(제출 차단)이다. 폼의 빈 수량 `null`도 새 계약에서는 같은 기본값을 적용한다. 동일 계약에서 수량을 생략하면 기존 값을 유지한다. 기본운임 포함 항목은 computed/approved 0원으로 처리한다.
-- 금액 근거는 계약 snapshot에 저장한다. 수량 변경에는 당시 단가를 사용한다. 사용일·차량·현장·거래처/단위를 변경하면 해당 근거를 새로 조회한다. 요청에 `billing_unit`이 있으면 반드시 그 단위로 조회하며, 생략한 경우에만 단위를 자동 선택한다. 기사 변경에 따른 숨겨진 고객청구 재계산은 서버 소유 값으로 처리한다.
+- 금액 근거는 계약 snapshot에 저장한다. 가져온 파일 단가도 `agreement_snapshot.source=IMPORT`와 함께 보존하며 계약 ID가 없어도 저장 단가(0원 포함)를 사용한다. 수량·비고 변경에는 당시 단가를 사용한다. 사용일·기사·차량·현장·거래처/단위를 실제로 변경하면 해당 근거를 새로 조회한다. 요청에 `billing_unit`이 있으면 반드시 그 단위로 조회하며, 생략한 경우에만 단위를 자동 선택한다. 기사 변경에 따른 숨겨진 고객청구 재계산은 서버 소유 값으로 처리한다.
 - 사용 건 snapshot은 생성·사용 내용 수정 시 현재 기준정보에서 채운다. 기준정보만 수정해도 기존 사용 건이 자동으로 바뀌지는 않는다. 제출 revision은 이전 snapshot을 보존한다.
 - `GET /api/uses/:id`: 사용 건 + `trips`, `charge_lines`, `evidence`(현재 증빙), `revisions`, `duplicate_hint`. 저장·검수 API도 사용 상세를 반환한다. 파일 storage_key는 반환하지 않는다.
 - `GET /api/uses`: `page=1`, `pageSize=20`(최대100), `project_id`, `driver_id`, `from`, `to`, `review_status`, `operation_status`, `search`(사용번호/운반내용), `sort=use_date|created_at|use_no`, `order=asc|desc`.

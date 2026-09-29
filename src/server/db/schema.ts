@@ -253,6 +253,7 @@ export const vehicleUses = pgTable(
     id: id(),
     use_no: text('use_no').notNull().unique(),
     client_request_id: text('client_request_id').unique(),
+    create_request_hash: text('create_request_hash'),
     use_date: date('use_date').notNull(),
     end_date: date('end_date'),
     project_id: uuid('project_id')
