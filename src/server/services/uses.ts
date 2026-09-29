@@ -404,7 +404,7 @@ async function saveCharges(
             vehicle_id: use.vehicle_id,
             use_date: use.use_date,
             direction: input.direction,
-            billing_unit: reprice ? undefined : input.billing_unit,
+            billing_unit: input.billing_unit,
           })
         : null;
     const agreementChanged = !!existing && !preserve && existing.rate_agreement_id !== (rate?.id ?? null);
@@ -416,9 +416,7 @@ async function saveCharges(
     // Omission preserves a quantity only while the same agreement still applies.
     const previousQuantity = agreementChanged ? null : existing?.quantity;
     const q = ['PER_DAY', 'HALF_DAY', 'MONTHLY', 'LUMP_SUM'].includes(unit)
-      ? agreementChanged
-        ? '1'
-        : (input.quantity ?? previousQuantity ?? '1')
+      ? (input.quantity ?? previousQuantity ?? '1')
       : input.quantity !== undefined
         ? input.quantity
         : (previousQuantity ?? null);

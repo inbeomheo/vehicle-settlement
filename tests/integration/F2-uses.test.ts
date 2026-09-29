@@ -54,7 +54,7 @@ it.each(['PER_TRIP', 'PER_HOUR', 'PER_TON', 'PER_M3', 'PER_DAY', 'HALF_DAY', 'MO
   },
 );
 
-it.each(['omitted', 'stale-unit', 'explicit'] as const)(
+it.each(['omitted', 'explicit-unit', 'explicit'] as const)(
   '직접 API 계약 변경 %s도 새 계약 규칙을 적용한다',
   async (kind) => {
     const s = await setupScenario(database().db);
@@ -75,17 +75,17 @@ it.each(['omitted', 'stale-unit', 'explicit'] as const)(
               {
                 id: original.charge_lines[0].id,
                 charge_type: 'BASE' as const,
-                billing_unit: 'PER_DAY' as const,
+                billing_unit: kind === 'explicit' ? ('PER_TRIP' as const) : ('PER_DAY' as const),
                 ...(kind === 'explicit' ? { quantity: '2' } : {}),
               },
             ],
           }),
     });
     expect(use.charge_lines[0]).toMatchObject({
-      rate_agreement_id: rate.id,
-      billing_unit: 'PER_TRIP',
-      quantity: kind === 'explicit' ? '2.000' : null,
-      computed_amount: kind === 'explicit' ? 246912 : null,
+      rate_agreement_id: kind === 'explicit-unit' ? s.rate.id : rate.id,
+      billing_unit: kind === 'explicit-unit' ? 'PER_DAY' : 'PER_TRIP',
+      quantity: kind === 'explicit' ? '2.000' : kind === 'explicit-unit' ? '5.000' : null,
+      computed_amount: kind === 'explicit' ? 246912 : kind === 'explicit-unit' ? 1500000 : null,
     });
   },
 );
