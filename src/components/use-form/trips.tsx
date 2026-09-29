@@ -2,7 +2,17 @@
 import { useContext, useEffect, useState } from 'react';
 import type { UseDetail } from '@/client/types';
 import { operationLabels } from '@/client/types';
-import { Field, button, control, Section, SettingsContext, FixContext, hasFieldValue } from './fields';
+import {
+  Field,
+  button,
+  control,
+  Section,
+  SettingsContext,
+  FixContext,
+  RevealedFieldsContext,
+  hasFieldValue,
+} from './fields';
+import { tripLayout, tripRevealTarget } from './visibility';
 import { fieldKeyForTarget } from '@/shared/form-settings';
 import { newTrip, type FormCharge, type FormTrip } from './model';
 export function TripFields({
@@ -18,6 +28,7 @@ export function TripFields({
 }) {
   const settings = useContext(SettingsContext);
   const fixes = useContext(FixContext);
+  const revealed = useContext(RevealedFieldsContext);
   const [collapsed, setCollapsed] = useState<Set<string>>(
     () =>
       new Set(
@@ -64,21 +75,7 @@ export function TripFields({
       },
     ]);
   };
-  const showQuantity =
-    settings.quantity === 'REQUIRED' || billingUnits.some((unit) => unit === 'PER_TON' || unit === 'PER_M3');
-  const showHours = settings.hours === 'REQUIRED' || billingUnits.includes('PER_HOUR');
-  const detailKeys = (
-    [
-      'via',
-      'quantity',
-      'quantity_unit',
-      'hours',
-      'depart_at',
-      'arrive_at',
-      'is_empty_return',
-      'trip_notes',
-    ] as const
-  ).filter((key) => !(key === 'quantity' && showQuantity) && !(key === 'hours' && showHours));
+  const { showQuantity, showHours, detailKeys } = tripLayout(settings, billingUnits);
   const detailValue = (trip: FormTrip, key: (typeof detailKeys)[number]) =>
     key === 'is_empty_return'
       ? !!trip.id || trip.is_empty_return
@@ -110,6 +107,7 @@ export function TripFields({
     <Field
       key={key}
       target={`trip:${index + 1}.${key}`}
+      revealTarget={tripRevealTarget(trip, key)}
       label={`${index + 1}회차 ${{ origin: '출발', destination: '도착', via: '경유 (쉼표 구분)', cargo_desc: '화물', quantity: '수량', quantity_unit: '수량 단위', hours: '시간' }[key]}`}
     >
       <input
@@ -205,6 +203,7 @@ export function TripFields({
                 <Field
                   label={`${i + 1}회차 운행 상태`}
                   target={`trip:${i + 1}.status`}
+                  revealTarget={tripRevealTarget(t, 'status')}
                   hasValue={!!t.id || t.status !== 'COMPLETED'}
                 >
                   <select
@@ -223,10 +222,16 @@ export function TripFields({
                 {showHours && inputField(t, i, 'hours')}
               </div>
               {(hasDetailFix(i) ||
-                detailKeys.some((key) => settings[key] !== 'HIDDEN' || detailValue(t, key))) && (
+                detailKeys.some(
+                  (key) =>
+                    settings[key] !== 'HIDDEN' ||
+                    detailValue(t, key) ||
+                    revealed.has(tripRevealTarget(t, key === 'trip_notes' ? 'notes' : key)),
+                )) && (
                 <details
                   open={
                     hasDetailFix(i) ||
+                    revealed.has(tripRevealTarget(t, 'details')) ||
                     requiredDetails ||
                     detailKeys.some((key) => detailValue(t, key)) ||
                     undefined
@@ -241,7 +246,11 @@ export function TripFields({
                     {!showQuantity && inputField(t, i, 'quantity')}
                     {inputField(t, i, 'quantity_unit')}
                     {!showHours && inputField(t, i, 'hours')}
-                    <Field label={`${i + 1}회차 출발시각 (서울)`} target={`trip:${i + 1}.depart_at`}>
+                    <Field
+                      label={`${i + 1}회차 출발시각 (서울)`}
+                      target={`trip:${i + 1}.depart_at`}
+                      revealTarget={tripRevealTarget(t, 'depart_at')}
+                    >
                       <input
                         className={control}
                         type="datetime-local"
@@ -249,7 +258,11 @@ export function TripFields({
                         onChange={(e) => change(i, { depart_at: e.target.value })}
                       />
                     </Field>
-                    <Field label={`${i + 1}회차 도착시각 (서울)`} target={`trip:${i + 1}.arrive_at`}>
+                    <Field
+                      label={`${i + 1}회차 도착시각 (서울)`}
+                      target={`trip:${i + 1}.arrive_at`}
+                      revealTarget={tripRevealTarget(t, 'arrive_at')}
+                    >
                       <input
                         className={control}
                         type="datetime-local"
@@ -260,6 +273,7 @@ export function TripFields({
                     <Field
                       label={`${i + 1}회차 공차회차`}
                       target={`trip:${i + 1}.is_empty_return`}
+                      revealTarget={tripRevealTarget(t, 'is_empty_return')}
                       hasValue={!!t.id || t.is_empty_return}
                     >
                       <input
@@ -269,7 +283,11 @@ export function TripFields({
                         onChange={(e) => change(i, { is_empty_return: e.target.checked })}
                       />
                     </Field>
-                    <Field label={`${i + 1}회차 비고`} target={`trip:${i + 1}.notes`}>
+                    <Field
+                      label={`${i + 1}회차 비고`}
+                      target={`trip:${i + 1}.notes`}
+                      revealTarget={tripRevealTarget(t, 'notes')}
+                    >
                       <input
                         className={control}
                         value={t.notes ?? ''}

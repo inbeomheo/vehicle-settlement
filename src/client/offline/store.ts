@@ -20,6 +20,8 @@ export type Draft = {
   userId: string;
   mode: Mode;
   form: FormValues;
+  // Local UI state only; optional for drafts created before visibility was remembered.
+  revealedFields?: string[];
   uploads: PendingEvidence[];
   updatedAt: number;
   serverId?: string;

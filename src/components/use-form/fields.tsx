@@ -9,7 +9,10 @@ import {
   type ReactNode,
 } from 'react';
 import { defaultFieldModes, fieldKeyForTarget, type FieldModes } from '@/shared/form-settings';
+import { hasFieldValue } from './visibility';
+export { hasFieldValue } from './visibility';
 export const SettingsContext = createContext<FieldModes>(defaultFieldModes('manager'));
+export const RevealedFieldsContext = createContext<ReadonlySet<string>>(new Set());
 export const control =
   'min-h-12 w-full min-w-0 rounded-xl border border-slate-300 bg-white px-3 py-2 text-base disabled:bg-slate-100';
 const buttonBase =
@@ -20,22 +23,25 @@ export const FixContext = createContext<{ target: string; message: string }[]>([
 export function FormContexts({
   fixes,
   modes,
+  revealed,
   children,
 }: {
   fixes: { target: string; message: string }[];
   modes: FieldModes;
+  revealed?: ReadonlySet<string>;
   children: ReactNode;
 }) {
   return (
     <SettingsContext.Provider value={modes}>
-      <FixContext.Provider value={fixes}>{children}</FixContext.Provider>
+      <FixContext.Provider value={fixes}>
+        <RevealedFieldsContext.Provider value={revealed ?? new Set()}>
+          {children}
+        </RevealedFieldsContext.Provider>
+      </FixContext.Provider>
     </SettingsContext.Provider>
   );
 }
 
-export function hasFieldValue(value: unknown): boolean {
-  return value !== undefined && value !== null && value !== '' && (!Array.isArray(value) || value.length > 0);
-}
 export function HiddenFieldNotice() {
   return <p className="mt-2 text-sm text-slate-600">관리자 설정상 숨김 항목입니다</p>;
 }
@@ -44,11 +50,13 @@ export function Field({
   target,
   children,
   hasValue,
+  revealTarget = target,
 }: {
   label: string;
   target?: string;
   children?: ReactNode;
   hasValue?: boolean;
+  revealTarget?: string;
 }) {
   const inputId = useId();
   const fixes = useContext(FixContext).filter(
@@ -56,9 +64,15 @@ export function Field({
   );
   const key = fieldKeyForTarget(target);
   const modes = useContext(SettingsContext);
+  const revealed = useContext(RevealedFieldsContext);
   const hidden = !!key && modes[key] === 'HIDDEN';
   const input = isValidElement<{ value?: unknown; checked?: boolean }>(children) ? children : undefined;
-  if (hidden && !fixes.length && !(hasValue ?? hasFieldValue(input?.props.value ?? input?.props.checked)))
+  if (
+    hidden &&
+    !fixes.length &&
+    !(revealTarget && revealed.has(revealTarget)) &&
+    !(hasValue ?? hasFieldValue(input?.props.value ?? input?.props.checked))
+  )
     return null;
   const required = !!key && modes[key] === 'REQUIRED';
   return (
