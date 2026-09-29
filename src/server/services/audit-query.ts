@@ -1,4 +1,6 @@
-import { sql } from 'drizzle-orm';
+import { inArray, sql } from 'drizzle-orm';
+import { projects, useRevisions } from '../db/schema';
+import { fieldLabels, type FieldKey } from '../../shared/form-settings';
 import { z } from 'zod';
 import type { Context } from '../context';
 import { accessibleUseFilter } from '../authz';
@@ -14,6 +16,7 @@ export const auditQuerySchema = z
     user_id: uuid.optional(),
     use_id: uuid.optional(),
     search: z.string().trim().max(100).optional(),
+    include_sessions: z.enum(['true', 'false']).default('false'),
     from: dateString.optional(),
     to: dateString.optional(),
   })
@@ -27,6 +30,63 @@ function stripSecrets(value: unknown): unknown {
       .map(([key, item]) => [key, stripSecrets(item)]),
   );
 }
+type AuditRecord = {
+  action: string;
+  entity_type: string;
+  before: unknown;
+  after: unknown;
+  entity_label?: string;
+};
+async function readableAuditRows(ctx: Context, input: unknown) {
+  const rows = stripSecrets(input) as AuditRecord[];
+  const revisionIds = new Set<string>();
+  function visit(value: unknown, replace?: Map<string, string>): unknown {
+    if (!value || typeof value !== 'object') return value;
+    if (Array.isArray(value)) return value.map((item) => visit(item, replace));
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => {
+        if (key === 'approved_revision_id' && typeof item === 'string') {
+          if (uuid.safeParse(item).success) revisionIds.add(item);
+          return [key, replace ? (replace.get(item) ?? '제출본 정보 없음') : item];
+        }
+        return [key, visit(item, replace)];
+      }),
+    );
+  }
+  visit(rows);
+  const revisions = revisionIds.size
+    ? await ctx.db
+        .select({ id: useRevisions.id, no: useRevisions.revision_no })
+        .from(useRevisions)
+        .where(inArray(useRevisions.id, [...revisionIds]))
+    : [];
+  const revisionLabels = new Map(revisions.map((row) => [row.id, `제출본 #${row.no}`]));
+  const settings = rows.filter((row) => row.entity_type === 'form_field_setting');
+  const projectIds = settings
+    .map((row) => (row.after ?? row.before) as Record<string, unknown>)
+    .map((value) => value?.project_id)
+    .filter((id): id is string => typeof id === 'string' && uuid.safeParse(id).success);
+  const projectRows = projectIds.length
+    ? await ctx.db
+        .select({ id: projects.id, name: projects.name })
+        .from(projects)
+        .where(inArray(projects.id, projectIds))
+    : [];
+  const projectNames = new Map(projectRows.map((row) => [row.id, row.name]));
+  return rows.map((row) => {
+    const value = (row.after ?? row.before) as Record<string, unknown> | null;
+    const entityLabel =
+      row.entity_type === 'form_field_setting' && value
+        ? `${fieldLabels[value.field_key as FieldKey] ?? '입력 항목'}(${value.project_name ?? (value.project_id ? (projectNames.get(String(value.project_id)) ?? '현장 정보 없음') : '회사 기본값')})`
+        : undefined;
+    return {
+      ...row,
+      before: visit(row.before, revisionLabels),
+      after: visit(row.after, revisionLabels),
+      ...(entityLabel ? { entity_label: entityLabel } : {}),
+    };
+  });
+}
 export async function queryAudit(ctx: Context, raw: unknown) {
   await managerOnly(ctx);
   const q = auditQuerySchema.parse(raw);
@@ -39,6 +99,7 @@ export async function queryAudit(ctx: Context, raw: unknown) {
     OR (a.entity_type='charge_line' AND EXISTS (SELECT 1 FROM charge_lines cl WHERE cl.id=a.entity_id AND cl.vehicle_use_id=vehicle_uses.id))
     OR (a.entity_type='evidence' AND EXISTS (SELECT 1 FROM evidence e WHERE e.id=a.entity_id AND e.vehicle_use_id=vehicle_uses.id))))`);
   const permitted = sql.join([...clauses], sql` AND `);
+  if (q.include_sessions !== 'true') clauses.push(sql`a.entity_type <> 'session'`);
   if (q.entity_type) clauses.push(sql`a.entity_type=${q.entity_type}`);
   if (q.entity_id) clauses.push(sql`a.entity_id=${q.entity_id}::uuid`);
   if (q.user_id) clauses.push(sql`a.user_id=${q.user_id}::uuid`);
@@ -61,7 +122,7 @@ export async function queryAudit(ctx: Context, raw: unknown) {
       COALESCE((SELECT jsonb_agg(t ORDER BY t.at DESC,t.id) FROM (SELECT * FROM filtered ORDER BY at DESC,id LIMIT ${q.pageSize} OFFSET ${(q.page - 1) * q.pageSize}) t),'[]'::jsonb) AS rows,
       COALESCE((SELECT jsonb_agg(u ORDER BY u.name,u.id) FROM visible_users u),'[]'::jsonb) AS user_options`);
   return {
-    rows: stripSecrets(result.rows[0].rows),
+    rows: await readableAuditRows(ctx, result.rows[0].rows),
     total: result.rows[0].total,
     page: q.page,
     pageSize: q.pageSize,

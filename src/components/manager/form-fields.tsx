@@ -23,9 +23,15 @@ import {
   useRemote,
 } from './common';
 
-export function FormFieldSettings() {
+const groups = [
+  { key: 'use', label: '사용 정보', fields: fieldKeys.slice(0, 6) },
+  { key: 'trips', label: '운행', fields: fieldKeys.slice(6, -1) },
+  { key: 'costs', label: '비용', fields: fieldKeys.slice(-1) },
+];
+export function FormFieldSettings({ initialProject = '' }: { initialProject?: string }) {
   const projects = useRemote<{ id: string; name: string }[]>('/api/admin/projects');
-  const [project, setProject] = useState('');
+  const [project, setProject] = useState(initialProject);
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
   const [settings, setSettings] = useState<AdminFieldSettings>();
   const [fields, setFields] = useState<FieldSetting[]>([]);
   const [attempt, setAttempt] = useState(0);
@@ -33,6 +39,21 @@ export function FormFieldSettings() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [conflict, setConflict] = useState<AdminFieldSettings>();
+  useEffect(() => {
+    const restore = () => {
+      const candidate = new URLSearchParams(window.location.search).get('project');
+      setProject(projects.data?.some((row) => row.id === candidate) ? candidate! : '');
+    };
+    window.addEventListener('popstate', restore);
+    return () => window.removeEventListener('popstate', restore);
+  }, [projects.data]);
+  function selectProject(value: string) {
+    setProject(value);
+    const url = new URL(window.location.href);
+    if (value) url.searchParams.set('project', value);
+    else url.searchParams.delete('project');
+    window.history.pushState(null, '', url.pathname + url.search);
+  }
   useEffect(() => {
     let alive = true;
     setSettings(undefined);
@@ -111,7 +132,7 @@ export function FormFieldSettings() {
             aria-label="설정할 현장"
             value={project}
             disabled={busy}
-            onChange={(event) => setProject(event.target.value)}
+            onChange={(event) => selectProject(event.target.value)}
           >
             <option value="">회사 기본값</option>
             {projects.data?.map((row) => (
@@ -150,64 +171,87 @@ export function FormFieldSettings() {
         </button>
       ) : (
         <form onSubmit={save} className="space-y-4">
-          <fieldset disabled={busy} className="grid min-w-0 gap-3 lg:grid-cols-2">
-            {fields.map((row, index) => (
-              <section
-                key={row.field_key}
-                className={panelClass}
-                aria-label={`${fieldLabels[row.field_key]} 설정`}
-              >
-                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                  <h2 className="font-bold">
-                    {index < 6 ? '사용 건' : row.field_key === 'extra_charges' ? '비용' : '운행'} ·{' '}
-                    {fieldLabels[row.field_key]}
-                  </h2>
-                  {project && (row.driver_mode || row.manager_mode) && (
-                    <button
-                      type="button"
-                      className={secondaryClass}
-                      onClick={() => patch(row.field_key, { driver_mode: null, manager_mode: null })}
-                    >
-                      재정의 해제
-                    </button>
-                  )}
-                </div>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {(['driver', 'manager'] as const).map((role) => (
-                    <Field
-                      key={role}
-                      title={`${fieldLabels[row.field_key]} · ${role === 'driver' ? '기사' : '담당자'}`}
-                    >
-                      <select
-                        className={inputClass}
-                        aria-label={`${fieldLabels[row.field_key]} · ${role === 'driver' ? '기사' : '담당자'}`}
-                        value={row[`${role}_mode`] ?? ''}
-                        onChange={(event) =>
-                          patch(row.field_key, {
-                            [`${role}_mode`]: (event.target.value as FieldMode) || null,
-                          })
-                        }
+          <fieldset disabled={busy} className="min-w-0 space-y-4">
+            {groups.map((group) => (
+              <section key={group.key} aria-label={`${group.label} 그룹`}>
+                <button
+                  type="button"
+                  className={`${secondaryClass} mb-3 w-full justify-between md:hidden`}
+                  aria-expanded={!!openGroups[group.key]}
+                  aria-controls={`field-group-${group.key}`}
+                  onClick={() =>
+                    setOpenGroups((previous) => ({ ...previous, [group.key]: !previous[group.key] }))
+                  }
+                >
+                  {group.label} · {group.fields.length}개 {openGroups[group.key] ? '접기 −' : '펼치기 +'}
+                </button>
+                <h2 className="mb-3 hidden font-bold md:block">{group.label}</h2>
+                <div
+                  id={`field-group-${group.key}`}
+                  className={`${openGroups[group.key] ? 'grid' : 'hidden'} min-w-0 gap-3 md:grid lg:grid-cols-2`}
+                >
+                  {fields
+                    .filter((row) => group.fields.includes(row.field_key))
+                    .map((row) => (
+                      <section
+                        key={row.field_key}
+                        className={panelClass}
+                        aria-label={`${fieldLabels[row.field_key]} 설정`}
                       >
-                        <option value="">
-                          {project ? '회사 기본 따름' : '초기 기본값'} ·{' '}
-                          {modeLabels[inherited![role][row.field_key]]}
-                        </option>
-                        {fieldModes.map((mode) => (
-                          <option key={mode} value={mode}>
-                            {modeLabels[mode]}
-                          </option>
-                        ))}
-                      </select>
-                    </Field>
-                  ))}
+                        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                          <h3 className="font-bold">{fieldLabels[row.field_key]}</h3>
+                          {project && (row.driver_mode || row.manager_mode) && (
+                            <button
+                              type="button"
+                              className={secondaryClass}
+                              onClick={() => patch(row.field_key, { driver_mode: null, manager_mode: null })}
+                            >
+                              재정의 해제
+                            </button>
+                          )}
+                        </div>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          {(['driver', 'manager'] as const).map((role) => (
+                            <Field
+                              key={role}
+                              title={`${fieldLabels[row.field_key]} · ${role === 'driver' ? '기사' : '담당자'}`}
+                            >
+                              <select
+                                className={inputClass}
+                                aria-label={`${fieldLabels[row.field_key]} · ${role === 'driver' ? '기사' : '담당자'}`}
+                                value={row[`${role}_mode`] ?? ''}
+                                onChange={(event) =>
+                                  patch(row.field_key, {
+                                    [`${role}_mode`]: (event.target.value as FieldMode) || null,
+                                  })
+                                }
+                              >
+                                <option value="">
+                                  {project ? '회사 기본 따름' : '초기 기본값'} ·{' '}
+                                  {modeLabels[inherited![role][row.field_key]]}
+                                </option>
+                                {fieldModes.map((mode) => (
+                                  <option key={mode} value={mode}>
+                                    {modeLabels[mode]}
+                                  </option>
+                                ))}
+                              </select>
+                            </Field>
+                          ))}
+                        </div>
+                        {(row.driver_mode ?? inherited!.driver[row.field_key]) === 'HIDDEN' &&
+                          !!settings.pending_fixes[row.field_key] && (
+                            <p
+                              role="alert"
+                              className="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-900"
+                            >
+                              미해결 보완요청이 {settings.pending_fixes[row.field_key]}건 있습니다. 숨김으로
+                              저장해도 해당 기사는 보완을 마칠 수 있도록 이 항목이 표시됩니다.
+                            </p>
+                          )}
+                      </section>
+                    ))}
                 </div>
-                {(row.driver_mode ?? inherited!.driver[row.field_key]) === 'HIDDEN' &&
-                  !!settings.pending_fixes[row.field_key] && (
-                    <p role="alert" className="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
-                      미해결 보완요청이 {settings.pending_fixes[row.field_key]}건 있습니다. 숨김으로 저장해도
-                      해당 기사는 보완을 마칠 수 있도록 이 항목이 표시됩니다.
-                    </p>
-                  )}
               </section>
             ))}
           </fieldset>

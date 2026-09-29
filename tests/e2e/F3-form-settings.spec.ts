@@ -71,6 +71,7 @@ async function pendingFix() {
 test('숨김 변경 경고를 확인하고 저장해도 기존 보완요청을 보존한다', async ({ page }) => {
   const s = await pendingFix();
   await login(page, s.admin.login_id, '/m/master/form-fields');
+  await page.getByRole('button', { name: /사용 정보.*펼치기/ }).click();
   await page.getByLabel('설정할 현장', { exact: true }).selectOption(s.project.id);
   await expect(page.getByLabel('요청자 · 기사', { exact: true })).toHaveValue('OPTIONAL');
   await page.getByLabel('요청자 · 기사', { exact: true }).selectOption('HIDDEN');

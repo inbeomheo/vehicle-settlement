@@ -78,12 +78,15 @@ export function UseDetail({ id, canSettle = false }: { id: string; canSettle?: b
     driverSettings.data?.project_id === use.project_id ? driverSettings.data.driver_modes : undefined;
   const fixOptions = [
     { target: 'evidence', label: '증빙' },
-    { target: 'cargo_desc', label: '작업내용' },
+    { target: 'cargo_desc', label: '운반 내용' },
     { target: 'requester', label: '요청자' },
-    ...use.trips.map((trip) => ({
-      target: `trip:${trip.seq}.destination`,
-      label: `${trip.seq}회 하차 장소`,
-    })),
+    { target: 'use_date', label: '사용일' },
+    { target: 'vehicle_id', label: '차량' },
+    ...use.trips.flatMap((trip) => [
+      { target: `trip:${trip.seq}.origin`, label: `${trip.seq}회 출발(상차지)` },
+      { target: `trip:${trip.seq}.destination`, label: `${trip.seq}회 도착(하차지)` },
+      { target: `trip:${trip.seq}.cargo_desc`, label: `${trip.seq}회 화물` },
+    ]),
     ...use.charge_lines.map((line) => ({
       target: `charge:${line.id}`,
       label: `${label(line.charge_type)} (${label(line.direction)})`,
@@ -215,7 +218,8 @@ export function UseDetail({ id, canSettle = false }: { id: string; canSettle?: b
               {revision.comment && <p className="mt-2 text-sm">{revision.comment}</p>}
               {revision.fix_items.map((fix, index) => (
                 <p key={index} className="mt-2 rounded bg-amber-50 p-2 text-sm">
-                  {fix.target}: {fix.message}
+                  {fixOptions.find((option) => option.target === fix.target)?.label ?? fix.target}:{' '}
+                  {fix.message}
                 </p>
               ))}
               <details className="mt-3">
@@ -254,7 +258,7 @@ export function UseDetail({ id, canSettle = false }: { id: string; canSettle?: b
                     : '본인 작성',
                 ],
                 ['사용 기간', `${use.use_date}${use.end_date ? ' ~ ' + use.end_date : ''}`],
-                ['작업내용', use.cargo_desc ?? '—'],
+                ['운반 내용', use.cargo_desc ?? '—'],
                 ['비고', use.notes ?? '—'],
               ].map(([title, value]) => (
                 <div key={title}>

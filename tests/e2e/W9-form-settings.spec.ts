@@ -92,6 +92,7 @@ test('관리자 회사 필수 변경 → 열린 기사 폼 제출 전 검사, �
     await fillTrip(driverPage);
     await login(page, s.admin.login_id, '/m/master');
     await page.getByRole('link', { name: /입력 항목 설정/ }).click();
+    await page.getByRole('button', { name: /사용 정보.*펼치기/ }).click();
     await page.getByLabel('요청자 · 기사', { exact: true }).selectOption('REQUIRED');
     await expect(page.getByRole('region', { name: '기사 폼 미리보기' })).toContainText('요청자 · 필수');
     await page.getByRole('button', { name: '설정 저장', exact: true }).click();
@@ -132,6 +133,7 @@ test('관리자 회사 필수 변경 → 열린 기사 폼 제출 전 검사, �
     await driverPage.getByLabel('현장', { exact: true }).selectOption(s.project.id);
     await expect(driverPage.getByLabel(/요청자.*필수/)).toBeVisible();
     await page.getByRole('link', { name: '변경 이력', exact: true }).last().click();
+    await page.getByRole('button', { name: '필터 펼치기 +', exact: true }).click();
     await page.getByLabel('대상 유형').selectOption('form_field_setting');
     await page.getByRole('button', { name: '이력 조회', exact: true }).click();
     await expect(page.getByText('입력 항목 설정 변경', { exact: true }).first()).toBeVisible();
@@ -194,6 +196,7 @@ test('현장 설정 IndexedDB 캐시로 오프라인 재시작·필수 검사·�
 test('관리자 동시 편집 충돌은 덮어쓰지 않고 최신 설정 불러오기 제공', async ({ page }) => {
   const s = await setupScenario(database.db);
   await login(page, s.admin.login_id, '/m/master/form-fields');
+  await page.getByRole('button', { name: /사용 정보.*펼치기/ }).click();
   await page.getByLabel('설정할 현장', { exact: true }).selectOption(s.project.id);
   await page.getByLabel('요청자 · 기사', { exact: true }).selectOption('OPTIONAL');
   await saveFormSettings(s.adminCtx, {

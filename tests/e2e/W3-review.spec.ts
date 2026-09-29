@@ -140,7 +140,7 @@ test('보완 항목·메시지 생성과 360px 화면의 사용대장', async ({
   await page.getByRole('button', { name: '보완 요청 보내기' }).click();
   await expect(page.getByRole('status').filter({ hasText: '보완 요청을 전달했습니다' })).toBeVisible();
   await page.getByRole('tab', { name: '제출·검수 이력' }).click();
-  await expect(page.getByText('trip:1.destination: 하차 장소를 정확하게 입력해 주세요.')).toBeVisible();
+  await expect(page.getByText('1회 도착(하차지): 하차 장소를 정확하게 입력해 주세요.')).toBeVisible();
   await page.setViewportSize({ width: 360, height: 800 });
   await page.getByRole('button', { name: '메뉴', exact: true }).click();
   await page.getByRole('link', { name: '차량 사용대장', exact: true }).click();
