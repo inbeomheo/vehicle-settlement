@@ -7,7 +7,7 @@ export default async function Layout({ children }: { children: React.ReactNode }
   return (
     <div className="min-h-dvh">
       <header className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-4">
-        <a href="/d" className="font-bold">
+        <a href="/d" className="inline-flex min-h-11 min-w-11 items-center font-bold">
           차량 사용·정산
         </a>
         <div className="flex items-center gap-2">

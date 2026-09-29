@@ -3,7 +3,9 @@ import { tripFieldKeys, type FieldModes } from '@/shared/form-settings';
 import type { FormCharge, FormTrip } from './model';
 
 export function hasFieldValue(value: unknown): boolean {
-  return value !== undefined && value !== null && value !== '' && (!Array.isArray(value) || value.length > 0);
+  if (typeof value === 'string') return value.trim() !== '';
+  if (Array.isArray(value)) return value.some(hasFieldValue);
+  return value !== undefined && value !== null && value !== false;
 }
 
 // Sequence numbers change when rows move; visibility belongs to the row itself.
@@ -47,7 +49,7 @@ export function revealDraftFields(draft: Draft, modes: FieldModes): Draft {
     const target = key === 'work_type' ? 'work_type_id' : key;
     const hasValue =
       key === 'operation_status'
-        ? !!draft.server || draft.form.operation_status !== 'COMPLETED'
+        ? draft.form.operation_status !== 'COMPLETED'
         : hasFieldValue(draft.form[target]);
     if (
       modes[key] !== 'HIDDEN' ||
@@ -65,9 +67,9 @@ export function revealDraftFields(draft: Draft, modes: FieldModes): Draft {
       if (!key) continue;
       const hasValue =
         property === 'status'
-          ? !!trip.id || trip.status !== 'COMPLETED'
+          ? trip.status !== 'COMPLETED'
           : property === 'is_empty_return'
-            ? !!trip.id || trip.is_empty_return
+            ? trip.is_empty_return
             : hasFieldValue(trip[property as keyof FormTrip]);
       const hasFix = fixes.some((fix) => fix.target === `trip:${index + 1}.${property}`);
       if (modes[key] !== 'HIDDEN' || hasValue || hasFix) revealed.add(tripRevealTarget(trip, property));

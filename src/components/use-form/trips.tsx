@@ -9,6 +9,7 @@ import {
   Section,
   SettingsContext,
   FixContext,
+  ValidationContext,
   RevealedFieldsContext,
   hasFieldValue,
 } from './fields';
@@ -28,6 +29,8 @@ export function TripFields({
 }) {
   const settings = useContext(SettingsContext);
   const fixes = useContext(FixContext);
+  const errors = useContext(ValidationContext);
+  const attention = [...fixes, ...errors];
   const revealed = useContext(RevealedFieldsContext);
   const [collapsed, setCollapsed] = useState<Set<string>>(
     () =>
@@ -78,17 +81,18 @@ export function TripFields({
   const { showQuantity, showHours, detailKeys } = tripLayout(settings, billingUnits);
   const detailValue = (trip: FormTrip, key: (typeof detailKeys)[number]) =>
     key === 'is_empty_return'
-      ? !!trip.id || trip.is_empty_return
+      ? trip.is_empty_return
       : hasFieldValue(trip[key === 'trip_notes' ? 'notes' : key]);
   const requiredDetails = detailKeys.some((key) => settings[key] === 'REQUIRED');
   const hasDetailFix = (index: number) =>
-    fixes.some(
+    attention.some(
       (fix) =>
         fix.target.startsWith(`trip:${index + 1}.`) &&
         detailKeys.some((key) => key === fieldKeyForTarget(fix.target)),
     );
   const isCollapsed = (trip: FormTrip, index: number) =>
-    collapsed.has(trip.client_row_id) && !fixes.some((fix) => fix.target.startsWith(`trip:${index + 1}.`));
+    collapsed.has(trip.client_row_id) &&
+    !attention.some((fix) => fix.target.startsWith(`trip:${index + 1}.`));
   const routes = [
     ...new Map(recent.flatMap((u) => u.trips).map((t) => [`${t.origin} → ${t.destination}`, t])).entries(),
   ].slice(0, 8);
@@ -204,7 +208,7 @@ export function TripFields({
                   label={`${i + 1}회차 운행 상태`}
                   target={`trip:${i + 1}.status`}
                   revealTarget={tripRevealTarget(t, 'status')}
-                  hasValue={!!t.id || t.status !== 'COMPLETED'}
+                  hasValue={t.status !== 'COMPLETED'}
                 >
                   <select
                     className={control}
@@ -274,7 +278,7 @@ export function TripFields({
                       label={`${i + 1}회차 공차회차`}
                       target={`trip:${i + 1}.is_empty_return`}
                       revealTarget={tripRevealTarget(t, 'is_empty_return')}
-                      hasValue={!!t.id || t.is_empty_return}
+                      hasValue={t.is_empty_return}
                     >
                       <input
                         className="h-11 w-11 text-base"

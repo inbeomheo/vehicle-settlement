@@ -143,7 +143,7 @@ scripts/             db 시작, 시드, 백업/복구
   - adjusts_statement_id(null) — `ADJUSTMENT` 가 어떤 원명세를 정정하는지
   - locked_statement_id(null) — 유효 **확정** 명세에 포함되면 설정, 명세 취소 시 해제
   - deleted_at(null; 논리 삭제), version
-  - **청구 수량은 운행 행 수로 자동 해석하지 않는다.** UI는 PER_TRIP일 때 완료 운행 수를 "제안"만 하고 사용자가 확정한다. PER_DAY/HALF_DAY/MONTHLY/LUMP_SUM 은 기본 수량 1.
+  - **서버는 청구 수량을 운행 행 수로 자동 해석하지 않는다.** UI는 PER_TRIP의 미입력 수량에 완료 운행 수를 자동 입력하고 수정 가능함을 안내한다(F7B 사용자 지시). 사용자가 직접 입력·삭제하면 이후 자동 변경하지 않으며, 저장·제출 시 전달한 수량을 서버가 검증·계산한다. PER_DAY/HALF_DAY/MONTHLY/LUMP_SUM 은 기본 수량 1.
 - `evidence` 증빙
   - id, vehicle_use_id, trip_id(null), kind(`PHOTO`|`RECEIPT` 인수증|`WEIGH_TICKET` 계근표|`CONFIRMATION` 확인서|`SLIP_NO` 전표번호(텍스트형 대체증빙)|`OTHER`)
   - client_upload_id(unique; 업로드 멱등), storage_key(null), original_name, mime, size, sha256, text_value(전표번호 등)

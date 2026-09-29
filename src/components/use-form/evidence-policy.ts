@@ -1,6 +1,16 @@
 import type { UseDetail } from '@/client/types';
 import type { PendingEvidence } from '@/client/offline/store';
 
+export function evidenceRequirement(policy: string | undefined) {
+  if (!policy || policy === 'NONE') return '';
+  return `사진·인수증·계근표·확인서 중 1개 이상${policy === 'PHOTO_OR_ALTERNATIVE' ? ' 또는 전표번호' : ''}`;
+}
+
+export function evidenceInstruction(policy: string | undefined) {
+  const requirement = evidenceRequirement(policy);
+  return requirement ? `${requirement}${policy === 'PHOTO_OR_ALTERNATIVE' ? '를' : '을'} 등록하세요.` : '';
+}
+
 export function evidenceError(
   policy: string | undefined,
   existing: UseDetail['evidence'],
@@ -18,7 +28,5 @@ export function evidenceError(
       (f) => f.upload_status === 'UPLOADED' && f.text_value?.trim() && alternativeKinds.includes(f.kind),
     ) || pending.some((f) => f.text_value?.trim() && alternativeKinds.includes(f.kind));
   if (file || (policy === 'PHOTO_OR_ALTERNATIVE' && alternative)) return '';
-  return policy === 'PHOTO_OR_ALTERNATIVE'
-    ? '사진 또는 인수증을 1개 이상 첨부하거나 전표번호를 입력하세요'
-    : '사진 또는 인수증을 1개 이상 첨부하세요';
+  return evidenceInstruction(policy);
 }

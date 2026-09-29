@@ -34,7 +34,8 @@ test('대리 입력 신규·수정 문맥, 실제 기사 변경 시 차량·단�
   await expect(page.getByLabel('차량', { exact: true })).toHaveValue(second.vehicle.id);
   await expect(page.getByLabel('과금 단위', { exact: true })).toHaveValue('PER_TRIP');
   await expect(page.getByText('회당·건당 · 단가 123,456원', { exact: true })).toBeVisible();
-  await expect(page.getByLabel('청구수량', { exact: true })).toHaveValue('');
+  await expect(page.getByLabel('청구수량', { exact: true })).toHaveValue('1');
+  await expect(page.getByText('운행 1회 기준 자동 입력, 수정 가능', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: '검수 대기로 제출', exact: true })).toBeVisible();
   await expect(page.getByRole('status')).toHaveText('이 기기에 임시저장됨');
   await page.getByText('1회차 상세 입력', { exact: true }).click();

@@ -199,7 +199,7 @@ it('클라이언트 증빙 정책은 파일·대체증빙·교체 예정 파일�
   const s = await setupScenario(database().db);
   const use = json(await createUse(s.driverCtx, s.input));
   expect(evidenceError('NONE', use.evidence, [])).toBe('');
-  expect(evidenceError('PHOTO_REQUIRED', [], [])).toContain('사진 또는 인수증');
+  expect(evidenceError('PHOTO_REQUIRED', [], [])).toContain('사진·인수증·계근표·확인서 중 1개 이상');
   const slip = {
     client_upload_id: 'slip',
     kind: 'SLIP_NO' as const,
@@ -207,7 +207,7 @@ it('클라이언트 증빙 정책은 파일·대체증빙·교체 예정 파일�
     status: 'pending' as const,
     progress: 0,
   };
-  expect(evidenceError('PHOTO_REQUIRED', [], [slip])).toContain('사진 또는 인수증');
+  expect(evidenceError('PHOTO_REQUIRED', [], [slip])).toContain('사진·인수증·계근표·확인서 중 1개 이상');
   expect(evidenceError('PHOTO_OR_ALTERNATIVE', [], [slip])).toBe('');
   expect(evidenceError('PHOTO_REQUIRED', [], [{ ...slip, kind: 'PHOTO', blob: new Blob(['image']) }])).toBe(
     '',

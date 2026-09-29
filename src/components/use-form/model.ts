@@ -1,4 +1,5 @@
 import { requiredFieldErrors, type FieldModes } from '@/shared/form-settings';
+import Decimal from 'decimal.js';
 import type { CreateUseInput } from '@/server/services/schemas';
 import type { Lookups, Mode, UseDetail } from '@/client/types';
 import { todaySeoul } from '@/client/types';
@@ -18,6 +19,8 @@ export type FormCharge = Omit<ChargeInput, 'requested_amount' | 'quantity' | 'bi
   requested_amount: string;
   quantity: string;
   billing_unit: NonNullable<ChargeInput['billing_unit']> | '';
+  // Local provenance: never overwrite a quantity the user has edited, including an empty one.
+  quantitySource?: 'automatic' | 'manual';
 };
 export type FormValues = {
   use_date: string;
@@ -65,6 +68,13 @@ export function newCharge(direction: 'PAYABLE' | 'RECEIVABLE' = 'PAYABLE', base 
     included_in_base: false,
   };
 }
+export function tripQuantityPatch(charge: FormCharge, trips: FormTrip[]): Partial<FormCharge> | undefined {
+  if (charge.billing_unit !== 'PER_TRIP' || charge.quantitySource === 'manual') return;
+  if (charge.quantitySource !== 'automatic' && charge.quantity !== '') return;
+  const quantity = String(trips.filter((trip) => trip.status === 'COMPLETED').length);
+  if (charge.quantity === quantity && charge.quantitySource === 'automatic') return;
+  return { quantity, quantitySource: 'automatic' };
+}
 export function defaultPayee(lookups: Lookups, driver: string, date: string) {
   return (
     lookups.affiliations
@@ -79,7 +89,7 @@ export function initialValues(lookups: Lookups, project = ''): FormValues {
   return {
     use_date: date,
     end_date: '',
-    project_id: project || lookups.projects[0]?.id || '',
+    project_id: lookups.projects.find((item) => item.id === project)?.id ?? lookups.projects[0]?.id ?? '',
     driver_id: driver?.id ?? '',
     vehicle_id: driver?.default_vehicle_id ?? lookups.vehicles[0]?.id ?? '',
     payee_counterparty_id: defaultPayee(lookups, driver?.id ?? '', date),
@@ -96,7 +106,17 @@ export function initialValues(lookups: Lookups, project = ''): FormValues {
 function localDateTime(value: string | null) {
   return value ? new Date(new Date(value).getTime() + 9 * 3600000).toISOString().slice(0, 16) : '';
 }
-export function fromUse(use: UseDetail, mode: Mode): FormValues {
+function savedQuantitySource(charge: UseDetail['charge_lines'][number], previous?: FormValues) {
+  const before = previous?.charges.find((line) => line.id === charge.id);
+  const unchanged =
+    before &&
+    before.billing_unit === charge.billing_unit &&
+    (charge.quantity === null
+      ? before.quantity === ''
+      : !!before.quantity && new Decimal(before.quantity).eq(charge.quantity));
+  return unchanged ? before.quantitySource : charge.quantity === null ? undefined : 'manual';
+}
+export function fromUse(use: UseDetail, mode: Mode, previous?: FormValues): FormValues {
   return {
     use_date: use.use_date,
     end_date: use.end_date ?? '',
@@ -137,6 +157,7 @@ export function fromUse(use: UseDetail, mode: Mode): FormValues {
         charge_type: c.charge_type as FormCharge['charge_type'],
         billing_unit: c.billing_unit,
         quantity: c.quantity ?? '',
+        quantitySource: savedQuantitySource(c, previous),
         requested_amount: c.requested_amount?.toString() ?? '',
         reason: c.reason,
         included_in_base: c.included_in_base,
@@ -175,8 +196,9 @@ export function toInput(form: FormValues, mode: Mode): CreateUseInput {
     })),
     charge_lines: form.charges
       .filter((c) => mode === 'manager' || c.direction === 'PAYABLE')
-      .map(({ key: _key, ...c }) => {
+      .map(({ key: _key, quantitySource: _quantitySource, ...c }) => {
         void _key;
+        void _quantitySource;
         return {
           ...c,
           billing_unit: c.billing_unit || undefined,
@@ -188,33 +210,39 @@ export function toInput(form: FormValues, mode: Mode): CreateUseInput {
       }),
   };
 }
-export function validate(form: FormValues, intent: 'save' | 'submit' = 'save', modes?: FieldModes) {
-  const errors: string[] = [];
-  if (!form.use_date || !form.project_id || !form.driver_id || !form.vehicle_id)
-    errors.push('사용일·현장·기사·차량을 선택하세요.');
-  if (form.end_date && form.end_date < form.use_date) errors.push('종료일은 사용일 이후여야 합니다.');
+export type FormError = { target: string; reason: string };
+export function validateFields(form: FormValues, intent: 'save' | 'submit' = 'save', modes?: FieldModes) {
+  const errors: FormError[] = [];
+  const add = (target: string, reason: string) => errors.push({ target, reason });
+  for (const key of ['use_date', 'project_id', 'driver_id', 'vehicle_id'] as const)
+    if (!form[key]) add(key, '사용일·현장·기사·차량을 선택하세요.');
+  if (form.end_date && form.end_date < form.use_date) add('end_date', '종료일은 사용일 이후여야 합니다.');
   form.trips.forEach((t, i) => {
-    if (!t.origin.trim() || !t.destination.trim()) errors.push(`${i + 1}회차 출발·도착을 입력하세요.`);
+    for (const key of ['origin', 'destination'] as const)
+      if (!t[key].trim()) add(`trip:${i + 1}.${key}`, `${i + 1}회차 출발·도착을 입력하세요.`);
     if (t.arrive_at && t.depart_at && t.arrive_at < t.depart_at)
-      errors.push(`${i + 1}회차 도착시각을 확인하세요.`);
-    if ([t.quantity, t.hours].some((v) => v && !/^\d{1,9}(\.\d{1,3})?$/.test(v)))
-      errors.push(`${i + 1}회차 수량·시간은 소수 셋째 자리까지 입력하세요.`);
+      add(`trip:${i + 1}.arrive_at`, `${i + 1}회차 도착시각을 확인하세요.`);
+    for (const key of ['quantity', 'hours'] as const)
+      if (t[key] && !/^\d{1,9}(\.\d{1,3})?$/.test(t[key]))
+        add(`trip:${i + 1}.${key}`, `${i + 1}회차 수량·시간은 소수 셋째 자리까지 입력하세요.`);
   });
   form.charges.forEach((c) => {
+    const target = `charge:${c.id ?? c.key}`;
     if (
       intent === 'submit' &&
       c.charge_type === 'BASE' &&
       ['PER_TRIP', 'PER_HOUR', 'PER_TON', 'PER_M3'].includes(c.billing_unit) &&
       !c.quantity
     )
-      errors.push('청구 수량을 입력하세요');
+      add(`${target}.quantity`, '청구 수량을 입력하세요');
     if (c.quantity && !/^\d{1,9}(\.\d{1,3})?$/.test(c.quantity))
-      errors.push('청구수량은 소수 셋째 자리까지 입력하세요.');
-    if (
-      c.charge_type !== 'BASE' &&
-      (!/^\d+$/.test(c.requested_amount) || Number(c.requested_amount) > 2147483647 || !c.reason?.trim())
-    )
-      errors.push('추가 비용은 정수 원 요청액과 사유를 입력하세요.');
+      add(`${target}.quantity`, '청구수량은 소수 셋째 자리까지 입력하세요.');
+    if (c.charge_type !== 'BASE') {
+      const message = '추가 비용은 정수 원 요청액과 사유를 입력하세요.';
+      if (!/^\d+$/.test(c.requested_amount) || Number(c.requested_amount) > 2147483647)
+        add(`${target}.requested_amount`, message);
+      if (!c.reason?.trim()) add(`${target}.reason`, message);
+    }
   });
   if (intent === 'submit') {
     if (modes)
@@ -233,11 +261,15 @@ export function validate(form: FormValues, intent: 'save' | 'submit' = 'save', m
             charge_lines: form.charges,
           },
           modes,
-        ).map((field) => field.reason),
+        ).filter((error) => !error.target.endsWith('.origin')),
       );
-    else if (!form.trips.length) errors.push('출발·도착을 입력한 운행을 1건 이상 추가하세요.');
+    if (!form.trips.length && !errors.some((error) => error.target === 'trips'))
+      add('trips', '출발·도착을 입력한 운행을 1건 이상 추가하세요.');
   }
-  return [...new Set(errors)];
+  return errors;
+}
+export function validate(form: FormValues, intent: 'save' | 'submit' = 'save', modes?: FieldModes) {
+  return [...new Set(validateFields(form, intent, modes).map((error) => error.reason))];
 }
 
 // Copies contain only editable values, never server row IDs or review/statement links.
@@ -267,6 +299,8 @@ export function copyValues(use: UseDetail, mode: Mode): FormValues {
 
 export function resetBaseRates(charges: FormCharge[]) {
   return charges.map((charge) =>
-    charge.charge_type === 'BASE' ? { ...charge, billing_unit: '' as const, quantity: '' } : charge,
+    charge.charge_type === 'BASE'
+      ? { ...charge, billing_unit: '' as const, quantity: '', quantitySource: undefined }
+      : charge,
   );
 }

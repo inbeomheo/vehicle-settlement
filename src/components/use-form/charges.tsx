@@ -4,8 +4,17 @@ import Decimal from 'decimal.js';
 import { api, ApiError } from '@/client/api';
 import { cachedValue, cacheValue } from '@/client/offline/store';
 import { units, chargeKinds, money, type RateResult, type UseDetail } from '@/client/types';
-import { button, control, Field, Section, SettingsContext, FixContext, HiddenFieldNotice } from './fields';
-import { newCharge, type FormCharge, type FormValues } from './model';
+import {
+  button,
+  control,
+  Field,
+  Section,
+  SettingsContext,
+  FixContext,
+  ValidationContext,
+  HiddenFieldNotice,
+} from './fields';
+import { newCharge, tripQuantityPatch, type FormCharge, type FormValues } from './model';
 function RateFields({
   charge,
   form,
@@ -15,7 +24,7 @@ function RateFields({
 }: {
   charge: FormCharge;
   form: FormValues;
-  onChange: (patch: Partial<FormCharge>) => void;
+  onChange: (patch: Partial<FormCharge>, automatic?: boolean) => void;
   userId: string;
   saved?: UseDetail;
 }) {
@@ -76,14 +85,21 @@ function RateFields({
   const rate = preserved ? (previous?.agreement_snapshot as RateResult['rate']) : result?.rate;
   useEffect(() => {
     if (result?.rate && !charge.billing_unit)
-      onChange({
-        billing_unit: result.rate.billing_unit,
-        ...(!charge.quantity &&
-        ['PER_DAY', 'HALF_DAY', 'MONTHLY', 'LUMP_SUM'].includes(result.rate.billing_unit)
-          ? { quantity: '1' }
-          : {}),
-      });
+      onChange(
+        {
+          billing_unit: result.rate.billing_unit,
+          ...(!charge.quantity &&
+          ['PER_DAY', 'HALF_DAY', 'MONTHLY', 'LUMP_SUM'].includes(result.rate.billing_unit)
+            ? { quantity: '1', quantitySource: 'automatic' }
+            : {}),
+        },
+        true,
+      );
   }, [result, charge.billing_unit, charge.quantity, onChange]);
+  useEffect(() => {
+    const patch = tripQuantityPatch(charge, form.trips);
+    if (patch) onChange(patch, true);
+  }, [charge, form.trips, onChange]);
   let estimate: number | null = null;
   if (rate && /^\d{1,9}(\.\d{1,3})?$/.test(charge.quantity)) {
     const rounding = { HALF_UP: Decimal.ROUND_HALF_UP, DOWN: Decimal.ROUND_DOWN, UP: Decimal.ROUND_UP }[
@@ -124,7 +140,7 @@ function RateFields({
             onChange({
               billing_unit: unit,
               ...(!charge.quantity && ['PER_DAY', 'HALF_DAY', 'MONTHLY', 'LUMP_SUM'].includes(unit)
-                ? { quantity: '1' }
+                ? { quantity: '1', quantitySource: 'automatic' }
                 : {}),
             });
           }}
@@ -137,24 +153,35 @@ function RateFields({
           ))}
         </select>
       </Field>
-      <Field label="청구수량">
+      <Field label="청구수량" target={`charge:${charge.id ?? charge.key}.quantity`}>
         <input
           className={control}
           inputMode="decimal"
           value={charge.quantity}
-          onChange={(e) => onChange({ quantity: e.target.value })}
+          onChange={(e) => onChange({ quantity: e.target.value, quantitySource: 'manual' })}
         />
       </Field>
       {charge.billing_unit === 'PER_TRIP' && (
-        <button
-          type="button"
-          className={button}
-          onClick={() =>
-            onChange({ quantity: String(form.trips.filter((t) => t.status === 'COMPLETED').length) })
-          }
-        >
-          완료 운행 {form.trips.filter((t) => t.status === 'COMPLETED').length}회 제안 적용
-        </button>
+        <>
+          {charge.quantitySource === 'automatic' && (
+            <p className="text-sm text-slate-600">
+              운행 {form.trips.filter((trip) => trip.status === 'COMPLETED').length}회 기준 자동 입력, 수정
+              가능
+            </p>
+          )}
+          <button
+            type="button"
+            className={button}
+            onClick={() =>
+              onChange({
+                quantity: String(form.trips.filter((t) => t.status === 'COMPLETED').length),
+                quantitySource: 'manual',
+              })
+            }
+          >
+            완료 운행 {form.trips.filter((t) => t.status === 'COMPLETED').length}회 제안 적용
+          </button>
+        </>
       )}
     </div>
   );
@@ -168,12 +195,13 @@ export function ChargeFields({
 }: {
   form: FormValues;
   mode: 'driver' | 'manager';
-  onChange: (charges: FormCharge[]) => void;
+  onChange: (charges: FormCharge[], automatic?: boolean) => void;
   userId: string;
   saved?: UseDetail;
 }) {
   const settings = useContext(SettingsContext);
   const fixes = useContext(FixContext);
+  const errors = useContext(ValidationContext);
   const visibleCharges = form.charges.filter((c) => mode === 'manager' || c.direction === 'PAYABLE');
   const hasExtraFix = fixes.some(
     (fix) =>
@@ -184,10 +212,13 @@ export function ChargeFields({
         )),
   );
   const extraHidden = settings.extra_charges === 'HIDDEN';
-  const showExtra = !extraHidden || hasExtraFix;
+  const showExtra = !extraHidden || hasExtraFix || errors.some((error) => error.target === 'charges');
   const hasExtra = visibleCharges.some((c) => c.charge_type !== 'BASE');
-  const patch = (key: string, change: Partial<FormCharge>) =>
-    onChange(form.charges.map((c) => (c.key === key ? { ...c, ...change } : c)));
+  const patch = (key: string, change: Partial<FormCharge>, automatic = false) =>
+    onChange(
+      form.charges.map((c) => (c.key === key ? { ...c, ...change } : c)),
+      automatic,
+    );
   return (
     <Section title={showExtra || hasExtra ? '과금·추가 비용' : '과금'} target="charges">
       {extraHidden && (hasExtra || hasExtraFix) && <HiddenFieldNotice />}
@@ -206,7 +237,7 @@ export function ChargeFields({
                 <RateFields
                   charge={c}
                   form={form}
-                  onChange={(change) => patch(c.key, change)}
+                  onChange={(change, automatic) => patch(c.key, change, automatic)}
                   userId={userId}
                   saved={saved}
                 />
@@ -230,7 +261,10 @@ export function ChargeFields({
                         ))}
                     </select>
                   </Field>
-                  <Field label={`추가비 ${i} 요청액 (원)`}>
+                  <Field
+                    label={`추가비 ${i} 요청액 (원)`}
+                    target={`charge:${c.id ?? c.key}.requested_amount`}
+                  >
                     <input
                       className={control}
                       inputMode="numeric"
@@ -238,7 +272,7 @@ export function ChargeFields({
                       onChange={(e) => patch(c.key, { requested_amount: e.target.value })}
                     />
                   </Field>
-                  <Field label={`추가비 ${i} 사유`}>
+                  <Field label={`추가비 ${i} 사유`} target={`charge:${c.id ?? c.key}.reason`}>
                     <input
                       className={control}
                       value={c.reason ?? ''}
