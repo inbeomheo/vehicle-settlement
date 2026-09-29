@@ -1,3 +1,4 @@
+import { formatQuantity } from '@/shared/quantity';
 import { RestrictedEvidenceNotice } from '@/components/evidence/restricted-notice';
 import { evidenceKinds, money, operationLabels, type UseDetail } from '@/client/types';
 import { Section } from './fields';
@@ -39,10 +40,10 @@ export function ReadOnlyUse({ use }: { use: UseDetail }) {
               {trip.via?.length ? <p>경유: {trip.via.join(', ')}</p> : null}
               {trip.quantity && (
                 <p>
-                  수량 {trip.quantity} {trip.quantity_unit}
+                  수량 {formatQuantity(trip.quantity)} {trip.quantity_unit}
                 </p>
               )}
-              {trip.hours && <p>시간 {trip.hours}</p>}
+              {trip.hours && <p>시간 {formatQuantity(trip.hours)}</p>}
               {trip.notes && <p>{trip.notes}</p>}
             </li>
           ))}

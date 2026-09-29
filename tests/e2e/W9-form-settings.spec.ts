@@ -124,7 +124,7 @@ test('관리자 회사 필수 변경 → 열린 기사 폼 제출 전 검사, �
     await driverPage.locator(`input[name="project_id"][value="${s.project.id}"]`).check();
     await expect(driverPage.getByLabel('요청자', { exact: true })).toBeVisible();
     await expect(driverPage.getByLabel('요청자', { exact: true })).toHaveValue('');
-    await expect(driverPage.locator('[data-fix-target="requester"]')).toContainText(
+    await expect(driverPage.locator('[data-fix-target="requester"]')).not.toContainText(
       '관리자 설정상 숨김 항목입니다',
     );
     await driverPage.locator(`input[name="project_id"][value="${b.id}"]`).check();

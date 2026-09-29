@@ -132,7 +132,7 @@ for (const action of ['수정', '삭제'] as const) {
       '추가 비용은 정수 원 요청액과 사유를 입력하세요.',
     );
     await expect(page.getByLabel('추가비 1 요청액 (원)', { exact: true })).toHaveValue('1200');
-    await expect(page.getByText('관리자 설정상 숨김 항목입니다', { exact: true })).toBeVisible();
+    await expect(page.getByText('관리자 설정상 숨김 항목입니다', { exact: true })).toHaveCount(0);
     await expect(page.getByRole('button', { name: '+ 추가 비용', exact: true })).toHaveCount(0);
     if (action === '수정') {
       await page.getByLabel('추가비 1 사유', { exact: true }).fill('통행료');

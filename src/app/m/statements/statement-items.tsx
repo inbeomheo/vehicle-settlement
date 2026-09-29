@@ -19,13 +19,23 @@ export function StatementItems({ items }: { items: StatementDetail['items'] }) {
     '세액',
     '비고',
   ];
+  // 현장·운반 내용·비고만 줄바꿈하고, 번호·이름·금액은 한 줄로 둔다.
+  const wrapping = new Set(['현장', '운반 내용', '비고']);
+  const numeric = new Set(['운행수', '수량', '단가', '공급가', '세액']);
+  const cellClass = (header: string) =>
+    wrapping.has(header)
+      ? 'min-w-0 break-keep whitespace-pre-wrap md:min-w-32 md:max-w-64'
+      : `min-w-0 break-words md:whitespace-nowrap ${numeric.has(header) ? 'num md:text-right' : ''}`;
   return (
     <div className="md:overflow-x-auto">
-      <table className="block w-full text-left text-sm md:table md:min-w-[1300px]">
+      <table className="block w-full text-left text-sm md:table">
         <thead className="hidden bg-slate-50 md:table-header-group">
           <tr>
             {headers.map((header) => (
-              <th key={header} className="p-3">
+              <th
+                key={header}
+                className={`p-3 whitespace-nowrap ${numeric.has(header) ? 'md:text-right' : ''}`}
+              >
                 {header}
               </th>
             ))}
@@ -69,10 +79,7 @@ export function StatementItems({ items }: { items: StatementDetail['items'] }) {
                 className="grid grid-cols-2 rounded-lg border border-slate-200 p-2 align-top md:table-row md:rounded-none md:border-0 md:border-b md:p-0"
               >
                 {values.map((value, index) => (
-                  <td
-                    key={headers[index]}
-                    className="min-w-0 break-words whitespace-pre-wrap p-3 md:max-w-64"
-                  >
+                  <td key={headers[index]} className={`p-3 align-top ${cellClass(headers[index])}`}>
                     <span className="mb-1 block text-xs text-slate-600 md:hidden">{headers[index]}</span>
                     {value}
                   </td>

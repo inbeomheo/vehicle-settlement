@@ -1,10 +1,12 @@
 'use client';
-import { useState, type FormEvent } from 'react';
+import { useId, useState, type FormEvent } from 'react';
 import { chargeTypeLabel, chargeUnitLabel } from '@/components/manager/charge-display';
+import { formatQuantity } from '@/shared/quantity';
 import {
   api,
   ErrorMessage,
   Field,
+  focusField,
   inputClass,
   money,
   secondaryClass,
@@ -44,6 +46,8 @@ export function DraftEditor({
   );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [missingHold, setMissingHold] = useState<Set<string>>(new Set());
+  const holdIdPrefix = useId();
   const existingRows: Candidate[] = statement.items.map((item) => ({
     charge_line_id: item.charge_line_id,
     snapshot: item.snapshot as ItemSnapshot,
@@ -89,6 +93,14 @@ export function DraftEditor({
   }
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const missing = rows
+      .map((row) => row.charge_line_id)
+      .filter((id) => choices[id]?.inclusion === 'HELD' && !choices[id].hold_reason.trim());
+    setMissingHold(new Set(missing));
+    if (missing.length) {
+      focusField(`${holdIdPrefix}${missing[0]}`);
+      return;
+    }
     const items: DraftChanges['items'] = [];
     for (const row of rows) {
       const choice = choices[row.charge_line_id];
@@ -96,7 +108,7 @@ export function DraftEditor({
       items.push({
         charge_line_id: row.charge_line_id,
         inclusion: choice.inclusion,
-        hold_reason: choice.inclusion === 'HELD' ? choice.hold_reason : null,
+        hold_reason: choice.inclusion === 'HELD' ? choice.hold_reason.trim() : null,
       });
     }
     if (!items.length) {
@@ -107,11 +119,24 @@ export function DraftEditor({
     const due = new FormData(event.currentTarget).get('due_date');
     await onSave({ version: statement.version, due_date: due ? String(due) : null, items });
   }
+  function choose(id: string, change: Partial<Choice>) {
+    setChoices((previous) => ({
+      ...previous,
+      [id]: { ...(previous[id] ?? { inclusion: 'EXCLUDED', hold_reason: '' }), ...change },
+    }));
+    if (missingHold.has(id)) {
+      const next = new Set(missingHold);
+      next.delete(id);
+      setMissingHold(next);
+    }
+  }
   return (
-    <form onSubmit={save} className="space-y-4">
-      <Field label={statement.direction === 'PAYABLE' ? '지급 예정일' : '입금 예정일'}>
-        <input className={inputClass} name="due_date" type="date" defaultValue={statement.due_date ?? ''} />
-      </Field>
+    <form onSubmit={save} noValidate className="space-y-4">
+      <div className="max-w-xs">
+        <Field label={statement.direction === 'PAYABLE' ? '지급 예정일' : '입금 예정일'}>
+          <input className={inputClass} name="due_date" type="date" defaultValue={statement.due_date ?? ''} />
+        </Field>
+      </div>
       <div className="space-y-2">
         <button
           type="button"
@@ -145,19 +170,25 @@ export function DraftEditor({
       />
       {rows.map((row) => {
         const choice = choices[row.charge_line_id] ?? { inclusion: 'EXCLUDED', hold_reason: '' };
+        const holdId = `${holdIdPrefix}${row.charge_line_id}`;
+        const holdMissing = missingHold.has(row.charge_line_id);
         return (
           <div
             key={row.charge_line_id}
-            className="grid items-end gap-3 rounded-lg bg-slate-50 p-3 sm:grid-cols-3"
+            className="grid items-start gap-3 rounded-lg bg-slate-50 p-3 sm:grid-cols-[minmax(0,1.4fr)_minmax(9rem,0.6fr)_minmax(0,1.4fr)]"
           >
-            <div className="text-sm">
-              <p>
-                {row.snapshot.use_date} · {row.snapshot.use_no}
+            <div className="min-w-0 text-sm">
+              <p className="num font-semibold">
+                <span className="whitespace-nowrap">{row.snapshot.use_date}</span> ·{' '}
+                <span className="whitespace-nowrap">{row.snapshot.use_no}</span>
               </p>
-              <p>
-                {chargeTypeLabel(row.snapshot.charge_type)} ·{' '}
-                {chargeUnitLabel(row.snapshot.charge_type, row.snapshot.billing_unit)} ·
-                {money(row.snapshot.supply_amount)}
+              <p className="text-slate-700">
+                <span className="whitespace-nowrap">{chargeTypeLabel(row.snapshot.charge_type)}</span> ·{' '}
+                <span className="whitespace-nowrap">
+                  {chargeUnitLabel(row.snapshot.charge_type, row.snapshot.billing_unit)}
+                  {row.snapshot.quantity != null && ` ${formatQuantity(row.snapshot.quantity)}`}
+                </span>{' '}
+                · <span className="num whitespace-nowrap">{money(row.snapshot.supply_amount)}</span>
               </p>
               {!row.eligible && <p className="mt-1 text-amber-800">{row.reasons.join(' · ')}</p>}
             </div>
@@ -166,10 +197,7 @@ export function DraftEditor({
                 className={inputClass}
                 value={choice.inclusion}
                 onChange={(event) =>
-                  setChoices({
-                    ...choices,
-                    [row.charge_line_id]: { ...choice, inclusion: event.target.value as Choice['inclusion'] },
-                  })
+                  choose(row.charge_line_id, { inclusion: event.target.value as Choice['inclusion'] })
                 }
               >
                 <option value="INCLUDED" disabled={!row.eligible}>
@@ -180,24 +208,39 @@ export function DraftEditor({
               </select>
             </Field>
             {choice.inclusion === 'HELD' && (
-              <Field label={`${row.snapshot.use_no} 보류 사유`}>
-                <input
-                  className={inputClass}
+              <div className="min-w-0 text-sm font-medium text-slate-700">
+                <label htmlFor={holdId} className="block">
+                  {`${row.snapshot.use_no} 보류 사유`}
+                </label>
+                <textarea
+                  id={holdId}
+                  className={`${inputClass} resize-y ${holdMissing ? 'border-red-600 ring-3 ring-red-100' : ''}`}
+                  aria-invalid={holdMissing || undefined}
+                  aria-describedby={holdMissing ? `${holdId}-error` : undefined}
                   required
+                  rows={2}
                   value={choice.hold_reason}
                   maxLength={1000}
-                  onChange={(event) =>
-                    setChoices({
-                      ...choices,
-                      [row.charge_line_id]: { ...choice, hold_reason: event.target.value },
-                    })
-                  }
+                  onChange={(event) => choose(row.charge_line_id, { hold_reason: event.target.value })}
                 />
-              </Field>
+                {holdMissing && (
+                  <p id={`${holdId}-error`} className="mt-1 font-semibold text-red-700">
+                    보류 사유를 입력해 주세요.
+                  </p>
+                )}
+              </div>
             )}
           </div>
         );
       })}
+      {missingHold.size > 0 && (
+        <p
+          role="alert"
+          className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-800"
+        >
+          보류 사유를 입력해 주세요. ({missingHold.size}건)
+        </p>
+      )}
       <button className={secondaryClass} disabled={busy || loading}>
         초안 변경 저장
       </button>

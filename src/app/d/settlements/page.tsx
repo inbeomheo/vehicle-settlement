@@ -31,6 +31,14 @@ function thisMonth() {
 function monthLabel(month: string) {
   return `${Number(month.slice(0, 4))}년 ${Number(month.slice(5, 7))}월`;
 }
+/** 2026-09-01 ~ 2026-09-30 → "9월 1일 ~ 30일" (달·해가 다르면 앞에 붙인다) */
+function periodLabel(start: string, end: string) {
+  const [sy, sm, sd] = start.split('-').map(Number);
+  const [ey, em, ed] = end.split('-').map(Number);
+  const from = `${sy !== ey ? `${sy}년 ` : ''}${sm}월 ${sd}일`;
+  const to = sy !== ey ? `${ey}년 ${em}월 ${ed}일` : sm !== em ? `${em}월 ${ed}일` : `${ed}일`;
+  return `${from} ~ ${to}`;
+}
 function Arrow({ dir }: { dir: 'left' | 'right' }) {
   return (
     <svg
@@ -146,8 +154,8 @@ export default function DriverSettlementsPage() {
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <h3 className="num font-bold break-all">{s.statement_no}</h3>
-                    <p className="num text-slate-700">
-                      {s.period_start} ~ {s.period_end}
+                    <p className="num whitespace-nowrap text-slate-700">
+                      {periodLabel(s.period_start, s.period_end)}
                     </p>
                   </div>
                   <span
@@ -203,8 +211,8 @@ export default function DriverSettlementsPage() {
                       <p className="font-semibold">
                         {use.use_date} · {use.project_name}
                       </p>
-                      <p className="text-slate-700">
-                        {use.use_no} · {reviews[use.review_status]}
+                      <p className="break-keep text-slate-700">
+                        <span className="num">{use.use_no}</span> · {reviews[use.review_status]}
                         {use.held_count > 0 && ` · 보류 ${use.held_count}건`}
                       </p>
                     </div>

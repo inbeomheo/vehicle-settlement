@@ -222,7 +222,7 @@ test('한 번 노출된 빈 항목과 기본 상태·공차를 숨김으로 바�
     fields: keys.map((field_key) => ({ field_key, driver_mode: 'HIDDEN', manager_mode: null, version: 1 })),
   });
   await page.evaluate(() => window.dispatchEvent(new Event('online')));
-  await expect(page.locator('[data-fix-target="requester"]')).toContainText('관리자 설정상 숨김 항목입니다');
+  await expect(page.getByLabel('요청자', { exact: true })).toBeVisible();
   await emptyReturn.uncheck();
   await expect(emptyReturn).toBeVisible();
   await expect(emptyReturn).toBeFocused();

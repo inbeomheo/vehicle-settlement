@@ -223,7 +223,7 @@ export default function StatementPage() {
         <h2 className="text-lg font-bold">명세 이력</h2>
         <p className="text-sm">
           확정 시각: {dateTime(statement.confirmed_at)} · 담당자:{' '}
-          {String(statement.issuer_snapshot?.prepared_by ?? '-')} · 예정일: {statement.due_date ?? '-'}
+          {String(statement.issuer_snapshot?.prepared_by ?? '-')} · 예정일: {statement.due_date ?? '미정'}
         </p>
         {statement.replaces_statement_id && (
           <p className="text-sm">

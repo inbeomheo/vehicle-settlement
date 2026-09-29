@@ -1293,22 +1293,6 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
                   수정하기
                 </button>
               ))}
-            <button
-              className={button}
-              disabled={busy}
-              onClick={async () => {
-                if (!startAction()) return;
-                setError('');
-                try {
-                  location.assign(await copyToDevice(boot.user.id, draft.serverId!));
-                } catch (e) {
-                  setError(errorMessage(e, '복사하지 못했습니다.'));
-                  finishAction();
-                }
-              }}
-            >
-              이전 운행 복사
-            </button>
             {draft.server.review_status === 'DRAFT' &&
               !statementLocked &&
               draft.server.operation_status !== 'CANCELED' &&
@@ -1589,6 +1573,27 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
               ))}
             </div>
           </Section>
+        )}
+        {mode === 'driver' && draft.server && (
+          <div className="flex flex-wrap items-center gap-3 border-t border-slate-200 pt-4">
+            <button
+              className={button}
+              disabled={busy}
+              onClick={async () => {
+                if (!startAction()) return;
+                setError('');
+                try {
+                  location.assign(await copyToDevice(boot.user.id, draft.serverId!));
+                } catch (e) {
+                  setError(errorMessage(e, '복사하지 못했습니다.'));
+                  finishAction();
+                }
+              }}
+            >
+              이전 운행 복사
+            </button>
+            <p className="text-[0.9375rem] text-slate-700">비슷한 운행은 복사해서 새로 쓸 수 있습니다.</p>
+          </div>
         )}
       </div>
     </FormContexts>

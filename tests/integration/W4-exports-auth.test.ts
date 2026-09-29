@@ -129,6 +129,33 @@ describe('W4 스냅샷 출력과 권한', () => {
       await writeFile(join(output, 'draft-multipage.pdf'), pdf);
     }
   });
+  it('작성 때 넣은 지급 예정일이 확정 후 상세·엑셀 출력까지 남는다', async () => {
+    const s = await scenario(database().db);
+    const use = await approved(s);
+    const created = await draft(
+      s,
+      use.charge_lines.map((l) => l.id),
+      { due_date: '2026-10-10' },
+    );
+    expect(created.due_date).toBe('2026-10-10');
+    const statement = await confirmStatement(s.adminCtx, created.id, {
+      confirmation_token: created.confirmation_token!,
+      version: created.version,
+    });
+    expect((await getStatement(s.adminCtx, statement.id)).due_date).toBe('2026-10-10');
+    const model = await statementExportModel(s.adminCtx, statement.id);
+    expect(model.due_date).toBe('2026-10-10');
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(
+      (await renderStatementXlsx(model)) as unknown as Parameters<typeof workbook.xlsx.load>[0],
+    );
+    expect(String(workbook.worksheets[0].getCell('A6').value)).toContain('예정일: 2026-10-10');
+    const undated = await draft(
+      s,
+      (await approved(s)).charge_lines.map((l) => l.id),
+    );
+    expect((await statementExportModel(s.adminCtx, undated.id)).due_date).toBe('미정');
+  });
   it('기사 정산은 본인 PAYABLE 항목 금액만, 타 기사·전체 명세·export URL은 404', async () => {
     const s = await scenario(database().db);
     const customer = await s.f.counterparty({ kind: 'CUSTOMER', name: '숨겨진 고객' });

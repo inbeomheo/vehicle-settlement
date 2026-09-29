@@ -48,9 +48,6 @@ export function FormContexts({
   );
 }
 
-export function HiddenFieldNotice() {
-  return <p className="mt-2 text-sm text-slate-700">관리자 설정상 숨김 항목입니다</p>;
-}
 export function Field({
   label,
   target,
@@ -162,7 +159,6 @@ export function Field({
           {errors.map((error) => error.reason).join(' ')}
         </p>
       )}
-      {hidden && <HiddenFieldNotice />}
       {fixes.map((f, i) => (
         <p
           key={i}

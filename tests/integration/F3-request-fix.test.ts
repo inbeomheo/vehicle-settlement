@@ -82,7 +82,7 @@ it('기존 추가비 보완요청은 숨김·빈 목록이어도 추가 입력�
     }),
   );
   expect(markup).toContain('+ 추가 비용');
-  expect(markup).toContain('관리자 설정상 숨김 항목입니다');
+  expect(markup).not.toContain('관리자 설정상 숨김 항목입니다');
   expect(markup).toContain('보완 요청: 통행료를 추가하세요');
 });
 
@@ -181,7 +181,7 @@ it('빈 숨김 항목도 미해결 보완 대상이면 표시하고 회차 상�
     }),
   );
   for (const fix of fixes) expect(markup).toContain(`보완 요청: ${fix.message}`);
-  expect(markup).toContain('관리자 설정상 숨김 항목입니다');
+  expect(markup).not.toContain('관리자 설정상 숨김 항목입니다');
   expect(markup).toContain('<details open=""');
 });
 

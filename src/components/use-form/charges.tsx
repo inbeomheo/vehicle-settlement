@@ -5,16 +5,7 @@ import { api, ApiError } from '@/client/api';
 import { errorMessage } from '@/client/error-message';
 import { cachedValue, cacheValue } from '@/client/offline/store';
 import { units, chargeKinds, money, type RateResult, type UseDetail } from '@/client/types';
-import {
-  button,
-  control,
-  Field,
-  Section,
-  SettingsContext,
-  FixContext,
-  ValidationContext,
-  HiddenFieldNotice,
-} from './fields';
+import { button, control, Field, Section, SettingsContext, FixContext, ValidationContext } from './fields';
 import { newCharge, tripQuantityPatch, type FormCharge, type FormValues } from './model';
 function RateFields({
   charge,
@@ -255,7 +246,6 @@ export function ChargeFields({
       step={step}
       done={done}
     >
-      {extraHidden && (hasExtra || hasExtraFix) && <HiddenFieldNotice />}
       <div className="grid gap-5">
         {visibleCharges.map((c, i) => (
           <div

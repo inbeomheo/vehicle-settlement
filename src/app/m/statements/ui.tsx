@@ -232,3 +232,11 @@ export function Pagination({
     </div>
   );
 }
+
+/** 입력칸을 화면 가운데로 옮기고 바로 고칠 수 있게 커서를 둔다. */
+export function focusField(id: string) {
+  const element = document.getElementById(id);
+  if (!element) return;
+  element.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  element.focus({ preventScroll: true });
+}

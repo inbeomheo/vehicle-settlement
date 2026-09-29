@@ -103,6 +103,10 @@ export function initialValues(lookups: Lookups, project = ''): FormValues {
     charges: [newCharge()],
   };
 }
+/** DB 소수 자리(1.000)를 입력칸에는 1 처럼 보여 준다. 값 자체는 같다. */
+function plainNumber(value: string | number | null | undefined) {
+  return value == null || value === '' ? '' : new Decimal(value).toFixed();
+}
 function localDateTime(value: string | null) {
   return value ? new Date(new Date(value).getTime() + 9 * 3600000).toISOString().slice(0, 16) : '';
 }
@@ -140,9 +144,9 @@ export function fromUse(use: UseDetail, mode: Mode, previous?: FormValues): Form
       depart_at: localDateTime(t.depart_at),
       arrive_at: localDateTime(t.arrive_at),
       cargo_desc: t.cargo_desc,
-      quantity: t.quantity ?? '',
+      quantity: plainNumber(t.quantity),
       quantity_unit: t.quantity_unit,
-      hours: t.hours ?? '',
+      hours: plainNumber(t.hours),
       is_empty_return: t.is_empty_return,
       notes: t.notes,
       client_row_id: t.client_row_id ?? crypto.randomUUID(),
@@ -156,7 +160,7 @@ export function fromUse(use: UseDetail, mode: Mode, previous?: FormValues): Form
         direction: c.direction,
         charge_type: c.charge_type as FormCharge['charge_type'],
         billing_unit: c.billing_unit,
-        quantity: c.quantity ?? '',
+        quantity: plainNumber(c.quantity),
         quantitySource: savedQuantitySource(c, previous),
         requested_amount: c.requested_amount?.toString() ?? '',
         reason: c.reason,

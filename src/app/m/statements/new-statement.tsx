@@ -1,12 +1,14 @@
 'use client';
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import { useBusy } from '@/components/ui/use-busy';
 import { chargeTypeLabel, chargeUnitLabel } from '@/components/manager/charge-display';
+import { formatQuantity } from '@/shared/quantity';
 import {
   api,
   buttonClass,
   ErrorMessage,
   Field,
+  focusField,
   inputClass,
   money,
   monthPeriod,
@@ -33,7 +35,8 @@ export function NewStatement({
   const [party, setParty] = useState(replaces?.counterparty_id ?? '');
   const [start, setStart] = useState(replaces?.period_start ?? initial.start);
   const [end, setEnd] = useState(replaces?.period_end ?? initial.end);
-  const [due, setDue] = useState('');
+  // 자동완성·날짜 선택기에 따라 onChange가 빠질 수 있어 저장 시점의 입력칸 값을 읽는다.
+  const dueRef = useRef<HTMLInputElement>(null);
   const [unsubmittedCount, setUnsubmittedCount] = useState(0);
   const [showDrafts, setShowDrafts] = useState(false);
   const [rows, setRows] = useState<Candidate[] | null>(null);
@@ -49,6 +52,8 @@ export function NewStatement({
     [],
   );
   const [error, setError] = useState('');
+  const [missingHold, setMissingHold] = useState<Set<string>>(new Set());
+  const holdIdPrefix = useId();
   const [clientId] = useState(() => crypto.randomUUID());
   const lookups = useResource<Lookup>('/api/lookups');
   async function findCandidates(includeDrafts = false, preserve = false) {
@@ -84,7 +89,16 @@ export function NewStatement({
   }
   async function save(event: FormEvent) {
     event.preventDefault();
-    if (loading || !rows || !begin()) return;
+    if (loading || !rows) return;
+    const missing = rows
+      .map((row) => row.charge_line_id)
+      .filter((id) => choices[id]?.inclusion === 'HELD' && !choices[id].hold_reason.trim());
+    setMissingHold(new Set(missing));
+    if (missing.length) {
+      focusField(`${holdIdPrefix}${missing[0]}`);
+      return;
+    }
+    if (!begin()) return;
     setError('');
     try {
       const items = Object.entries(choices)
@@ -92,7 +106,7 @@ export function NewStatement({
         .map(([id, c]) => ({
           charge_line_id: id,
           inclusion: c.inclusion,
-          ...(c.inclusion === 'HELD' ? { hold_reason: c.hold_reason } : {}),
+          ...(c.inclusion === 'HELD' ? { hold_reason: c.hold_reason.trim() } : {}),
         }));
       if (!items.some((i) => i.inclusion === 'INCLUDED'))
         throw new Error('포함할 비용을 한 건 이상 선택하세요.');
@@ -101,7 +115,7 @@ export function NewStatement({
         counterparty_id: party,
         period_start: start,
         period_end: end,
-        due_date: due || null,
+        due_date: dueRef.current?.value || null,
         client_request_id: clientId,
         items,
         ...(replaces ? { replaces_statement_id: replaces.id } : {}),
@@ -130,7 +144,16 @@ export function NewStatement({
     setUnsubmittedCount(0);
     setShowDrafts(false);
     setChoices({});
+    setMissingHold(new Set());
     setRows(null);
+  }
+  function choose(id: string, change: Partial<Choice>) {
+    setChoices((previous) => ({ ...previous, [id]: { ...previous[id], ...change } }));
+    if (missingHold.has(id)) {
+      const next = new Set(missingHold);
+      next.delete(id);
+      setMissingHold(next);
+    }
   }
   return (
     <section className={`${panelClass} space-y-5`}>
@@ -210,7 +233,7 @@ export function NewStatement({
             />
           </Field>
           <Field label={direction === 'PAYABLE' ? '지급 예정일' : '입금 예정일'}>
-            <input className={inputClass} type="date" value={due} onChange={(e) => setDue(e.target.value)} />
+            <input ref={dueRef} className={inputClass} type="date" name="due_date" defaultValue="" />
           </Field>
         </div>
         <ErrorMessage error={lookups.error} onRetry={lookups.reload} />
@@ -223,7 +246,7 @@ export function NewStatement({
         onRetry={!saving && rows === null && party ? () => void findCandidates(showDrafts, true) : undefined}
       />
       {rows && (
-        <form onSubmit={save} className="space-y-4">
+        <form onSubmit={save} noValidate className="space-y-4">
           <p className="text-sm text-slate-600">
             종료일까지의 미정산 과거분을 함께 표시합니다. 보류 항목은 이번 합계에서 제외되며 다음 정산 후보로
             남습니다.
@@ -243,7 +266,7 @@ export function NewStatement({
             <p className="rounded-lg bg-slate-50 p-6">조회된 미정산 비용이 없습니다.</p>
           ) : (
             <div className="md:overflow-x-auto">
-              <table className="block w-full text-left text-sm md:table md:min-w-[1000px]">
+              <table className="block w-full text-left text-sm md:table md:min-w-[1040px]">
                 <thead className="hidden border-y bg-slate-50 md:table-header-group">
                   <tr>
                     {[
@@ -254,93 +277,105 @@ export function NewStatement({
                       '과금 / 운행수',
                       '공급가 / 세액',
                       '상태·사유',
-                    ].map((h) => (
-                      <th className="min-w-0 break-words p-3" key={h}>
+                    ].map((h, index) => (
+                      <th
+                        className={`p-3 whitespace-nowrap ${index === 0 ? 'w-60' : ''} ${index === 5 ? 'text-right' : ''}`}
+                        key={h}
+                      >
                         {h}
                       </th>
                     ))}
                   </tr>
                 </thead>
                 <tbody className="grid gap-4 md:table-row-group">
-                  {rows.map((row) => (
-                    <tr
-                      className="grid grid-cols-2 rounded-lg border p-2 align-top md:table-row md:rounded-none md:border-0 md:border-b md:p-0"
-                      key={row.charge_line_id}
-                    >
-                      <td className="min-w-0 break-words p-3">
-                        <select
-                          aria-label={`${row.snapshot.use_no} 포함 여부`}
-                          className={inputClass}
-                          value={choices[row.charge_line_id]?.inclusion}
-                          onChange={(e) =>
-                            setChoices({
-                              ...choices,
-                              [row.charge_line_id]: {
-                                ...choices[row.charge_line_id],
-                                inclusion: e.target.value as Choice['inclusion'],
-                              },
-                            })
-                          }
-                        >
-                          <option value="INCLUDED" disabled={!row.eligible}>
-                            포함
-                          </option>
-                          <option value="HELD">보류</option>
-                          <option value="EXCLUDED">제외</option>
-                        </select>
-                        {choices[row.charge_line_id]?.inclusion === 'HELD' && (
-                          <input
-                            aria-label={`${row.snapshot.use_no} 보류 사유`}
+                  {rows.map((row) => {
+                    const choice = choices[row.charge_line_id];
+                    const holdId = `${holdIdPrefix}${row.charge_line_id}`;
+                    const holdMissing = missingHold.has(row.charge_line_id);
+                    return (
+                      <tr
+                        className="grid grid-cols-2 rounded-lg border p-2 align-top md:table-row md:rounded-none md:border-0 md:border-b md:p-0"
+                        key={row.charge_line_id}
+                      >
+                        <td className="col-span-2 min-w-0 p-3 align-top md:w-60">
+                          <select
+                            aria-label={`${row.snapshot.use_no} 포함 여부`}
                             className={inputClass}
-                            placeholder="보류 사유"
-                            required
-                            maxLength={1000}
-                            value={choices[row.charge_line_id].hold_reason}
+                            value={choice?.inclusion}
                             onChange={(e) =>
-                              setChoices({
-                                ...choices,
-                                [row.charge_line_id]: {
-                                  ...choices[row.charge_line_id],
-                                  hold_reason: e.target.value,
-                                },
-                              })
+                              choose(row.charge_line_id, { inclusion: e.target.value as Choice['inclusion'] })
                             }
-                          />
-                        )}
-                      </td>
-                      <td className="min-w-0 break-words p-3">
-                        <p>{row.snapshot.use_date}</p>
-                        <p>{row.snapshot.use_no}</p>
-                        {row.snapshot.carried_forward && (
-                          <span className="rounded bg-amber-100 px-2 text-amber-900">전월분</span>
-                        )}
-                      </td>
-                      <td className="min-w-0 break-words p-3">
-                        {row.snapshot.project_name}
-                        <br />
-                        {row.snapshot.plate_no} · {row.snapshot.driver_name}
-                      </td>
-                      <td className="min-w-0 break-words p-3">
-                        <span className="block text-xs text-slate-600 md:hidden">비용 종류</span>
-                        {chargeTypeLabel(row.snapshot.charge_type)}
-                      </td>
-                      <td className="min-w-0 break-words p-3">
-                        {chargeUnitLabel(row.snapshot.charge_type, row.snapshot.billing_unit)} · 수량{' '}
-                        {row.snapshot.quantity ?? '미정'}
-                        <br />
-                        운행 {row.snapshot.trip_count}건
-                      </td>
-                      <td className="p-3 tabular-nums">
-                        <span className="block text-xs text-slate-600 md:hidden">공급가 / 세액</span>
-                        {money(row.snapshot.supply_amount)}
-                        <br />
-                        {money(row.snapshot.tax_amount)}
-                      </td>
-                      <td className={`p-3 ${row.eligible ? 'text-emerald-700' : 'text-amber-800'}`}>
-                        {row.eligible ? '포함 가능' : row.reasons.join(' · ')}
-                      </td>
-                    </tr>
-                  ))}
+                          >
+                            <option value="INCLUDED" disabled={!row.eligible}>
+                              포함
+                            </option>
+                            <option value="HELD">보류</option>
+                            <option value="EXCLUDED">제외</option>
+                          </select>
+                          {choice?.inclusion === 'HELD' && (
+                            <>
+                              <textarea
+                                id={holdId}
+                                aria-label={`${row.snapshot.use_no} 보류 사유`}
+                                aria-invalid={holdMissing || undefined}
+                                aria-describedby={holdMissing ? `${holdId}-error` : undefined}
+                                className={`${inputClass} resize-y ${holdMissing ? 'border-red-600 ring-3 ring-red-100' : ''}`}
+                                placeholder="보류 사유"
+                                rows={2}
+                                required
+                                maxLength={1000}
+                                value={choice.hold_reason}
+                                onChange={(e) => choose(row.charge_line_id, { hold_reason: e.target.value })}
+                              />
+                              {holdMissing && (
+                                <p id={`${holdId}-error`} className="mt-1 font-semibold text-red-700">
+                                  보류 사유를 입력해 주세요.
+                                </p>
+                              )}
+                            </>
+                          )}
+                        </td>
+                        <td className="min-w-0 p-3 align-top">
+                          <p className="num whitespace-nowrap">{row.snapshot.use_date}</p>
+                          <p className="num whitespace-nowrap">{row.snapshot.use_no}</p>
+                          {row.snapshot.carried_forward && (
+                            <span className="rounded bg-amber-100 px-2 whitespace-nowrap text-amber-900">
+                              전월분
+                            </span>
+                          )}
+                        </td>
+                        <td className="min-w-0 p-3 align-top">
+                          <p className="break-keep">{row.snapshot.project_name}</p>
+                          <p className="md:whitespace-nowrap">
+                            {row.snapshot.plate_no} · {row.snapshot.driver_name}
+                          </p>
+                        </td>
+                        <td className="min-w-0 p-3 align-top">
+                          <span className="block text-xs text-slate-600 md:hidden">비용 종류</span>
+                          <span className="whitespace-nowrap">
+                            {chargeTypeLabel(row.snapshot.charge_type)}
+                          </span>
+                        </td>
+                        <td className="min-w-0 p-3 align-top">
+                          <p className="whitespace-nowrap">
+                            {chargeUnitLabel(row.snapshot.charge_type, row.snapshot.billing_unit)} · 수량{' '}
+                            {row.snapshot.quantity == null ? '미정' : formatQuantity(row.snapshot.quantity)}
+                          </p>
+                          <p className="whitespace-nowrap">운행 {row.snapshot.trip_count}건</p>
+                        </td>
+                        <td className="p-3 align-top tabular-nums md:text-right">
+                          <span className="block text-xs text-slate-600 md:hidden">공급가 / 세액</span>
+                          <p className="whitespace-nowrap">{money(row.snapshot.supply_amount)}</p>
+                          <p className="whitespace-nowrap text-slate-600">{money(row.snapshot.tax_amount)}</p>
+                        </td>
+                        <td
+                          className={`col-span-2 min-w-0 p-3 align-top break-keep ${row.eligible ? 'text-emerald-700' : 'text-amber-800'}`}
+                        >
+                          {row.eligible ? '포함 가능' : row.reasons.join(' · ')}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -356,6 +391,14 @@ export function NewStatement({
                 }
               />
               <Totals supply_total={supply} tax_total={tax} grand_total={supply + tax} />
+              {missingHold.size > 0 && (
+                <p
+                  role="alert"
+                  className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-800"
+                >
+                  보류 사유를 입력해 주세요. ({missingHold.size}건)
+                </p>
+              )}
               <button className={buttonClass} disabled={busy}>
                 {busy ? '저장 중…' : '초안 만들기'}
               </button>

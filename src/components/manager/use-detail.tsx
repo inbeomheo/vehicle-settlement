@@ -256,7 +256,10 @@ export function UseDetail({ id, canSettle = false }: { id: string; canSettle?: b
                 ['현장', snapshot('project_name')],
                 ['실제 기사', snapshot('driver_name')],
                 ['기사 연락처', snapshot('driver_phone')],
-                ['차량', `${snapshot('plate_no')} · ${snapshot('vehicle_type')} · ${snapshot('tonnage')}톤`],
+                [
+                  '차량',
+                  `${snapshot('plate_no')} · ${snapshot('vehicle_type')} · ${use.snapshot.tonnage == null ? '—' : `${formatQuantity(String(use.snapshot.tonnage))}톤`}`,
+                ],
                 ['운송사/지급처', snapshot('payee_name')],
                 ['고객', snapshot('customer_name')],
                 ['공종', metadata.data?.rows[0]?.work_type_name ?? '—'],
@@ -391,10 +394,8 @@ export function UseDetail({ id, canSettle = false }: { id: string; canSettle?: b
           </div>
           <section className={panelClass}>
             <h2 className="text-lg font-bold">비용 검수</h2>
-            <p className="mt-1 text-xs text-slate-600">
-              승인 공급가는 부가세를 제외한 금액입니다. 기존 승인액은 유지하며, 처음 승인할 때 비워두면 계약
-              조건으로 계산합니다. 공급가를 변경하면 부가세 10%를 다시 계산합니다. 보류·반려 선택은 전체 승인
-              시 유지됩니다.
+            <p className="mt-1 text-sm text-slate-600">
+              승인 공급가는 부가세 제외 금액이며, 비워 두면 계약 단가로 자동 계산합니다.
             </p>
             <div className="mt-4 max-w-full overflow-x-auto">
               <table className="review-costs w-full text-left text-sm">
@@ -410,9 +411,6 @@ export function UseDetail({ id, canSettle = false }: { id: string; canSettle?: b
                       '승인 공급가(원)',
                       '세액',
                       '현재 상태',
-                      '검수 결정',
-                      '검수 사유',
-                      '처리',
                     ].map((title) => (
                       <th key={title} className="px-3 py-3 whitespace-nowrap">
                         {title}
@@ -420,13 +418,13 @@ export function UseDetail({ id, canSettle = false }: { id: string; canSettle?: b
                     ))}
                   </tr>
                 </thead>
-                <tbody>
-                  {use.charge_lines.map((line) => (
-                    <tr
-                      className="border-t border-slate-100"
-                      key={line.id}
-                      data-testid={`charge-${line.charge_type}`}
-                    >
+                {use.charge_lines.map((line) => (
+                  <tbody
+                    key={line.id}
+                    className="border-t border-slate-200"
+                    data-testid={`charge-${line.charge_type}`}
+                  >
+                    <tr>
                       <td data-label="비용 종류" className="min-w-32 px-3 py-4">
                         <strong>{chargeTypeLabel(line.charge_type)}</strong>
                         <p className="text-xs text-slate-600">
@@ -442,13 +440,19 @@ export function UseDetail({ id, canSettle = false }: { id: string; canSettle?: b
                         {formatQuantity(line.quantity)}
                       </td>
                       <td data-label="단가" className="px-3 whitespace-nowrap">
-                        {money(line.unit_price)}
+                        {line.unit_price === null && line.charge_type !== 'BASE'
+                          ? '—'
+                          : money(line.unit_price)}
                       </td>
                       <td data-label="계산액" className="px-3 whitespace-nowrap">
-                        {money(line.computed_amount)}
+                        {line.computed_amount === null && line.charge_type !== 'BASE'
+                          ? '—'
+                          : money(line.computed_amount)}
                       </td>
                       <td data-label="요청액" className="px-3 whitespace-nowrap">
-                        {money(line.requested_amount)}
+                        {line.requested_amount === null && line.charge_type === 'BASE'
+                          ? '—'
+                          : money(line.requested_amount)}
                       </td>
                       <td data-label="승인 공급가(원)" className="min-w-36 px-3">
                         {use.review_status === 'SUBMITTED' ? (
@@ -486,54 +490,61 @@ export function UseDetail({ id, canSettle = false }: { id: string; canSettle?: b
                           <p className="mt-1 text-xs text-amber-800">단가 미확정</p>
                         )}
                       </td>
-                      <td data-label="검수 결정" className="min-w-28 px-3">
-                        <select
-                          aria-label={`${label(line.charge_type)} 검수 결정`}
-                          className={inputClass}
-                          disabled={!canReview}
-                          value={decisions[line.id]?.line_review_status ?? 'APPROVED'}
-                          onChange={(e) =>
-                            updateDecision(line.id, {
-                              line_review_status: e.target.value as Decision['line_review_status'],
-                            })
-                          }
-                        >
-                          {['APPROVED', 'HELD', 'REJECTED'].map((value) => (
-                            <option value={value} key={value}>
-                              {label(value)}
-                            </option>
-                          ))}
-                        </select>
-                      </td>
-                      <td data-label="검수 사유" className="min-w-40 px-3">
-                        <input
-                          aria-label={`${label(line.charge_type)} 검수 사유`}
-                          disabled={!canReview}
-                          className={inputClass}
-                          value={decisions[line.id]?.reason ?? ''}
-                          onChange={(e) => updateDecision(line.id, { reason: e.target.value })}
-                        />
-                      </td>
-                      <td data-label="처리" className="px-3">
-                        <button
-                          className={secondaryClass}
-                          disabled={!canReview}
-                          onClick={() =>
-                            run(() => {
-                              const { id: lineId, ...decision } = decisionBody(line.id);
-                              return mutate(`/api/charge-lines/${lineId}/review`, 'PATCH', {
-                                version: use.version,
-                                ...decision,
-                              });
-                            }, '비용 검수가 저장되었습니다.')
-                          }
-                        >
-                          적용
-                        </button>
+                    </tr>
+                    <tr>
+                      <td colSpan={9} className="review-decision px-3 pb-4">
+                        <div className="flex flex-wrap items-end gap-3 rounded-lg bg-slate-50 p-3">
+                          <label className="w-36 text-xs font-semibold text-slate-700">
+                            검수 결정
+                            <select
+                              aria-label={`${label(line.charge_type)} 검수 결정`}
+                              className={inputClass}
+                              disabled={!canReview}
+                              value={decisions[line.id]?.line_review_status ?? 'APPROVED'}
+                              onChange={(e) =>
+                                updateDecision(line.id, {
+                                  line_review_status: e.target.value as Decision['line_review_status'],
+                                })
+                              }
+                            >
+                              {['APPROVED', 'HELD', 'REJECTED'].map((value) => (
+                                <option value={value} key={value}>
+                                  {label(value)}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label className="min-w-48 flex-1 text-xs font-semibold text-slate-700">
+                            검수 사유
+                            <input
+                              aria-label={`${label(line.charge_type)} 검수 사유`}
+                              disabled={!canReview}
+                              className={inputClass}
+                              placeholder="보류·반려 이유"
+                              value={decisions[line.id]?.reason ?? ''}
+                              onChange={(e) => updateDecision(line.id, { reason: e.target.value })}
+                            />
+                          </label>
+                          <button
+                            className={secondaryClass}
+                            disabled={!canReview}
+                            onClick={() =>
+                              run(() => {
+                                const { id: lineId, ...decision } = decisionBody(line.id);
+                                return mutate(`/api/charge-lines/${lineId}/review`, 'PATCH', {
+                                  version: use.version,
+                                  ...decision,
+                                });
+                              }, '비용 검수가 저장되었습니다.')
+                            }
+                          >
+                            적용
+                          </button>
+                        </div>
                       </td>
                     </tr>
-                  ))}
-                </tbody>
+                  </tbody>
+                ))}
               </table>
             </div>
             {use.review_status === 'SUBMITTED' && (

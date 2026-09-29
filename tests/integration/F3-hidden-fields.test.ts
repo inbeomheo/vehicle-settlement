@@ -42,7 +42,7 @@ it('숨김으로 변경해도 미완성 추가비 행은 편집·삭제 가능�
     );
     expect(markup).toContain('추가비 1 요청액');
     expect(markup).toContain('추가 비용 삭제');
-    expect(markup).toContain('관리자 설정상 숨김 항목입니다');
+    expect(markup).not.toContain('관리자 설정상 숨김 항목입니다');
     expect(markup).not.toContain('+ 추가 비용');
   }
   expect(validate(form, 'save', modes)).toContain('추가 비용은 정수 원 요청액과 사유를 입력하세요.');
@@ -102,7 +102,7 @@ it('숨긴 헤더·회차의 기존 값과 0은 표시하고 기본 false는 숨
       }),
     );
     expect(markup).toContain(form[target]);
-    expect(markup).toContain('관리자 설정상 숨김 항목입니다');
+    expect(markup).not.toContain('관리자 설정상 숨김 항목입니다');
   }
   const markup = renderToStaticMarkup(
     h(FormContexts, {
@@ -114,7 +114,7 @@ it('숨긴 헤더·회차의 기존 값과 0은 표시하고 기본 false는 숨
   for (const label of ['상세 입력', '경유', '수량', '시간', '비고']) expect(markup).toContain(label);
   expect(markup).not.toContain('공차회차');
   expect(markup).toContain('경유지');
-  expect(markup).toContain('value="0.000"');
+  expect(markup).toContain('value="0"');
   expect(markup).toContain('<details open=""');
   const saved = await updateUse(s.driverCtx, use.id, { ...toInput(form, 'driver'), version: use.version });
   expect(saved).toMatchObject({ requester: use.requester, notes: use.notes });

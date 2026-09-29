@@ -71,7 +71,7 @@ export async function statementExportModel(ctx: Context, id: string) {
       statement.issuer_snapshot?.issued_on ?? statement.created_at.toISOString().slice(0, 10),
     ),
     confirmed_at: seoulTime(statement.confirmed_at),
-    due_date: statement.due_date ?? '-',
+    due_date: statement.due_date ?? '미정',
     contact: String(statement.issuer_snapshot?.prepared_by ?? ''),
     rows: statement.items
       .filter((i) => i.inclusion === 'INCLUDED')
