@@ -460,7 +460,8 @@ export default function ManualPage() {
           <h3 className="pt-4 text-xl font-bold">2. 사용자 초대</h3>
           <p className="text-[1.0625rem] leading-relaxed">
             <B>사용자 초대 생성</B>에서 역할과 담당 현장을 고르면 초대 링크가 나옵니다. 그 링크를 문자로
-            보내면 받은 사람이 직접 비밀번호를 정합니다. 비밀번호를 잊었을 때도 새 링크를 보내면 됩니다.
+            보내면 받은 사람이 직접 비밀번호를 정합니다. 비밀번호를 잊은 사람에게는 그 사람 옆의 ‘비밀번호
+            재설정 링크 만들기’로 링크를 보냅니다.
           </p>
           <Shot src="41-users" alt="사용자 관리" />
           <h3 className="pt-4 text-xl font-bold">3. 기사가 적을 칸 줄이기</h3>
@@ -521,7 +522,10 @@ export default function ManualPage() {
                 '승인한 걸 취소하고 싶어요',
                 '정산에 들어가기 전이면 관리자에게 문의하세요. 확정된 명세는 지급 전에만 명세 취소를 할 수 있고, 지급 후에는 다음 달에 조정 금액으로 반영합니다.',
               ],
-              ['비밀번호를 잊었어요', '관리자에게 말하면 새 초대 링크를 보내 드립니다.'],
+              [
+                '비밀번호를 잊었어요',
+                '관리자에게 말하면 사용자 관리에서 비밀번호 재설정 링크를 보내 드립니다. 로그인한 상태라면 메뉴의 ‘비밀번호 변경’에서 직접 바꿀 수 있습니다. 기사는 홈 맨 아래에 있습니다.',
+              ],
             ].map(([q, a]) => (
               <div key={q} className="rounded-lg bg-white px-5 py-4">
                 <dt className="font-bold">{q}</dt>

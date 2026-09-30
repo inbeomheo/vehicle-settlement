@@ -12,6 +12,8 @@ import { createDatabase, defaultDatabaseUrl, withDatabase } from '../../src/serv
 import { migrateDatabase } from '../../src/server/db/migrate';
 import { poolConfig } from '../../src/server/db/config';
 import { evidence, evidenceBlobs, users } from '../../src/server/db/schema';
+import { createPasswordReset, resetPassword } from '../../src/server/services/password';
+import { factories } from '../helpers/factories';
 import { storageDriver, readStoredFile, deleteStoredFile, writeStoredFile } from '../../src/server/storage';
 import { uploadLimit } from '../../src/server/upload-limits';
 import {
@@ -93,7 +95,7 @@ it('제한 롤: 모든 연결의 vehicle search_path, 내장 UUID, 마이그레�
     connections.forEach((client) => client.release());
   }
   await migrateDatabase(database.db);
-  expect((await database.pool.query('SELECT count(*) FROM __drizzle_migrations')).rows[0].count).toBe('9');
+  expect((await database.pool.query('SELECT count(*) FROM __drizzle_migrations')).rows[0].count).toBe('10');
   expect((await owner.query("SELECT tablename FROM pg_tables WHERE schemaname='public'")).rows).toEqual([
     { tablename: 'other_app' },
   ]);
@@ -226,4 +228,26 @@ it('배포 업로드/JSON 실제 스트림 제한과 SSL 옵션 검증', async (
   vi.stubEnv('PG_SSL_NO_VERIFY', '0');
   expect(poolConfig(`${url}?sslmode=require`).connectionString).toContain('sslmode=require');
   expect(storageDriver()).toBe('db');
+});
+
+it('vehicle 스키마에서 비밀번호 재설정 링크와 감사·세션 갱신도 동작한다', async () => {
+  const f = factories(database.db);
+  const user = await f.user();
+  await f.session(user.id);
+  const link = await createPasswordReset(f.context(user), user.id);
+  const token = new URL(link.reset_url).pathname.split('/').at(-1)!;
+  await resetPassword(database.db, randomUUID(), token, {
+    password: 'schema-new1234',
+    password_confirmation: 'schema-new1234',
+  });
+  expect(
+    (await database.pool.query('SELECT used_at FROM password_resets WHERE id=$1', [link.id])).rows[0].used_at,
+  ).not.toBeNull();
+  expect(
+    (
+      await owner.query(
+        "SELECT count(*)::int n FROM pg_tables WHERE schemaname='public' AND tablename='password_resets'",
+      )
+    ).rows[0].n,
+  ).toBe(0);
 });

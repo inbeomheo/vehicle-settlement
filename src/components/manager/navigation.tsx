@@ -145,6 +145,12 @@ export function ManagerNavigation({
             >
               사용 설명서
             </a>
+            <Link
+              href="/m/account"
+              className="inline-flex min-h-11 items-center rounded-md px-3 text-sm font-semibold text-slate-200 hover:bg-white/10"
+            >
+              비밀번호 변경
+            </Link>
             <LogoutButton tone="dark" />
           </div>
         </div>
@@ -179,14 +185,14 @@ export function ManagerNavigation({
         {open && (
           <nav id="manager-menu" aria-label="주 메뉴" className="border-t border-white/10 px-3 pt-2 pb-3">
             <MenuLinks items={items} onNavigate={() => setOpen(false)} />
-            <div className="mt-3 flex items-center justify-between border-t border-white/10 pt-3">
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-white/10 pt-3">
               <TextSizeControl fallback="normal" tone="dark" />
             </div>
-            <div className="mt-3 flex items-center justify-between border-t border-white/10 pt-3">
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-white/10 pt-3">
               <span className="text-sm text-slate-300">
                 {userName} · {roleLabel}
               </span>
-              <span className="flex items-center gap-1">
+              <span className="flex flex-wrap items-center gap-1">
                 <a
                   href="/manual"
                   target="_blank"
@@ -194,6 +200,12 @@ export function ManagerNavigation({
                 >
                   사용 설명서
                 </a>
+                <Link
+                  href="/m/account"
+                  className="inline-flex min-h-11 items-center rounded-md px-3 text-sm font-semibold text-slate-200 hover:bg-white/10"
+                >
+                  비밀번호 변경
+                </Link>
                 <LogoutButton tone="dark" />
               </span>
             </div>

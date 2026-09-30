@@ -234,6 +234,24 @@ export const invites = pgTable('invites', {
   created_at: created(),
   updated_at: updated(),
 });
+export const passwordResets = pgTable(
+  'password_resets',
+  {
+    id: id(),
+    user_id: uuid('user_id')
+      .notNull()
+      .references(() => users.id),
+    token_hash: text('token_hash').notNull().unique(),
+    expires_at: time('expires_at').notNull(),
+    used_at: time('used_at'),
+    revoked_at: time('revoked_at'),
+    created_by: uuid('created_by')
+      .notNull()
+      .references(() => users.id),
+    created_at: created(),
+  },
+  (t) => [index('password_resets_user_idx').on(t.user_id)],
+);
 export const rateAgreements = pgTable(
   'rate_agreements',
   {

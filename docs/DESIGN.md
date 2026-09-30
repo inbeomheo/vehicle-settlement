@@ -299,3 +299,7 @@ scripts/             db 시작, 시드, 백업/복구
 사용자 DEPLOY 지시에 따라 DB_SCHEMA 지정 시 전용 스키마와 그 안의 마이그레이션 이력을 사용한다. 미설정 로컬의 public/drizzle 위치는 유지한다. 명시적으로 허용된 초기 SQL 두 파일의 public 한정자 제거 외 기존 업무 마이그레이션은 변경하지 않는다.
 
 `0500_deploy_evidence_blobs.sql`의 `evidence_blobs(storage_key pk, bytes bytea, size int, sha256 text, created_at timestamptz)`는 증빙·가져오기 XLSX 원본을 위한 저장 드라이버다. `STORAGE_DRIVER=db`일 때 업무 트랜잭션에 함께 저장하고, 기본 local은 기존 파일 저장을 유지한다. 증빙 논리 삭제·교체 이력·귀속·권한 계약은 유지한다. 환경·백업·복구·제약은 [DEPLOY](DEPLOY.md)를 따른다.
+
+## 17. PW 비밀번호 재설정·변경
+
+PW 작업 지시에 따라 `0600_pw_password_resets.sql`에 `password_resets(id, user_id, token_hash unique, expires_at, used_at, revoked_at, created_by, created_at)`를 추가한다. 관리자는 본인 포함 활성 사용자에게 24시간·1회용 링크를 발급하며 이전 미사용 링크를 폐기한다. 재설정은 모든 세션을 폐기하고 해당 계정 잠금을 해제한다. 본인 변경은 현재 비밀번호를 확인하고 현재 세션을 제외한 세션·미사용 재설정 링크를 폐기한다. 확인 실패는 기존 throttle 헬퍼를 재사용한 별도 계정 카운터로 제한한다. 두 입력의 일치와 초대의 비밀번호 길이 규칙을 서버에서 검증한다. 상세 API와 감사 동작은 [API](API.md)의 PW 절을 따른다.

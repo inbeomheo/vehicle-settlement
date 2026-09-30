@@ -23,7 +23,11 @@ export async function lockLoginCounters(db: Db, loginId: string, ip: string) {
   const keys = [
     { scope: 'ACCOUNT' as const, key: loginThrottleKey('ACCOUNT', loginId) },
     { scope: 'IP' as const, key: loginThrottleKey('IP', ip) },
-  ].sort((a, b) => a.key.localeCompare(b.key));
+  ];
+  return lockThrottleCounters(db, keys);
+}
+export async function lockThrottleCounters(db: Db, keys: { scope: 'ACCOUNT' | 'IP'; key: string }[]) {
+  keys = [...keys].sort((a, b) => a.key.localeCompare(b.key));
   const counters = [];
   for (const key of keys) {
     await db.insert(loginThrottles).values(key).onConflictDoNothing();

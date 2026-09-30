@@ -12,9 +12,9 @@ it('기존 public/drizzle 이력의 알려진 해시만 보정하고 업무 자�
   const client = await database().pool.connect();
   try {
     const before = await logicalDump(client);
-    await client.query('DROP TABLE evidence_blobs');
-    await client.query('DELETE FROM drizzle.__drizzle_migrations WHERE created_at=$1', [
-      journal.entries.at(-1)!.when,
+    await client.query('DROP TABLE evidence_blobs, password_resets');
+    await client.query('DELETE FROM drizzle.__drizzle_migrations WHERE created_at >= $1', [
+      journal.entries.find((entry) => entry.tag === '0500_deploy_evidence_blobs')!.when,
     ]);
     // Match the old database's next journal id before applying the new migration.
     await client.query("SELECT setval('drizzle.__drizzle_migrations_id_seq', 8, true)");
