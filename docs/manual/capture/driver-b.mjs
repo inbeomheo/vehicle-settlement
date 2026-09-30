@@ -25,6 +25,16 @@ try {
   await page.goto(BASE + '/d/settlements?month=2026-09');
   await page.getByRole('heading', { name: '9월 운행' }).waitFor();
   await shot(page, '15-my-settlement', { wait: 1500 });
+  const views = page.getByRole('group', { name: '운행 보기' });
+  await views.evaluate((el) => window.scrollTo(0, el.getBoundingClientRect().top + scrollY - 80));
+  await page.locator('details.group summary').first().click();
+  await shot(page, '17-settle-projects');
+  await page.getByRole('button', { name: '날짜별', exact: true }).click();
+  await views.evaluate((el) => window.scrollTo(0, el.getBoundingClientRect().top + scrollY - 80));
+  await shot(page, '18-settle-dates');
+  await page.goto(BASE + '/d/account');
+  await page.getByLabel('현재 비밀번호').waitFor();
+  await shot(page, '19-password-change');
   await page.goto(BASE + '/d');
   await page.getByRole('heading', { name: '내 운행' }).waitFor();
   await page.getByRole('radio', { name: '글자 아주 크게' }).click();

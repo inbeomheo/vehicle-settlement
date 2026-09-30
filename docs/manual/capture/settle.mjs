@@ -7,6 +7,13 @@ try {
   await page.waitForURL(/\/m\/statements/);
   await page.getByRole('button', { name: '새 정산', exact: true }).waitFor();
   await shot(page, '30-statements', { wait: 1500 });
+  await page.goto(BASE + '/m/summary?view=projects');
+  await page.getByRole('button', { name: '한눈에 표' }).waitFor();
+  await shot(page, '28-summary', { wait: 2000 });
+  await page.getByRole('button', { name: '한눈에 표' }).click();
+  await shot(page, '29-summary-table', { wait: 1200 });
+  await page.goto(BASE + '/m/statements');
+  await page.getByRole('button', { name: '새 정산', exact: true }).waitFor();
   await page.getByRole('button', { name: '새 정산', exact: true }).click();
   const party = page.getByLabel('거래처', { exact: true });
   await party.waitFor();
@@ -31,7 +38,7 @@ try {
   await top(page, page.getByRole('heading').filter({ hasText: /후보/ }).first(), 16).catch(() => {});
   await shot(page, '31-candidates');
   await page.getByRole('button', { name: '초안 만들기' }).click();
-  await page.waitForURL(/\/m\/statements\/[0-9a-f-]+$/, { timeout: 60000 });
+  await page.waitForURL(/\/m\/statements\/[0-9a-f-]+$/, { timeout: 150000 });
   await page.getByRole('button', { name: '명세 확정', exact: true }).waitFor();
   await shot(page, '32-draft', { wait: 1500 });
   await page.getByRole('button', { name: '명세 확정', exact: true }).click();

@@ -62,8 +62,7 @@ export function PasswordForm({ token, driver = false }: { token?: string; driver
   return (
     <form method="post" onSubmit={submit} className="space-y-5">
       <p id="password-help" className="text-sm leading-relaxed text-slate-600">
-        새 비밀번호는 8자 이상, 72자 이하로 입력하세요. 한글처럼 여러 자리를 차지하는 글자는 더 짧게 입력해야
-        합니다.
+        새 비밀번호는 8자 이상으로 정하세요.
       </p>
       {!token && (
         <Field title="현재 비밀번호">

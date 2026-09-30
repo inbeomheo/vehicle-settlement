@@ -274,16 +274,17 @@ export default function ManualPage() {
             </Step>
             <Step
               n={5}
-              title="요금을 확인하고 필요하면 입력합니다"
-              shot={<Shot src="08-step5-fee" alt="요금 확인" phone />}
+              title="이번 운행 금액을 확인합니다"
+              shot={<Shot src="08b-amount-input" alt="이번 운행 금액 직접 입력" phone />}
             >
               <p>
-                계약된 요금이 자동으로 나옵니다. 다르면 <B>금액이 다르면 직접 입력</B>을 누르고 이번 운행
-                금액을 적으세요.
+                정해진 계약 단가가 있으면 금액이 자동으로 나옵니다. 조출 등으로 금액이 다르면{' '}
+                <B>금액이 다르면 직접 입력</B>을 누르고 받을 금액을 적습니다(부가세 빼고).
               </p>
               <p>
-                계약이 없으면 금액을 바로 입력할 수 있습니다. 담당자가 확인하면 확정되며, 모르면 비워 두어도
-                됩니다.
+                구간마다 금액이 다른 현장은 처음부터 <B>이번 운행 금액</B> 칸이 나옵니다. 최근 경로를 고르면
+                지난번 그 구간 금액이 미리 채워집니다. 담당자가 확인하면 이 금액으로 확정되고, 모르면 비워
+                두어도 됩니다.
               </p>
               <p>
                 대기료·통행료가 있었으면 <B>+ 추가 비용</B>에 금액과 이유를 적고, 영수증도 4번에서 함께
@@ -371,6 +372,40 @@ export default function ManualPage() {
                 본인 운행분만 보이고, 다른 기사나 원청 청구 금액은 보이지 않습니다.
               </p>
             </Step>
+            <Step
+              title="현장마다 얼마나 운행했는지 봅니다"
+              shot={<Shot src="17-settle-projects" alt="내 정산 — 현장별" phone />}
+            >
+              <p>
+                아래 <B>현장별</B>을 누르면 현장마다 운행 건수와 금액이 한 줄씩 나옵니다. 현장을 누르면 그
+                현장 운행이 날짜순으로 펼쳐집니다.
+              </p>
+              <p>
+                마감이 19일~다음 달 18일처럼 달 중간이면 <B>기간 직접 고르기</B>로 시작일·종료일을 정합니다.
+              </p>
+            </Step>
+            <Step
+              title="날짜별로 확인합니다"
+              shot={<Shot src="18-settle-dates" alt="내 정산 — 날짜별" phone />}
+            >
+              <p>
+                <B>날짜별</B>을 누르면 날짜마다 그날 운행과 합계가 나옵니다. 회색 ‘검수 전’ 금액은 담당자가
+                아직 확인하지 않은 금액입니다.
+              </p>
+            </Step>
+          </ol>
+
+          <h3 className="pt-6 text-xl font-bold md:text-2xl">비밀번호를 바꾸고 싶을 때</h3>
+          <ol>
+            <Step
+              title="홈 맨 아래 ‘비밀번호 변경’"
+              shot={<Shot src="19-password-change" alt="비밀번호 변경" phone />}
+            >
+              <p>
+                지금 비밀번호와 새 비밀번호(8자 이상)를 두 번 적고 <B>비밀번호 바꾸기</B>. 다른 휴대폰에서는
+                다시 로그인해야 합니다. 담당자는 왼쪽 메뉴 아래에 같은 버튼이 있습니다.
+              </p>
+            </Step>
           </ol>
         </section>
 
@@ -398,13 +433,23 @@ export default function ManualPage() {
             결정’을 보류로 바꾸고 이유를 적습니다. 고쳐야 할 게 있으면 <B>보완 요청</B>에서 항목을 고르고
             무엇을 고칠지 적은 뒤 <B>보완 요청 보내기</B> — 그 문장이 기사 홈 화면에 그대로 뜹니다.
           </p>
-          <p className="text-[1.0625rem] leading-relaxed">
-            기사의 요청액을 확인하고 승인 공급가를 비운 채 승인하면 그 금액으로 확정됩니다. 계약 단가와 다른
-            금액은 주황색 안내를 보고 상세에서 확인하세요.
-          </p>
           <Shot src="23-cost-review" alt="비용 검수와 보완 요청" />
 
-          <h3 className="pt-4 text-xl font-bold md:text-2xl">2. 나머지는 한 번에</h3>
+          <h3 className="pt-4 text-xl font-bold md:text-2xl">2. 기사가 넣은 금액 확인하기</h3>
+          <p className="text-[1.0625rem] leading-relaxed">
+            기사가 운행마다 금액을 넣으면 검수함 카드에 그 금액이 그대로 나옵니다. 계약 단가와 같거나 계약이
+            없으면 <B>바로 승인</B>으로 끝납니다. 계약 단가와 다르면 주황색 <B>계약 단가와 다른 금액</B>이
+            붙고 <B>확인하기</B>로 열어 봅니다. 카드에 운반 내용(조출·장재물 등)도 함께 보여 금액이 다른
+            이유를 바로 알 수 있습니다.
+          </p>
+          <Shot src="21b-inbox-differ" alt="검수함 — 계약 단가와 다른 금액" />
+          <p className="text-[1.0625rem] leading-relaxed">
+            비용 검수 표의 <B>요청액</B>에 기사가 넣은 금액이 나옵니다. 맞으면 승인 공급가를 비운 채{' '}
+            <B>전체 승인</B> — 그 금액으로 확정됩니다. 다르게 정하려면 승인 공급가에 금액을 적습니다.
+          </p>
+          <Shot src="23b-cost-differ" alt="비용 검수 — 기사 요청액 확인" />
+
+          <h3 className="pt-4 text-xl font-bold md:text-2xl">3. 나머지는 한 번에</h3>
           <p className="text-[1.0625rem] leading-relaxed">
             문제없는 건에는 노란 <B>바로 승인</B>이 있습니다. <B>문제없는 N건 모두 선택</B>을 누르면 아래에
             합계와 <B>선택 N건 승인</B> 버튼이 뜨고, 한 번 누르면 끝입니다.
@@ -418,7 +463,20 @@ export default function ManualPage() {
             <Scene>9월 30일. 한길 운송에 줄 9월분을 정리합니다.</Scene>
           </RoleHeader>
 
-          <h3 className="text-xl font-bold md:text-2xl">1. 이번 달 건 묶기</h3>
+          <h3 className="text-xl font-bold md:text-2xl">1. 현장별·기사별로 먼저 보기</h3>
+          <p className="text-[1.0625rem] leading-relaxed">
+            왼쪽 메뉴 <B>현장·기사별 집계</B>. 기간을 고르고(19일~18일 마감이면 직접 입력) <B>조회하기</B>를
+            누르면 현장마다 기사님별 금액, 기사님마다 현장별 금액이 나옵니다. 엑셀 마감 양식의 집계 시트와
+            같은 숫자입니다.
+          </p>
+          <Shot src="28-summary" alt="현장·기사별 집계 — 현장별" />
+          <p className="text-[1.0625rem] leading-relaxed">
+            <B>한눈에 표</B>는 기사 × 현장 표에 합계가 붙어 있습니다. <B>엑셀로 받기</B>로 현장별·기사별·표 세
+            장을 한 파일로 받습니다.
+          </p>
+          <Shot src="29-summary-table" alt="현장·기사별 집계 — 한눈에 표" />
+
+          <h3 className="pt-4 text-xl font-bold md:text-2xl">2. 이번 달 건 묶기</h3>
           <p className="text-[1.0625rem] leading-relaxed">
             왼쪽 메뉴 <B>월 정산</B> → 노란 <B>새 정산</B>. 거래처 한길 운송, 기간은 <B>당월</B> 버튼 한 번,
             지급 예정일 10월 10일을 넣고 <B>후보 조회</B>. 승인된 비용이 줄마다 나오고 기본은 ‘포함’입니다.
@@ -436,19 +494,20 @@ export default function ManualPage() {
             </Tip>
           </ul>
 
-          <h3 className="pt-4 text-xl font-bold md:text-2xl">2. 확정하고 파일 보내기</h3>
+          <h3 className="pt-4 text-xl font-bold md:text-2xl">3. 확정하고 파일 보내기</h3>
           <p className="text-[1.0625rem] leading-relaxed">
             초안에서 합계를 확인하고 <B>명세 확정</B>을 누르면 한 번 더 묻습니다. 맞으면 <B>확정</B>.
           </p>
           <Shot src="33-confirm-step" alt="확정 확인 창" />
           <p className="text-[1.0625rem] leading-relaxed">
-            문서번호가 붙고 맨 위에 ‘미지급’이 보입니다. <B>PDF 다운로드</B> 또는 <B>엑셀 다운로드</B>로 받아
-            운송사에 보냅니다. PDF에는 예정일과 보류를 뺀 합계가 찍힙니다.
+            문서번호(정산 기간이 끝나는 달 기준, 예: 8/19~9/18 → PAY-202609-…)가 붙고 맨 위에 ‘미지급’이
+            보입니다. <B>PDF 다운로드</B> 또는 <B>엑셀 다운로드</B>로 받아 운송사에 보냅니다. PDF에는 예정일과
+            보류를 뺀 합계가 찍힙니다.
           </p>
           <Shot src="34-confirmed" alt="확정된 지급명세" />
           <Shot src="35-pdf-1" alt="지급명세 PDF" />
 
-          <h3 className="pt-4 text-xl font-bold md:text-2xl">3. 입금하고 기록하기</h3>
+          <h3 className="pt-4 text-xl font-bold md:text-2xl">4. 입금하고 기록하기</h3>
           <p className="text-[1.0625rem] leading-relaxed">
             이체한 뒤 같은 화면 아래 <B>지급 기록</B>에 지급일, 방법, 참고번호(이체 번호), 메모를 적고{' '}
             <B>지급 기록 저장</B>. 나눠 보냈으면 보낼 때마다 기록합니다.
@@ -466,10 +525,15 @@ export default function ManualPage() {
           <RoleHeader id="admin" role="관리자" title="처음 세팅할 때">
             <p className="text-[1.0625rem] leading-relaxed">순서대로 한 번만 해 두면 됩니다.</p>
           </RoleHeader>
-          <h3 className="text-xl font-bold">1. 기준정보</h3>
           <p className="text-[1.0625rem] leading-relaxed">
-            현장·차량·기사·거래처·계약 단가를 등록합니다. 단가가 있어야 기사 화면에서 금액이 자동으로
-            계산됩니다.
+            처음 로그인하면 대시보드에 <B>시작 준비</B> 목록이 나옵니다. 위에서부터 누르며 등록하면 끝난
+            항목에 초록 체크가 붙고, 다 끝나면 목록이 사라집니다.
+          </p>
+          <Shot src="43-checklist" alt="관리자 대시보드 — 시작 준비" />
+          <h3 className="pt-4 text-xl font-bold">1. 기준정보</h3>
+          <p className="text-[1.0625rem] leading-relaxed">
+            회사 정보·현장·차량·거래처(기사 사업자)·기사·기사 소속을 등록합니다. 계약 단가는 정해진 단가가
+            있을 때만 등록합니다. 구간마다 금액이 다르면 비워 두고 기사가 운행마다 금액을 넣게 하면 됩니다.
           </p>
           <Shot src="42-master" alt="기준정보" />
           <h3 className="pt-4 text-xl font-bold">2. 사용자 초대</h3>
@@ -536,6 +600,10 @@ export default function ManualPage() {
               [
                 '승인한 걸 취소하고 싶어요',
                 '정산에 들어가기 전이면 관리자에게 문의하세요. 확정된 명세는 지급 전에만 명세 취소를 할 수 있고, 지급 후에는 다음 달에 조정 금액으로 반영합니다.',
+              ],
+              [
+                '운행마다 금액이 달라요',
+                '계약 단가를 등록하지 않으면 기사가 운행마다 ‘이번 운행 금액’을 넣고, 현장 담당자가 확인하면 그 금액으로 확정됩니다. 같은 구간은 지난번 금액이 미리 채워집니다.',
               ],
               [
                 '비밀번호를 잊었어요',

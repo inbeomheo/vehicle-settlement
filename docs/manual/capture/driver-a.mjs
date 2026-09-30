@@ -29,6 +29,11 @@ try {
   await shot(page, '07-step4-photo', { wait: 2500 });
   await top(page, page.getByRole('heading', { name: '요금 확인' }));
   await shot(page, '08-step5-fee');
+  // 계약 단가와 다른 금액(예: 조출로 추가된 금액)을 직접 넣는 경우
+  await page.getByRole('button', { name: '금액이 다르면 직접 입력' }).click();
+  await page.getByLabel('이번 운행 금액(원)', { exact: true }).fill('330000');
+  await top(page, page.getByRole('heading', { name: '요금 확인' }));
+  await shot(page, '08b-amount-input');
   await page.getByRole('button', { name: '담당자에게 보내기', exact: true }).click();
   const sheet = page.getByRole('dialog', { name: '이대로 보낼까요?' });
   await sheet.waitFor();

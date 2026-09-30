@@ -21,6 +21,17 @@ try {
   await page.waitForTimeout(1500);
   await page.evaluate(() => window.scrollTo(0, 0));
   await shot(page, '24-approved');
+  // 기사가 계약과 다른 금액을 넣은 건: 주황 표시 → 열어서 확인
+  await page.goto(BASE + '/m/review');
+  await page.locator('article').first().waitFor();
+  await page.waitForTimeout(1200);
+  const differ = page.locator('article').filter({ hasText: '330,000' }).first();
+  await differ.scrollIntoViewIfNeeded();
+  await shot(page, '21b-inbox-differ');
+  await differ.getByRole('link', { name: /^U-/ }).first().click();
+  await page.getByRole('heading', { name: '비용 검수' }).waitFor();
+  await top(page, page.getByRole('heading', { name: '비용 검수' }), 16);
+  await shot(page, '23b-cost-differ', { wait: 1200 });
   await page.goto(BASE + '/m/review');
   await page.locator('article').first().waitFor();
   await page.waitForTimeout(1200);
