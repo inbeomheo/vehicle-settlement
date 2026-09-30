@@ -446,6 +446,7 @@ function quickApprovable(row: LedgerRow) {
     row.operation_status !== 'CANCELED' &&
     !row.evidence_missing &&
     !row.has_requested_extra &&
+    !row.has_base_amount_difference &&
     row.review_total_amount !== null
   );
 }
@@ -478,6 +479,7 @@ function ReviewCard({
   const issues = [
     row.evidence_missing && '증빙 없음',
     row.has_requested_extra && '요청 추가비 확인 필요',
+    row.has_base_amount_difference && '계약 단가와 다른 금액',
     row.review_total_amount === null && '단가 미확정',
     row.entered_as === 'PROXY' && `대리 입력(${row.creator_name})`,
   ].filter(Boolean) as string[];

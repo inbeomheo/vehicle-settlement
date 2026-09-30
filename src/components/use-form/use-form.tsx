@@ -1,4 +1,6 @@
 'use client';
+import type { RecentRoute } from '@/client/types';
+import { proposedAmount } from '@/shared/charge-amount';
 import { RestrictedEvidenceNotice } from '@/components/evidence/restricted-notice';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, ApiError, mutate } from '@/client/api';
@@ -128,6 +130,27 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
   const settings = useFormSettings(boot.user.id, draft?.form.project_id, mode);
   const current = useRef<Draft | undefined>(undefined);
   const [lookups, setLookups] = useState(boot.lookups);
+  const [recentRoutes, setRecentRoutes] = useState<RecentRoute[]>([]);
+  const recentDriver = draft?.form.driver_id;
+  useEffect(() => {
+    let alive = true;
+    setRecentRoutes([]);
+    if (!recentDriver) return;
+    const key = `recent-routes:${recentDriver}`;
+    void api<RecentRoute[]>(`/api/uses/recent-routes?driver_id=${recentDriver}&limit=20`)
+      .then(async (rows) => {
+        await cacheValue(boot.user.id, key, rows).catch(() => {});
+        if (alive) setRecentRoutes(rows);
+      })
+      .catch(async (error: unknown) => {
+        if (error instanceof ApiError) return;
+        const rows = await cachedValue<RecentRoute[]>(boot.user.id, key).catch(() => undefined);
+        if (alive) setRecentRoutes(rows ?? []);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [recentDriver, boot.user.id]);
   const [recent, setRecent] = useState<UseDetail[]>([]);
   const [resumable, setResumable] = useState<Draft[]>([]);
   const [submitted, setSubmitted] = useState(false);
@@ -753,7 +776,9 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
     (f) => !pendingUploads.some((u) => u.serverId === f.id || u.replacesId === f.id),
   );
   const baseCharges = form.charges.filter((c) => c.direction === 'PAYABLE' && c.charge_type === 'BASE');
-  const baseAmounts = baseCharges.map((c) => estimates[c.key]);
+  const baseAmounts = baseCharges.map((c) =>
+    c.requested_amount !== '' ? Number(c.requested_amount) : estimates[c.key],
+  );
   const extraAmount = form.charges
     .filter(
       (c) =>
@@ -1187,9 +1212,11 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
                   <p>
                     기본운임{' '}
                     {money(
-                      draft.conflict.charge_lines.find(
-                        (c) => c.charge_type === 'BASE' && c.direction === 'PAYABLE',
-                      )?.computed_amount,
+                      proposedAmount(
+                        draft.conflict.charge_lines.find(
+                          (c) => c.charge_type === 'BASE' && c.direction === 'PAYABLE',
+                        ),
+                      ),
                     )}
                   </p>
                 </div>
@@ -1400,7 +1427,26 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
                 done={stepDone.trips}
                 trips={form.trips}
                 onChange={(trips) => change({ trips })}
-                recent={recent}
+                recent={recent.filter((use) => use.driver_id === form.driver_id)}
+                recentRoutes={recentRoutes}
+                onRecentRoute={(trips, route) =>
+                  change({
+                    trips,
+                    charges: form.charges.map((charge) =>
+                      charge.charge_type === 'BASE' &&
+                      charge.direction === 'PAYABLE' &&
+                      charge.requested_amount === ''
+                        ? {
+                            ...charge,
+                            recentAmount:
+                              route.last_amount === null
+                                ? undefined
+                                : { amount: route.last_amount, tax_mode: 'VAT_EXCLUDED' },
+                          }
+                        : charge,
+                    ),
+                  })
+                }
                 billingUnits={form.charges
                   .filter((charge) => charge.charge_type === 'BASE')
                   .map((charge) => charge.billing_unit)}
@@ -1559,7 +1605,7 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
                     }
                   </p>
                   <p>
-                    요청/계산: {money(c.computed_amount ?? c.requested_amount)} · 인정액:{' '}
+                    요청/계산: {money(proposedAmount(c))} · 인정액:{' '}
                     {c.approved_amount == null ? '미확정' : money(c.approved_amount)}
                   </p>
                   {c.reason && <p className="text-sm">{c.reason}</p>}

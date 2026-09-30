@@ -21,6 +21,8 @@ export type FormCharge = Omit<ChargeInput, 'requested_amount' | 'quantity' | 'bi
   billing_unit: NonNullable<ChargeInput['billing_unit']> | '';
   // Local provenance: never overwrite a quantity the user has edited, including an empty one.
   quantitySource?: 'automatic' | 'manual';
+  recentAmount?: { amount: number; tax_mode: 'VAT_EXCLUDED' | 'VAT_INCLUDED' | 'TAX_EXEMPT' };
+  amountSource?: 'recent' | 'manual';
 };
 export type FormValues = {
   use_date: string;
@@ -200,18 +202,29 @@ export function toInput(form: FormValues, mode: Mode): CreateUseInput {
     })),
     charge_lines: form.charges
       .filter((c) => mode === 'manager' || c.direction === 'PAYABLE')
-      .map(({ key: _key, quantitySource: _quantitySource, ...c }) => {
-        void _key;
-        void _quantitySource;
-        return {
-          ...c,
-          billing_unit: c.billing_unit || undefined,
-          quantity:
-            c.quantity ||
-            (['PER_DAY', 'HALF_DAY', 'MONTHLY', 'LUMP_SUM'].includes(c.billing_unit) ? '1' : null),
-          requested_amount: c.charge_type === 'BASE' ? undefined : Number(c.requested_amount),
-        };
-      }),
+      .map(
+        ({
+          key: _key,
+          quantitySource: _quantitySource,
+          recentAmount: _recentAmount,
+          amountSource: _amountSource,
+          ...c
+        }) => {
+          void _key;
+          void _quantitySource;
+          void _recentAmount;
+          void _amountSource;
+          return {
+            ...c,
+            billing_unit: c.billing_unit || undefined,
+            quantity:
+              c.quantity ||
+              (['PER_DAY', 'HALF_DAY', 'MONTHLY', 'LUMP_SUM'].includes(c.billing_unit) ? '1' : null),
+            requested_amount:
+              c.requested_amount === '' && c.charge_type === 'BASE' ? null : Number(c.requested_amount),
+          };
+        },
+      ),
   };
 }
 export type FormError = { target: string; reason: string };
@@ -241,6 +254,12 @@ export function validateFields(form: FormValues, intent: 'save' | 'submit' = 'sa
       add(`${target}.quantity`, '청구 수량을 입력하세요');
     if (c.quantity && !/^\d{1,9}(\.\d{1,3})?$/.test(c.quantity))
       add(`${target}.quantity`, '청구수량은 소수 셋째 자리까지 입력하세요.');
+    if (
+      c.charge_type === 'BASE' &&
+      c.requested_amount !== '' &&
+      (!/^\d+$/.test(c.requested_amount) || Number(c.requested_amount) > 2147483647)
+    )
+      add(`${target}.requested_amount`, '운행 금액은 0 이상의 정수 원으로 입력하세요.');
     if (c.charge_type !== 'BASE') {
       const message = '추가 비용은 정수 원 요청액과 사유를 입력하세요.';
       if (!/^\d+$/.test(c.requested_amount) || Number(c.requested_amount) > 2147483647)
@@ -304,7 +323,13 @@ export function copyValues(use: UseDetail, mode: Mode): FormValues {
 export function resetBaseRates(charges: FormCharge[]) {
   return charges.map((charge) =>
     charge.charge_type === 'BASE'
-      ? { ...charge, billing_unit: '' as const, quantity: '', quantitySource: undefined }
+      ? {
+          ...charge,
+          billing_unit: '' as const,
+          quantity: '',
+          quantitySource: undefined,
+          recentAmount: undefined,
+        }
       : charge,
   );
 }

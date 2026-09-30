@@ -60,3 +60,14 @@ export function todaySeoul() {
 export function money(value: number | null | undefined) {
   return value == null ? '단가 미확정' : `${value.toLocaleString('ko-KR')}원`;
 }
+
+export type RecentRoute = {
+  project_id: string;
+  project_name: string;
+  origin: string;
+  destination: string;
+  last_used: string;
+  frequency: number;
+  /** Supply amount of this driver's latest submitted use of the route. */
+  last_amount: number | null;
+};
