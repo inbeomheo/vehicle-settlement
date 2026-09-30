@@ -347,12 +347,18 @@ export function DriverDashboard() {
           </button>
         )}
       </section>
-      <p className="pt-2 text-center">
+      <p className="flex flex-wrap justify-center gap-x-4 pt-2 text-center">
         <a
           href="/manual#driver"
           className="inline-flex min-h-12 items-center font-semibold text-slate-700 underline underline-offset-4"
         >
           쓰는 법이 궁금하면 사용 설명서
+        </a>
+        <a
+          href="/d/account"
+          className="inline-flex min-h-12 items-center font-semibold text-slate-700 underline underline-offset-4"
+        >
+          비밀번호 변경
         </a>
       </p>
     </div>

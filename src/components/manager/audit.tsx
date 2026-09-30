@@ -39,6 +39,11 @@ type Result = {
 };
 const auditLabels: Record<string, string> = {
   ...formFieldLabels,
+  CREATE_PASSWORD_RESET: '비밀번호 재설정 링크 생성',
+  RESET_PASSWORD: '비밀번호 재설정',
+  CHANGE_PASSWORD: '비밀번호 변경',
+  CHANGE_PASSWORD_FAILED: '비밀번호 변경 실패',
+  password_reset: '비밀번호 재설정 링크',
   FORM_FIELDS_UPDATE: '입력 항목 설정 변경',
   form_field_setting: '입력 항목 설정',
   HIDDEN: '숨김',

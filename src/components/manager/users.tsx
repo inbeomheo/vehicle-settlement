@@ -56,6 +56,7 @@ export function Users() {
   const { busy, begin, end } = useBusy();
   const [cancelInvite, setCancelInvite] = useState<Invite | null>(null);
   const [inviteUrl, setInviteUrl] = useState('');
+  const [resetLink, setResetLink] = useState<{ userId: string; url: string } | null>(null);
   const [inviteRole, setInviteRole] = useState('SITE_MANAGER');
   const [projects, setProjects] = useState<string[]>([]);
   const [selected, setSelected] = useState<User | null>(null);
@@ -431,6 +432,51 @@ export function Users() {
                     </div>
                   </div>
                   <p className="mt-2 break-all text-xs text-slate-600">사용자 ID: {user.id}</p>
+                  <button
+                    className={`${secondaryClass} mt-3 max-w-full whitespace-normal`}
+                    disabled={busy || user.status !== 'ACTIVE'}
+                    onClick={() => {
+                      setResetLink(null);
+                      void run(async () => {
+                        const result = await mutate<{ reset_url?: string; message?: string }>(
+                          `/api/admin/users/${user.id}/password-reset`,
+                          'POST',
+                        );
+                        if (!result.reset_url) throw new Error(result.message ?? '새 링크를 다시 만드세요.');
+                        setResetLink({ userId: user.id, url: result.reset_url });
+                      }, '비밀번호 재설정 링크를 만들었습니다.');
+                    }}
+                  >
+                    비밀번호 재설정 링크 만들기
+                  </button>
+                  {resetLink?.userId === user.id && (
+                    <div className="mt-4 space-y-3">
+                      <Field title="비밀번호 재설정 링크">
+                        <input
+                          className={inputClass}
+                          readOnly
+                          value={resetLink.url}
+                          onFocus={(event) => event.target.select()}
+                        />
+                      </Field>
+                      <p className="text-sm text-slate-600">
+                        이 링크를 본인에게 문자로 보내세요. 24시간 동안 한 번만 쓸 수 있습니다.
+                      </p>
+                      <button
+                        className={secondaryClass}
+                        onClick={async () => {
+                          try {
+                            await navigator.clipboard.writeText(resetLink.url);
+                            setSuccess('링크를 복사했습니다.');
+                          } catch {
+                            setError('링크를 선택한 뒤 직접 복사하세요.');
+                          }
+                        }}
+                      >
+                        복사
+                      </button>
+                    </div>
+                  )}
                 </article>
               ))}
           </div>
