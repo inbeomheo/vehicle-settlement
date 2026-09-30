@@ -203,10 +203,6 @@ export default function ManualPage() {
                 휴대폰이나 PC에서 <B>vehicle-settlement.vercel.app</B> 에 들어가, 담당자에게 받은 아이디와
                 비밀번호를 넣습니다. 기사는 ‘내 운행’, 담당자는 ‘처리할 일’ 화면이 바로 열립니다.
               </p>
-              <p className="text-slate-600">
-                시연용 아이디: 기사 driver1 · 현장 담당자 site · 정산 담당자 settlement (비밀번호 demo1234),
-                관리자 admin (admin1234)
-              </p>
             </Step>
             <Step
               n={2}
