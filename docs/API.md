@@ -168,3 +168,14 @@ commit은 generic 응답 캐시를 사용하지 않는다. job 행 잠금 + 가�
 - 기사의 증빙 목록·revision 내부 증빙·다운로드·업로드·삭제·교체·client_upload_id 재전송·Idempotency-Key 재생은 현재 사용 건/현장 권한과 귀속 기사 일치를 모두 검사한다. 다른 기사 또는 null 귀속 단건은 404다. 해당 사용 건이 다시 본래 기사에게 배정되면 그 기사의 증빙은 다시 보인다.
 - 사용 상세의 `restricted_evidence_count`는 기사가 볼 수 없는 현재(삭제/교체되지 않은) 증빙 수다. `restricted_evidence_satisfies_policy`는 그 제한 증빙만으로 현재 현장의 필수 증빙 정책을 충족하는지를 알려준다. 파일명·ID·본문은 포함하지 않는다. 담당자 응답은 건수 0/false이고 원래 전체 증빙을 유지한다.
 - 숨겨진 증빙도 해당 사용 건의 제출·승인·정산 근거로 인정한다. PENDING/FAILED, 삭제, 교체된 증빙은 기존대로 필수 충족에서 제외한다. 클라이언트 안내 값은 검증 권한을 부여하지 않으며 서버가 매번 최종 재검사한다.
+
+## AGG 현장·기사별 집계
+
+- `GET /api/summary?from=YYYY-MM-DD&to=YYYY-MM-DD&include=approved|all`: 담당자 전용, 기본 `include=approved`. `from`·`to` 필수, 실제 사용일 양끝 포함, 종료일은 시작일의 다음 해 같은 날짜 미만(최대 1년). 잘못된 입력은 422, 기사는 403이다.
+- `GET /api/summary/export.xlsx`: 같은 입력·권한·현장 범위·계산으로 `현장별`, `기사별`, `표` 3시트를 내려준다. 파일명은 `현장기사별집계_시작일_종료일.xlsx`, 숫자 셀은 `#,##0`이다.
+- 응답 `{ data: { from, to, include, projects, drivers, cells, totals } }`. `projects`는 `{id,name,...합계}`, `drivers`는 `{id,name,affiliations:string[],...합계}`, `cells`는 `{project_id,driver_id,...합계}`다. 합계 필드는 `count`, `approved_supply`, `approved_tax`, `pending_supply`, `pending_unknown_count`. `totals`에 `grand_total`(승인 공급가+세액), `driver_count`, `project_count`를 추가한다.
+- `count`는 사용대장 한 줄(사용 건) 기준이며 비용 줄·회차 수로 중복하지 않는다. `approved`는 승인 공급가가 있는 PAYABLE 줄을 가진 사용 건만(0원 포함), `all`은 취소되지 않은 모든 사용 건을 센다. 보류·반려만 있는 건은 `all`의 건수에는 포함되지만 금액에는 포함되지 않는다.
+- 승인 공급가는 사용대장의 `ledgerBase`를 재사용한다. 사용 건 전체 승인 여부와 별개로 삭제되지 않은 PAYABLE/APPROVED 줄의 저장된 승인 공급가·세액을 합산한다. 취소 사용 건, 삭제·보류·반려 비용, RECEIVABLE은 금액에서 제외한다. 정산 완료 금액도 운행일 기준 집계에 포함하며 명세의 정산 기간/확정/지급 상태로 다시 제한하지 않는다.
+- `all`의 검수 전 금액은 PENDING 줄만 별도 표시한다. 기본운임 포함은 0, 그 외 `computed_amount ?? requested_amount`를 기존 `calculateTax`로 공급가 환산한다. ADJUSTMENT는 저장된 공급가 차액 그대로다. 미정 비용은 금액에 더하지 않고 `pending_unknown_count`로 알린다.
+- `ledgerBase`의 기존 `accessibleUseFilter` 권한을 그대로 적용한다. 관리자 및 `all_projects=true` 정산 담당자는 전체, 현장 담당자 및 현장 제한 정산 담당자는 현재 유효 배정 현장만 조회한다. 기사·현장 식별자는 UUID, 이름은 해당 범위 내 최신 사용 스냅샷, 상호는 각 실제 사용일에 유효한 `driver_affiliations → counterparties` 이름을 중복 제거한다.
+- `/m/summary` URL은 `from`, `to`, `include`, `view=projects|drivers|table`을 유지한다. 대장 연결은 기존 `/m/ledger?from&to&project_id&driver_id` 필터를 사용한다.
