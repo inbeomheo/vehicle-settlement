@@ -7,7 +7,7 @@ export default async function Layout({ children }: { children: React.ReactNode }
   await guardPage('driver');
   return (
     <div className="min-h-dvh">
-      <TextSizeScript fallback="large" />
+      <TextSizeScript fallback="normal" />
       <header className="sticky top-0 z-20 flex items-center justify-between gap-2 bg-ink px-3 pt-[max(0.5rem,env(safe-area-inset-top))] pb-2 text-white [font-size:15px]">
         <a
           href="/d"
@@ -18,7 +18,7 @@ export default async function Layout({ children }: { children: React.ReactNode }
           <span className="hidden min-[400px]:inline">차량 사용·정산</span>
         </a>
         <div className="flex shrink-0 items-center gap-1">
-          <TextSizeControl fallback="large" tone="dark" />
+          <TextSizeControl fallback="normal" tone="dark" />
           <LogoutButton tone="dark" />
         </div>
       </header>

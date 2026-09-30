@@ -1,3 +1,4 @@
+import { displayUnitPrice } from '@/shared/charge-amount';
 import { Plate } from '@/components/ui/plate';
 import { formatQuantity } from '@/shared/quantity';
 import { chargeTypeLabel, chargeUnitLabel } from '@/components/manager/charge-display';
@@ -63,9 +64,9 @@ export function StatementItems({ items }: { items: StatementDetail['items'] }) {
                 </span>
                 <span className="text-slate-600">운행 {snapshot.trip_count}건</span>
               </>,
-              snapshot.unit_price === null && snapshot.charge_type && snapshot.charge_type !== 'BASE'
+              displayUnitPrice(snapshot, item.supply_amount) === null
                 ? '—'
-                : money(snapshot.unit_price),
+                : money(displayUnitPrice(snapshot, item.supply_amount)),
               money(item.supply_amount),
               money(item.tax_amount),
               <>

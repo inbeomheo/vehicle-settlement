@@ -115,8 +115,13 @@ export function UseViews({
     <div className="min-w-0 space-y-3 break-keep [overflow-wrap:anywhere]">
       <p aria-label="기간 운행 합계" className="flex flex-wrap gap-x-1 gap-y-1 font-semibold">
         <span>운행 {totals.count}건 ·</span>
-        <span className="whitespace-nowrap">승인 {money(totals.approved_supply)} ·</span>
-        <span className="whitespace-nowrap">검수 전 {money(totals.pending_supply)}</span>
+        <span className="whitespace-nowrap">
+          승인 {money(totals.approved_supply)}
+          {totals.pending_supply !== 0 && ' ·'}
+        </span>
+        {totals.pending_supply !== 0 && (
+          <span className="whitespace-nowrap">검수 전 {money(totals.pending_supply)}</span>
+        )}
       </p>
       <p className="text-sm text-slate-700">
         운행 금액은 세금 제외 기준입니다. 검수 전 금액은 검수 후 달라질 수 있습니다.

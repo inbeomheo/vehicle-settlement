@@ -1,3 +1,4 @@
+import { displayUnitPrice } from '../../shared/charge-amount';
 import { formatQuantity } from '../../shared/quantity';
 import type { Context } from '../context';
 import { getStatement, type ItemSnapshot } from '../services/statements';
@@ -99,7 +100,7 @@ export function rowValues(row: StatementExportModel['rows'][number]): (string | 
     row.trip_count,
     exportChargeUnit(row.charge_type, row.billing_unit),
     row.quantity === null ? null : formatQuantity(row.quantity),
-    row.unit_price,
+    displayUnitPrice(row, row.supply_amount),
     row.supply_amount,
     row.tax_amount,
     [row.carried_forward ? '전월분' : '', row.charge_type === 'ADJUSTMENT' ? '조정' : '', row.notes]

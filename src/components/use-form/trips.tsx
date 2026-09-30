@@ -295,7 +295,16 @@ export function TripFields({
                           const patch = {
                             origin: route.origin,
                             destination: route.destination,
-                            via: route.via?.join(', ') ?? '',
+                            // 최근 경로 목록에는 경유지가 없으므로 같은 구간의 지난 운행에서 가져온다.
+                            via:
+                              (
+                                route.via ??
+                                recent
+                                  .flatMap((u) => u.trips)
+                                  .find(
+                                    (t) => t.origin === route.origin && t.destination === route.destination,
+                                  )?.via
+                              )?.join(', ') ?? '',
                           };
                           const recentRoute = recentRoutes.find(
                             (r) => r.origin === route.origin && r.destination === route.destination,

@@ -606,7 +606,8 @@ export async function confirmStatement(
       .set({
         ...totals,
         ...(await headerSnapshots(tx, before)),
-        statement_no: await nextStatementNo(tx.db, before.direction, before.period_start),
+        // 19일~18일 같은 마감 기간은 끝나는 달로 부른다(예: 8/19~9/18 → 9월분).
+        statement_no: await nextStatementNo(tx.db, before.direction, before.period_end),
         status: 'CONFIRMED',
         confirmed_at: new Date(),
         confirmed_by: tx.user.id,

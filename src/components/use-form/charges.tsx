@@ -132,41 +132,52 @@ function RateFields({
   return (
     <div className="grid gap-4">
       <div aria-live="polite" aria-atomic="true" className="grid gap-2">
-        <div className="flex min-w-0 flex-wrap overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
-          <div className="min-w-[min(100%,11rem)] flex-[2_1_11rem] p-4">
-            <p className="flex flex-wrap items-center gap-1.5 text-sm text-slate-700">
-              <span className="truncate">
-                {rate?.name ?? (charge.requested_amount !== '' ? '직접 입력한 운행 금액' : '단가 미확정')}
-              </span>
-              {rate && (
-                <span className="shrink-0 whitespace-nowrap rounded bg-slate-200 px-1.5 py-0.5 text-sm font-semibold text-slate-800">
-                  {preserved ? '저장 당시 계약' : '자동 적용'}
+        {/* 계약 단가가 있을 때만 자동 계산 전표를 보여 준다. 없으면 아래 금액 칸이 주인공. */}
+        {!rate && (
+          // 화면 읽기 프로그램에는 계약이 없어도 기본운임 상태를 알려 준다.
+          <p className="sr-only">
+            기본운임 {charge.requested_amount !== '' ? money(Number(charge.requested_amount)) : '금액 미정'}
+          </p>
+        )}
+        {rate && (
+          <div className="flex min-w-0 flex-wrap overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+            <div className="min-w-[min(100%,11rem)] flex-[2_1_11rem] p-4">
+              <p className="flex flex-wrap items-center gap-1.5 text-sm text-slate-700">
+                <span className="truncate">
+                  {rate?.name ?? (charge.requested_amount !== '' ? '직접 입력한 운행 금액' : '단가 미확정')}
                 </span>
-              )}
-            </p>
-            <p className="mt-1 text-2xl font-bold whitespace-nowrap">
-              {rate ? units[rate.billing_unit] : '—'}
-            </p>
-            <p className="mt-0.5 text-sm text-slate-700">
-              {rate ? `단가 ${money(rate.unit_price)}` : '단가를 아직 찾지 못했습니다. 담당자가 확인합니다.'}
-            </p>
-          </div>
-          <div aria-hidden="true" className="slip-perforation w-2 shrink-0" />
-          <div className="flex min-w-[min(100%,9rem)] flex-[1_1_9rem] flex-col items-end justify-center p-4 text-right">
-            {needsQuantity ? (
-              <p className="text-[0.9375rem] font-bold text-orange-700">청구 수량을 입력하세요</p>
-            ) : (
-              <p className="leading-tight">
-                <span className="block text-sm text-slate-700">기본운임</span>{' '}
-                <span className="num text-[1.625rem] font-bold whitespace-nowrap">
-                  {money(
-                    !rate && charge.requested_amount !== '' ? Number(charge.requested_amount) : estimate,
-                  )}
-                </span>
+                {rate && (
+                  <span className="shrink-0 whitespace-nowrap rounded bg-slate-200 px-1.5 py-0.5 text-sm font-semibold text-slate-800">
+                    {preserved ? '저장 당시 계약' : '자동 적용'}
+                  </span>
+                )}
               </p>
-            )}
+              <p className="mt-1 text-2xl font-bold whitespace-nowrap">
+                {rate ? units[rate.billing_unit] : '—'}
+              </p>
+              <p className="mt-0.5 text-sm text-slate-700">
+                {rate
+                  ? `단가 ${money(rate.unit_price)}`
+                  : '단가를 아직 찾지 못했습니다. 담당자가 확인합니다.'}
+              </p>
+            </div>
+            <div aria-hidden="true" className="slip-perforation w-2 shrink-0" />
+            <div className="flex min-w-[min(100%,9rem)] flex-[1_1_9rem] flex-col items-end justify-center p-4 text-right">
+              {needsQuantity ? (
+                <p className="text-[0.9375rem] font-bold text-orange-700">청구 수량을 입력하세요</p>
+              ) : (
+                <p className="leading-tight">
+                  <span className="block text-sm text-slate-700">기본운임</span>{' '}
+                  <span className="num text-[1.625rem] font-bold whitespace-nowrap">
+                    {money(
+                      !rate && charge.requested_amount !== '' ? Number(charge.requested_amount) : estimate,
+                    )}
+                  </span>
+                </p>
+              )}
+            </div>
           </div>
-        </div>
+        )}
         {error && <p className="text-[0.9375rem] font-semibold text-orange-800">{error}</p>}
       </div>
       {rate && !manualAmount && charge.requested_amount === '' ? (
@@ -182,8 +193,9 @@ function RateFields({
           <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-end gap-2">
             <Field label="이번 운행 금액(원)" target={`charge:${charge.id ?? charge.key}.requested_amount`}>
               <input
-                className={`${control} min-w-0 flex-1`}
+                className={`${control} min-w-0 flex-1 ${rate ? '' : 'num text-xl font-bold'}`}
                 inputMode="numeric"
+                placeholder={rate ? money(estimate) : '예: 300,000'}
                 value={
                   charge.requested_amount === ''
                     ? ''
@@ -198,17 +210,19 @@ function RateFields({
             </Field>
             <span className="pb-4">원</span>
           </div>
-          {charge.amountSource === 'recent' && <p className="text-sm text-slate-700">지난번 이 구간 금액</p>}
-          <p className="text-sm text-slate-700">
-            담당자가 확인하면 이 금액으로 확정됩니다. 모르면 비워 두세요.
-            {rate && ' 비우면 계약 금액이 적용됩니다.'}
-          </p>
+          {charge.amountSource === 'recent' && (
+            <p className="justify-self-start rounded-md bg-blue-50 px-2.5 py-1 text-sm font-semibold text-blue-900">
+              지난번 이 구간 금액
+            </p>
+          )}
           <p className="text-sm text-slate-700">
             {rate?.tax_mode === 'VAT_INCLUDED'
-              ? '부가세 포함 금액'
+              ? '부가세를 포함해 적어 주세요.'
               : rate?.tax_mode === 'TAX_EXEMPT'
-                ? '면세 금액'
-                : '부가세 별도 금액(공급가)'}
+                ? '면세 금액을 적어 주세요.'
+                : '부가세는 빼고 적어 주세요.'}{' '}
+            담당자가 확인하면 이 금액으로 확정됩니다.
+            {rate ? ' 비우면 계약 금액이 적용됩니다.' : ' 모르면 비워 두세요.'}
           </p>
         </div>
       )}

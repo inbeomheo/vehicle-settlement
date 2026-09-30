@@ -523,7 +523,11 @@ function ReviewCard({
             <span className="font-semibold">{row.driver_name}</span>
             <span className="text-sm text-slate-500">{row.project_name}</span>
           </div>
-          <p className="mt-1.5 truncate text-[0.9375rem]">{row.route_summary}</p>
+          <p className="mt-1.5 truncate text-[0.9375rem]">
+            {row.route_summary}
+            {/* 조출·장재물 같은 운반 내용은 금액이 달라지는 이유라 함께 보여 준다. */}
+            {row.cargo_desc && <span className="text-slate-500"> · {row.cargo_desc}</span>}
+          </p>
           <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
             <UseLink id={row.id}>{row.use_no}</UseLink>
             <span className="text-slate-600">증빙 {row.evidence_count}개</span>
