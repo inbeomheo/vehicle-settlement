@@ -108,3 +108,13 @@ DB_SCHEMA를 지정하면 항상 앱 논리 백업을 사용한다. 지정 스�
 - 코드의 자동 검증과 실제 Vercel/Supabase 배포 검증은 별개다. 실제 프로젝트 연결·URL 발급은 코디네이터가 준비한 대상에서 수행한다.
 
 참고: [Next.js 파일 추적](https://nextjs.org/docs/app/api-reference/config/next-config-js/output), [node-postgres SSL](https://node-postgres.com/features/ssl).
+
+## 실제 사용 시작 (시연 데이터 지우기)
+
+시연 데이터와 시연 계정을 모두 지우고 관리자 계정 하나만 남긴다. 관리자 비밀번호는 아무도 모르는 임의 값이고, 24시간짜리 비밀번호 설정 링크가 출력된다.
+
+```sh
+CONFIRM_FRESH_START=지우기 APP_URL=https://<배포 주소> npm run start:fresh -- [관리자아이디] [관리자이름]
+```
+
+관리자가 링크에서 비밀번호를 정하고 로그인하면 대시보드의 "시작 준비"에 회사 정보 → 현장 → 차량 → 운송사·기사 사업자 → 기사 → 기사 소속 → 계약·단가 → 사람 초대 순서가 나온다. 모두 등록하면 사라진다.

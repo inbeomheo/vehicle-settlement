@@ -34,6 +34,85 @@ function Chevron() {
   );
 }
 
+const setupSteps = [
+  {
+    key: 'company',
+    title: '회사 정보',
+    hint: '명세서에 찍히는 회사 이름·사업자번호',
+    href: '/m/master/company',
+  },
+  { key: 'projects', title: '현장', hint: '운행을 받을 현장(프로젝트)', href: '/m/master/projects' },
+  { key: 'vehicles', title: '차량', hint: '차량번호·차종·톤수', href: '/m/master/vehicles' },
+  {
+    key: 'payees',
+    title: '운송사·기사 사업자',
+    hint: '돈을 받는 상호(개인 사업자 포함)',
+    href: '/m/master/counterparties',
+  },
+  { key: 'drivers', title: '기사', hint: '기사 이름·연락처·기본 차량', href: '/m/master/drivers' },
+  {
+    key: 'affiliations',
+    title: '기사 소속',
+    hint: '기사가 어느 상호로 받는지',
+    href: '/m/master/affiliations',
+  },
+  {
+    key: 'rates',
+    title: '계약·단가',
+    hint: '기사 화면에서 금액이 자동으로 계산되게',
+    href: '/m/master/rates',
+  },
+  { key: 'people', title: '사람 초대', hint: '기사·현장 담당자·정산 담당자에게 초대 링크', href: '/m/users' },
+];
+
+/** 관리자가 처음 쓸 때: 운행을 받기 전에 등록할 것을 순서대로. 모두 끝나면 사라진다. */
+function SetupChecklist() {
+  const { data } = useRemote<Counts>('/api/setup-status');
+  if (!data) return null;
+  const done = setupSteps.filter((step) => data[step.key] > 0).length;
+  if (done === setupSteps.length) return null;
+  return (
+    <section aria-labelledby="setup-title" className="mb-8 rounded-lg border-2 border-signal bg-white p-5">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 id="setup-title" className="text-xl font-bold">
+          시작 준비
+        </h2>
+        <p className="num text-sm font-semibold text-slate-600">
+          {done} / {setupSteps.length} 완료
+        </p>
+      </div>
+      <p className="mt-1 text-[0.9375rem] text-slate-600">
+        기사님이 운행을 보내기 전에 위에서부터 차례로 등록해 주세요.
+      </p>
+      <ol className="mt-4 divide-y divide-slate-100">
+        {setupSteps.map((step, index) => {
+          const ok = data[step.key] > 0;
+          return (
+            <li key={step.key}>
+              <Link href={step.href} className="flex min-h-14 items-center gap-3 py-2.5 hover:bg-slate-50">
+                <span
+                  aria-hidden="true"
+                  className={`num flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold ${ok ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-700'}`}
+                >
+                  {ok ? '✓' : index + 1}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className={`block font-semibold ${ok ? 'text-slate-500' : ''}`}>
+                    {step.title}
+                    <span className="sr-only">{ok ? ' 완료' : ' 아직 안 함'}</span>
+                  </span>
+                  <span className="block text-sm text-slate-600">{step.hint}</span>
+                </span>
+                <Chevron />
+              </Link>
+            </li>
+          );
+        })}
+      </ol>
+    </section>
+  );
+}
+
 /** 대시보드는 "지금 처리할 일"만 보여준다. 숫자를 누르면 해당 목록으로 간다. */
 export function Dashboard({ role }: { role: Context['user']['role'] }) {
   const { data, error, loading, refresh } = useRemote<Counts>('/api/dashboard');
@@ -53,6 +132,7 @@ export function Dashboard({ role }: { role: Context['user']['role'] }) {
           대리 입력
         </Link>
       </div>
+      {role === 'ADMIN' && <SetupChecklist />}
       <Notice error={error} onRetry={error ? refresh : undefined} />
       {loading && !data ? (
         <Empty loading />
