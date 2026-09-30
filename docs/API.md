@@ -168,3 +168,18 @@ commit은 generic 응답 캐시를 사용하지 않는다. job 행 잠금 + 가�
 - 기사의 증빙 목록·revision 내부 증빙·다운로드·업로드·삭제·교체·client_upload_id 재전송·Idempotency-Key 재생은 현재 사용 건/현장 권한과 귀속 기사 일치를 모두 검사한다. 다른 기사 또는 null 귀속 단건은 404다. 해당 사용 건이 다시 본래 기사에게 배정되면 그 기사의 증빙은 다시 보인다.
 - 사용 상세의 `restricted_evidence_count`는 기사가 볼 수 없는 현재(삭제/교체되지 않은) 증빙 수다. `restricted_evidence_satisfies_policy`는 그 제한 증빙만으로 현재 현장의 필수 증빙 정책을 충족하는지를 알려준다. 파일명·ID·본문은 포함하지 않는다. 담당자 응답은 건수 0/false이고 원래 전체 증빙을 유지한다.
 - 숨겨진 증빙도 해당 사용 건의 제출·승인·정산 근거로 인정한다. PENDING/FAILED, 삭제, 교체된 증빙은 기존대로 필수 충족에서 제외한다. 클라이언트 안내 값은 검증 권한을 부여하지 않으며 서버가 매번 최종 재검사한다.
+
+## DRV 기사 현장별·날짜별 정산
+
+`GET /api/statements/mine?periodStart=YYYY-MM-DD&periodEnd=YYYY-MM-DD`는 기존 `uses`, `summary`, `statements`에 다음 읽기 전용 집계를 추가한다. 기사 역할·본인 운행·현재 유효한 현장 배정을 모두 검사한다. 유효한 실제 날짜, 시작일 ≤ 종료일, 시작일의 다음 해 같은 날짜 미만(최대 1년)을 zod로 검증하며 실패는 422다. 조회일 양 끝은 포함한다.
+
+- `period_totals`: `{ count, trip_count, approved_supply, pending_supply, unpriced_count, canceled_count }`.
+- `projects`: `{ project_id, project_name, ...period_totals, uses }[]`. 승인 공급가 내림차순, 동률이면 검수 전 공급가 내림차순. 이름은 해당 기간의 최신 운행에 저장된 현장명이다.
+- `dates`: `{ date, ...period_totals, uses }[]`. 실제 운행일 내림차순.
+- 기존 `uses`와 묶음 내부 `uses`의 행: 기존 `id, use_no, use_date, review_status, project_name, held_count, approved_supply`에 `project_id, operation_status, route_summary, trip_count, pending_supply, pending_count, unpriced_count`를 추가한다. 경로는 기존 기사 목록과 같은 첫 경로 + 나머지 회차 요약이다.
+
+승인 공급가는 기존 기사 정산·사용대장과 동일하게 삭제되지 않은 PAYABLE/APPROVED 라인의 `approved_amount` 합이다. 검수 전은 PENDING/HELD의 저장된 `computed_amount ?? requested_amount`를 기존 세금 함수로 공급가 환산한다(기본운임 포함은 0, ADJUSTMENT는 이미 공급가). REJECTED·삭제 비용은 제외한다. 금액이 없는 항목은 `unpriced_count`로 구분하며 합계에 더하지 않는다. 사용 건·개별 회차의 CANCELED는 집계 건수·회차에서 제외하며 취소 사용 건의 금액은 기간·현장·날짜 합계에서 제외한다. 취소 운행 행은 이력 조회를 위해 남긴다.
+
+지급명세·받은 돈·받을 돈은 기존처럼 **선택 기간과 명세 기간이 겹치는 확정 지급명세의 본인분**을 조회한다. 운행 합계는 **실제 운행일과 세금 제외 공급가** 기준이므로 지급명세 합계(세금 포함·전월분 가능)와 의미가 다르다. 다른 기사·고객 청구 정보는 추가 집계에도 포함하지 않는다.
+
+화면 URL은 기존 `month=YYYY-MM`과 `view=project|date`(기본 project), 직접 기간 `from=YYYY-MM-DD&to=YYYY-MM-DD`를 사용한다. from/to가 있으면 month보다 우선하며 월별 복귀 때 from/to만 제거한다. 새로고침·뒤로가기에서도 선택을 복원한다.
