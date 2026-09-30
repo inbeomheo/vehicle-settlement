@@ -1,3 +1,4 @@
+import { proposedSupply } from '../../shared/charge-amount';
 import { createHash } from 'node:crypto';
 import { and, asc, desc, eq, gte, inArray, isNull, lte, ne, sql, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
@@ -212,6 +213,7 @@ export async function statementCandidates(ctx: Context, input: z.input<typeof ca
     candidates.push({
       charge_line_id: line.id,
       snapshot: await makeItemSnapshot(ctx, line, use, query.periodStart),
+      estimated_supply: line.approved_amount ?? proposedSupply(line),
       eligible: !reasons.length,
       reasons,
     });

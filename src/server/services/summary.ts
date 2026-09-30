@@ -1,3 +1,4 @@
+import { proposedAmountSql } from './charge-amount-sql';
 import { sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Context } from '../context';
@@ -93,7 +94,7 @@ export async function getSummary(ctx: Context, raw: unknown): Promise<SummaryRes
       COALESCE(sum(tax_amount) FILTER (WHERE line_review_status='APPROVED' AND approved_amount IS NOT NULL),0)::text AS approved_tax,
       count(*) FILTER (WHERE line_review_status='APPROVED' AND approved_amount IS NOT NULL)::int AS approved_count,
       COALESCE(jsonb_agg(jsonb_build_object(
-        'amount', CASE WHEN included_in_base THEN 0 ELSE COALESCE(computed_amount,requested_amount) END,
+        'amount', ${proposedAmountSql},
         'tax_mode',tax_mode,'charge_type',charge_type)) FILTER (WHERE line_review_status='PENDING'), '[]'::jsonb) AS pending_lines
       FROM charge_lines WHERE vehicle_use_id=s.id AND direction='PAYABLE' AND deleted_at IS NULL
     ) c

@@ -1,9 +1,10 @@
+import { proposedSupply } from '../../shared/charge-amount';
 import { and, asc, eq, gte, lte, inArray, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Context } from '../context';
 import { accessibleUseFilter, assertActive } from '../authz';
 import { chargeLines, paymentRecords, statementItems, statements, vehicleUses, trips } from '../db/schema';
-import { calculateTax, sumMoney } from '../domain/money';
+import { sumMoney } from '../domain/money';
 import { notFound } from '../errors';
 import { driverSettlementSchema } from './statements-schemas';
 import type { ItemSnapshot } from './statements';
@@ -43,12 +44,7 @@ export async function driverSettlements(ctx: Context, input: z.input<typeof driv
     const costs = linesByUse.get(use.id) ?? [];
     const routes = tripsByUse.get(use.id) ?? [];
     const pending = costs.filter((line) => ['PENDING', 'HELD'].includes(line.line_review_status));
-    const estimates = pending.map((line) => {
-      if (line.included_in_base) return 0;
-      const amount = line.computed_amount ?? line.requested_amount;
-      if (amount === null) return null;
-      return line.charge_type === 'ADJUSTMENT' ? amount : calculateTax(amount, line.tax_mode).supply;
-    });
+    const estimates = pending.map(proposedSupply);
     return {
       id: use.id,
       use_no: use.use_no,
