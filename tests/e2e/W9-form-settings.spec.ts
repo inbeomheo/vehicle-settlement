@@ -75,7 +75,8 @@ test('390px 기본 기사 폼은 최소 항목과 추가비 버튼만 표시하�
   await page.screenshot({ path: 'test-results/W9-minimal-390.png', fullPage: true });
   await page.getByLabel('사진·파일 선택', { exact: true }).setInputFiles('public/icons/icon-192.png');
   await submitDriverForm(page);
-  await expect(page.getByRole('status')).toHaveText('담당자에게 보냈습니다');
+  // 사진 업로드 직후 제출이라 병렬 실행 부하에서는 5초를 넘길 수 있다.
+  await expect(page.getByRole('status')).toHaveText('담당자에게 보냈습니다', { timeout: 20000 });
   const rows = await database.db.select().from(vehicleUses).where(eq(vehicleUses.driver_id, s.driver.id));
   expect(rows).toHaveLength(1);
   expect(rows[0]).toMatchObject({ review_status: 'SUBMITTED', requester: '', work_type_id: null });
