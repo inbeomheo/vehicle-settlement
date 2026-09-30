@@ -31,7 +31,8 @@ test('11: 역할별 메뉴 및 직접 URL의 서버 권한 가드', async ({ pag
   await page.goto('/m/users');
   await expect(page).toHaveURL('/m');
   await login(page, 'admin');
-  await expect(menu.getByRole('link')).toHaveCount(10);
+  await expect(menu.getByRole('link', { name: '현장·기사별 집계', exact: true })).toBeVisible();
+  await expect(menu.getByRole('link')).toHaveCount(11);
   await page.goto('/m/users');
   await expect(page.getByRole('heading', { name: '사용자 관리' })).toBeVisible();
 });

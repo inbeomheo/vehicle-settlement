@@ -13,6 +13,7 @@ const icons: Record<string, string> = {
   '/m/ledger':
     'M3 7h13v10H3zM16 10h3l2 3v4h-5M7 20a2 2 0 1 0 0-4 2 2 0 0 0 0 4M17 20a2 2 0 1 0 0-4 2 2 0 0 0 0 4',
   '/m/uses/new': 'M12 5v14M5 12h14',
+  '/m/summary': 'M4 20h16M6 16v-5M12 16V4M18 16V8',
   '/m/statements': 'M6 3h9l4 4v14H6zM14 3v5h5M9 13h7M9 17h5',
   '/m/payments': 'M3 7h18v10H3zM3 11h18M7 15h3',
   '/m/import': 'M12 3v12M7 10l5 5 5-5M4 19h16',
