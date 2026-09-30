@@ -28,6 +28,15 @@
 - `POST /api/invites/:token/accept`: `{ login_id, password }` → 새 사용자 + 세션 쿠키. 비밀번호 최소 8자·UTF-8 최대 72바이트, 토큰 1회용/7일. URL의 동적 디렉터리 이름은 Next 라우트 충돌을 피하려고 `[id]`로 통일했지만 외부 URL 의미는 token이다.
 - `DELETE /api/invites/:id`: 초대 회수.
 
+## 비밀번호 재설정·변경 (PW)
+
+- `POST /api/admin/users/:id/password-reset`: ADMIN만, 본인 포함 ACTIVE 사용자에게 생성. 빈 본문 → `{ id, user_id, expires_at, reset_url }`. 24시간·1회용 `/reset/:token`. 같은 사용자의 이전 미사용 링크는 폐기한다. `Idempotency-Key` 재요청에는 링크를 제거한 결과와 안내만 반환한다. 원본 토큰은 DB·감사·멱등 응답에 보관하지 않는다.
+- `GET /api/password-resets/:token`: 로그인 불필요. 유효하면 `{ status: "VALID", name, login_id }`, 잘못됨·만료·사용·폐기·비활성 계정이면 `{ status: "INVALID", name: null, login_id: null }`.
+- `POST /api/password-resets/:token`: 로그인 불필요. `{ password, password_confirmation }` → `{ changed: true }`. 비밀번호 교체·링크 사용 처리·모든 세션 폐기·해당 계정 로그인/비밀번호 확인 잠금 해제·감사를 한 트랜잭션으로 처리한다. IP 잠금은 여러 사용자에게 공유되므로 유지한다. 사용할 수 없는 링크는 `404 NOT_FOUND`와 “링크가 만료되었거나 이미 사용되었습니다. 관리자에게 새 링크를 요청하세요.”를 반환한다. 세션을 발급하지 않으며 새 비밀번호로 로그인해야 한다.
+- `POST /api/auth/password`: 로그인한 모든 역할. `{ current_password, password, password_confirmation }` → `{ changed: true }`. 현재 세션을 재검사하고 다른 세션 및 미사용 재설정 링크를 폐기한다. 현재 암호 불일치는 `422 VALIDATION_FAILED`. 계정별 별도 확인 카운터를 기존 throttle 헬퍼로 잠그며 10분 내 5회 실패하면 15분 동안 `429 LOGIN_THROTTLED` (`Retry-After: 900`). 여러 세션의 동시 실패도 누적한다. 실패 횟수의 커밋을 보장하려고 외부 멱등 트랜잭션은 적용하지 않는다.
+- 새 비밀번호는 초대와 동일하게 최소 8자·UTF-8 최대 72바이트. 확인 입력이 다르면 422. 본문은 비밀번호 세 필드 외 추가 필드를 허용하지 않는다.
+- 감사 동작: `CREATE_PASSWORD_RESET`, `RESET_PASSWORD`, `CHANGE_PASSWORD`, `CHANGE_PASSWORD_FAILED`. 비밀번호·비밀번호 해시·재설정 토큰·토큰 해시는 기록하지 않는다.
+
 ## 사용 건
 
 생성 예:

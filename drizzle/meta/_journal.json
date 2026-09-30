@@ -64,6 +64,13 @@
       "when": 1790665000000,
       "tag": "0500_deploy_evidence_blobs",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1790666000000,
+      "tag": "0600_pw_password_resets",
+      "breakpoints": true
     }
   ]
 }
