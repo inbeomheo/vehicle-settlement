@@ -37,22 +37,27 @@ export function InviteForm({ token }: { token: string }) {
   if (invalid) return <p role="alert">이미 사용되었거나 만료된 초대입니다</p>;
   return (
     <form method="post" onSubmit={submit} className="space-y-5">
-      <p className="text-sm text-slate-600">사용할 아이디와 비밀번호를 등록하세요.</p>
-      <label className="block">
+      <p className="text-sm text-slate-600">사용할 아이디와 비밀번호를 정하세요.</p>
+      <label className="block text-sm font-semibold">
         아이디
         <input
-          className="mt-2 block min-h-12 w-full rounded-lg border border-slate-300 px-3 text-base"
+          className="mt-1.5 block min-h-12 w-full rounded-lg border border-slate-300 px-3 text-base focus:border-blue-700 focus:outline-none focus:ring-3 focus:ring-blue-100"
           name="login_id"
+          aria-describedby="login-id-hint"
           autoComplete="username"
           required
           maxLength={100}
         />
       </label>
-      <label className="block">
+      <p id="login-id-hint" className="-mt-3 text-sm text-slate-600">
+        로그인할 때 쓰는 이름입니다. 영문·숫자로 정하면 편합니다.
+      </p>
+      <label className="block text-sm font-semibold">
         비밀번호
         <input
-          className="mt-2 block min-h-12 w-full rounded-lg border border-slate-300 px-3 text-base"
+          className="mt-1.5 block min-h-12 w-full rounded-lg border border-slate-300 px-3 text-base focus:border-blue-700 focus:outline-none focus:ring-3 focus:ring-blue-100"
           name="password"
+          aria-describedby="password-hint"
           type="password"
           autoComplete="new-password"
           minLength={8}
@@ -60,6 +65,9 @@ export function InviteForm({ token }: { token: string }) {
           required
         />
       </label>
+      <p id="password-hint" className="-mt-3 text-sm text-slate-600">
+        8자 이상으로 정하세요.
+      </p>
       {error && (
         <p role="alert" className="text-sm text-red-700">
           {error}
