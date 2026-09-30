@@ -14,7 +14,33 @@ function dateLabel(date: string) {
   const value = new Date(`${date}T00:00:00+09:00`);
   return `${Number(date.slice(5, 7))}월 ${Number(date.slice(8))}일 (${new Intl.DateTimeFormat('ko-KR', { weekday: 'short', timeZone: 'Asia/Seoul' }).format(value)})`;
 }
-function UseRows({ uses }: { uses: Use[] }) {
+/** 한 운행의 금액: 승인되면 굵게, 검수 전이면 회색 금액 위에 작은 "검수 전". */
+function Amount({ use }: { use: Use }) {
+  if (use.operation_status === 'CANCELED')
+    return <span className="text-sm font-semibold text-slate-500">취소 · 합계 제외</span>;
+  const approved = use.review_status === 'APPROVED' || use.approved_supply !== 0;
+  return (
+    <span className="flex flex-col items-end">
+      <span className="sr-only">인정 공급가 </span>
+      {approved ? (
+        <span className="num text-lg font-bold whitespace-nowrap">{money(use.approved_supply)}</span>
+      ) : (
+        <>
+          <span className="text-xs font-semibold text-slate-500">검수 전</span>
+          <span className="num text-lg font-bold whitespace-nowrap text-slate-500">
+            {use.pending_count > 0 && use.pending_supply !== 0 ? money(use.pending_supply) : '금액 미정'}
+          </span>
+        </>
+      )}
+      {approved && use.pending_count > 0 && use.pending_supply !== 0 && (
+        <span className="num text-xs whitespace-nowrap text-slate-500">
+          + 검수 전 {money(use.pending_supply)}
+        </span>
+      )}
+    </span>
+  );
+}
+function UseRows({ uses, title }: { uses: Use[]; title: 'date' | 'project' }) {
   return (
     <ul className="divide-y divide-slate-200">
       {uses.map((use) => (
@@ -22,40 +48,57 @@ function UseRows({ uses }: { uses: Use[] }) {
           <article>
             <a
               href={`/d/uses/${use.id}`}
-              className="block min-h-14 space-y-1 p-4 hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-blue-700"
+              className="flex min-h-14 items-start justify-between gap-3 px-4 py-3 hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-blue-700"
             >
-              <p className="font-semibold">
-                {dateLabel(use.use_date)} · {use.project_name}
-              </p>
-              <p>{use.route_summary ?? '경로 미입력'}</p>
-              <p className="text-sm text-slate-700">
-                <span className="num break-all">{use.use_no}</span> ·{' '}
-                {use.operation_status === 'CANCELED' ? '취소' : reviews[use.review_status]}
-                {use.operation_status !== 'CANCELED' && use.held_count > 0 && ` · 보류 ${use.held_count}건`}
-              </p>
-              {use.operation_status === 'CANCELED' ? (
-                <p className="text-sm text-slate-700">합계에서 제외</p>
-              ) : (
-                <>
-                  <p className="num font-bold whitespace-nowrap">
-                    <span className="sr-only">인정 공급가 </span>
-                    {use.review_status === 'APPROVED' || use.approved_supply !== 0
-                      ? money(use.approved_supply)
-                      : '검수 전'}
-                  </p>
-                  {use.pending_count > 0 && (
-                    <p className="text-sm text-slate-700">
-                      검수 전 <span className="num whitespace-nowrap">{money(use.pending_supply)}</span>
-                      {use.unpriced_count > 0 && ' · 금액 미정 포함'}
-                    </p>
-                  )}
-                </>
-              )}
+              <span className="min-w-0 space-y-0.5">
+                <span className="block font-semibold">
+                  {title === 'date' ? dateLabel(use.use_date) : use.project_name}
+                </span>
+                <span className="block text-[0.9375rem]">{use.route_summary ?? '경로 미입력'}</span>
+                <span className="block text-sm text-slate-600">
+                  <span className="num break-all">{use.use_no}</span> ·{' '}
+                  {use.operation_status === 'CANCELED' ? '취소' : reviews[use.review_status]}
+                  {use.operation_status !== 'CANCELED' && use.held_count > 0 && ` · 보류 ${use.held_count}건`}
+                </span>
+              </span>
+              <Amount use={use} />
             </a>
           </article>
         </li>
       ))}
     </ul>
+  );
+}
+/** 묶음(현장·날짜)의 합계: 승인 금액 크게, 검수 전은 있을 때만 작게. */
+function GroupTotal({
+  approved,
+  pending,
+  unpriced,
+}: {
+  approved: number;
+  pending: number;
+  unpriced: number;
+}) {
+  // 승인된 금액이 없으면 검수 전 금액을 회색으로 크게 보여 "0원"만 덩그러니 남지 않게 한다.
+  const onlyPending = approved === 0 && pending !== 0;
+  return (
+    <span className="flex shrink-0 flex-col items-end">
+      {onlyPending ? (
+        <>
+          <span className="text-xs font-semibold text-slate-500">검수 전</span>
+          <span className="num text-xl font-bold whitespace-nowrap text-slate-500">{money(pending)}</span>
+        </>
+      ) : (
+        <>
+          <span className="sr-only">승인 </span>
+          <span className="num text-xl font-bold whitespace-nowrap">{money(approved)}</span>
+          {pending !== 0 && (
+            <span className="num text-sm whitespace-nowrap text-slate-500">검수 전 {money(pending)}</span>
+          )}
+        </>
+      )}
+      {unpriced > 0 && <span className="text-sm text-slate-500">금액 미정 {unpriced}건</span>}
+    </span>
   );
 }
 export function UseViews({
@@ -95,28 +138,36 @@ export function UseViews({
       </div>
       {view === 'project'
         ? data.projects.map((project) => (
-            <details key={project.project_id} className="rounded-lg border border-slate-200 bg-white">
-              <summary className="min-h-14 cursor-pointer p-4 focus-visible:outline-2 focus-visible:outline-blue-700">
-                <span className="font-bold">{project.project_name}</span>
-                <span className="mt-1 block text-sm text-slate-700">
-                  운행 {project.count}건 · {project.trip_count}회
-                </span>
-                <span className="num mt-2 block text-[1.5rem] font-bold whitespace-nowrap">
-                  <span className="sr-only">승인 </span>
-                  {money(project.approved_supply)}
-                </span>
-                {project.pending_supply !== 0 && (
-                  <span className="mt-1 block text-sm text-slate-700">
-                    검수 전 <span className="num whitespace-nowrap">{money(project.pending_supply)}</span>
+            <details key={project.project_id} className="group rounded-lg border border-slate-200 bg-white">
+              <summary className="flex min-h-14 cursor-pointer list-none items-center gap-3 p-4 focus-visible:outline-2 focus-visible:outline-blue-700 [&::-webkit-details-marker]:hidden">
+                <span className="min-w-0 flex-1">
+                  <span className="block text-lg font-bold">{project.project_name}</span>
+                  <span className="mt-0.5 block text-sm text-slate-600">
+                    운행 {project.count}건 · {project.trip_count}회
                   </span>
-                )}
-                {project.unpriced_count > 0 && (
-                  <span className="block text-sm text-slate-700">검수 전 금액 미정 포함</span>
-                )}
-                <span className="mt-2 block text-sm font-semibold text-blue-800">운행 목록 펼치기·접기</span>
+                </span>
+                <GroupTotal
+                  approved={project.approved_supply}
+                  pending={project.pending_supply}
+                  unpriced={project.unpriced_count}
+                />
+                <svg
+                  aria-hidden="true"
+                  width="22"
+                  height="22"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="shrink-0 text-slate-500 transition-transform group-open:rotate-180"
+                >
+                  <path d="m6 9 6 6 6-6" />
+                </svg>
               </summary>
               <div className="border-t border-slate-200">
-                <UseRows uses={project.uses} />
+                <UseRows uses={project.uses} title="date" />
               </div>
             </details>
           ))
@@ -126,17 +177,15 @@ export function UseViews({
               aria-label={dateLabel(day.date)}
               className="rounded-lg border border-slate-200 bg-white"
             >
-              <div className="space-y-1 border-b border-slate-200 bg-slate-50 p-4">
+              <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3">
                 <h3 className="font-bold">{dateLabel(day.date)}</h3>
-                <p className="num font-bold whitespace-nowrap">승인 {money(day.approved_supply)}</p>
-                {day.pending_supply !== 0 && (
-                  <p className="text-sm text-slate-700">
-                    검수 전 <span className="num whitespace-nowrap">{money(day.pending_supply)}</span>
-                  </p>
-                )}
-                {day.unpriced_count > 0 && <p className="text-sm text-slate-700">검수 전 금액 미정 포함</p>}
+                <GroupTotal
+                  approved={day.approved_supply}
+                  pending={day.pending_supply}
+                  unpriced={day.unpriced_count}
+                />
               </div>
-              <UseRows uses={day.uses} />
+              <UseRows uses={day.uses} title="project" />
             </section>
           ))}
     </div>
