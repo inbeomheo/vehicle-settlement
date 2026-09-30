@@ -1,3 +1,4 @@
+import { routeSummary } from '../domain/route-summary';
 import { createHash } from 'node:crypto';
 import { fixTargetBlockedReason, requiredFieldErrors } from '../../shared/form-settings';
 import { getEffectiveFormSettings } from './form-settings';
@@ -1091,9 +1092,7 @@ export async function listUses(ctx: Context, raw: unknown = {}) {
       payable_base_amount:
         !amounts.length || amounts.some((amount) => amount === null) ? null : sumMoney(amounts),
       payable_base_approved: lines.length > 0 && lines.every((line) => line.status === 'APPROVED'),
-      route_summary: routeTrips.length
-        ? `${routeTrips[0].origin} → ${routeTrips[0].destination}${routeTrips.length > 1 ? ` 외 ${routeTrips.length - 1}회` : ''}`
-        : null,
+      route_summary: routeSummary(routeTrips),
       fix_message: fix ? (fixItems[0]?.message ?? fix.comment ?? null) : null,
     };
   });

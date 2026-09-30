@@ -1,12 +1,14 @@
-import { and, asc, eq, gte, lte } from 'drizzle-orm';
+import { and, asc, eq, gte, lte, inArray, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Context } from '../context';
 import { accessibleUseFilter, assertActive } from '../authz';
-import { chargeLines, paymentRecords, statementItems, statements, vehicleUses } from '../db/schema';
-import { sumMoney } from '../domain/money';
+import { chargeLines, paymentRecords, statementItems, statements, vehicleUses, trips } from '../db/schema';
+import { calculateTax, sumMoney } from '../domain/money';
 import { notFound } from '../errors';
 import { driverSettlementSchema } from './statements-schemas';
 import type { ItemSnapshot } from './statements';
+import { routeSummary } from '../domain/route-summary';
+import { groupDriverUses } from './driver-use-groups';
 export async function driverSettlements(ctx: Context, input: z.input<typeof driverSettlementSchema>) {
   const query = driverSettlementSchema.parse(input);
   await assertActive(ctx);
@@ -19,26 +21,54 @@ export async function driverSettlements(ctx: Context, input: z.input<typeof driv
       and(useScope, gte(vehicleUses.use_date, query.periodStart), lte(vehicleUses.use_date, query.periodEnd)),
     )
     .orderBy(asc(vehicleUses.use_date));
-  const summaries = [];
-  for (const use of uses) {
-    const lines = await ctx.db
-      .select()
-      .from(chargeLines)
-      .where(and(eq(chargeLines.vehicle_use_id, use.id), eq(chargeLines.direction, 'PAYABLE')));
-    summaries.push({
+  const ids = uses.map((use) => use.id);
+  const lines = ids.length
+    ? await ctx.db
+        .select()
+        .from(chargeLines)
+        .where(
+          and(
+            inArray(chargeLines.vehicle_use_id, ids),
+            eq(chargeLines.direction, 'PAYABLE'),
+            isNull(chargeLines.deleted_at),
+          ),
+        )
+    : [];
+  const tripRows = ids.length
+    ? await ctx.db.select().from(trips).where(inArray(trips.vehicle_use_id, ids)).orderBy(asc(trips.seq))
+    : [];
+  const linesByUse = Map.groupBy(lines, (line) => line.vehicle_use_id);
+  const tripsByUse = Map.groupBy(tripRows, (trip) => trip.vehicle_use_id);
+  const summaries = uses.map((use) => {
+    const costs = linesByUse.get(use.id) ?? [];
+    const routes = tripsByUse.get(use.id) ?? [];
+    const pending = costs.filter((line) => ['PENDING', 'HELD'].includes(line.line_review_status));
+    const estimates = pending.map((line) => {
+      if (line.included_in_base) return 0;
+      const amount = line.computed_amount ?? line.requested_amount;
+      if (amount === null) return null;
+      return line.charge_type === 'ADJUSTMENT' ? amount : calculateTax(amount, line.tax_mode).supply;
+    });
+    return {
       id: use.id,
       use_no: use.use_no,
       use_date: use.use_date,
       review_status: use.review_status,
+      operation_status: use.operation_status,
+      project_id: use.project_id,
       project_name: String(use.snapshot?.project_name ?? ''),
-      held_count: lines.filter((l) => !l.deleted_at && l.line_review_status === 'HELD').length,
+      route_summary: routeSummary(routes),
+      trip_count: routes.filter((trip) => trip.status !== 'CANCELED').length,
+      held_count: costs.filter((line) => line.line_review_status === 'HELD').length,
+      // Same approved PAYABLE supply as the ledger and the existing driver view.
       approved_supply: sumMoney(
-        lines
-          .filter((l) => !l.deleted_at && l.line_review_status === 'APPROVED')
-          .map((l) => l.approved_amount),
+        costs.filter((line) => line.line_review_status === 'APPROVED').map((line) => line.approved_amount),
       ),
-    });
-  }
+      pending_supply: sumMoney(estimates),
+      pending_count: pending.length,
+      unpriced_count: estimates.filter((amount) => amount === null).length,
+    };
+  });
   const rows = await ctx.db
     .select({ statement: statements, item: statementItems })
     .from(statementItems)
@@ -100,6 +130,7 @@ export async function driverSettlements(ctx: Context, input: z.input<typeof driv
   }
   return {
     uses: summaries,
+    ...groupDriverUses(summaries),
     summary: {
       total: summaries.length,
       submitted: summaries.filter((u) => u.review_status === 'SUBMITTED').length,

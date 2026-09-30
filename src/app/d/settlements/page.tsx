@@ -1,16 +1,14 @@
 'use client';
 import { errorMessage } from '@/client/error-message';
-import { useEffect, useState } from 'react';
+import { Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { button } from '@/components/use-form/fields';
+import { driverSettlementPeriodSchema } from '@/shared/driver-settlement-period';
+import { PeriodPicker } from './period-picker';
+import { UseViews } from './use-views';
 import type { driverSettlements } from '@/server/services/statements-driver';
 import { ErrorMessage, money, useResource } from '../../m/statements/ui';
 import { Plate } from '@/components/ui/plate';
-
-const reviews: Record<string, string> = {
-  DRAFT: '아직 안 보냄',
-  SUBMITTED: '확인 기다림',
-  APPROVED: '승인됨',
-  NEEDS_FIX: '고쳐서 다시 보내기',
-};
 
 /** YYYY-MM 문자열의 첫날·말일 */
 function period(month: string) {
@@ -59,52 +57,91 @@ function Arrow({ dir }: { dir: 'left' | 'right' }) {
 
 /** 기사의 "내 정산": 이번 달 받은 돈·받을 돈을 먼저 보여 준다. */
 export default function DriverSettlementsPage() {
-  const [month, setMonth] = useState(thisMonth);
-  useEffect(() => {
-    const requested = new URLSearchParams(window.location.search).get('month');
-    if (requested && /^\d{4}-\d{2}$/.test(requested)) setMonth(requested);
-  }, []);
-  const { start, end } = period(month);
+  return (
+    <Suspense fallback={<p role="status">불러오는 중…</p>}>
+      <DriverSettlements />
+    </Suspense>
+  );
+}
+function DriverSettlements() {
+  const search = useSearchParams();
+  const router = useRouter();
+  const requested = search.get('month');
+  const month =
+    requested && /^\d{4}-(0[1-9]|1[0-2])$/.test(requested) && Number(requested.slice(0, 4)) >= 1000
+      ? requested
+      : thisMonth();
+  const custom = search.has('from') || search.has('to');
+  const monthly = period(month);
+  const start = custom ? (search.get('from') ?? '') : monthly.start;
+  const end = custom ? (search.get('to') ?? '') : monthly.end;
+  const valid = driverSettlementPeriodSchema.safeParse({ periodStart: start, periodEnd: end }).success;
+  const label = custom ? (valid ? periodLabel(start, end) : '기간을 확인해 주세요') : monthLabel(month);
+  const view = search.get('view') === 'date' ? 'date' : 'project';
   const result = useResource<Awaited<ReturnType<typeof driverSettlements>>>(
     `/api/statements/mine?${new URLSearchParams({ periodStart: start, periodEnd: end })}`,
   );
-  const go = (delta: number) => {
-    const next = shift(month, delta);
-    setMonth(next);
-    window.history.replaceState(null, '', `/d/settlements?month=${next}`);
+  const navigate = (changes: Record<string, string | null>) => {
+    const query = new URLSearchParams(search.toString());
+    for (const [key, value] of Object.entries(changes)) {
+      if (value === null) query.delete(key);
+      else query.set(key, value);
+    }
+    router.push(`/d/settlements?${query}`, { scroll: false });
   };
+  const go = (delta: number) => navigate({ month: shift(month, delta), from: null, to: null });
   const statements = result.data?.statements ?? [];
   const paid = statements.filter((s) => s.paid).reduce((sum, s) => sum + s.grand_total, 0);
   const unpaid = statements.filter((s) => !s.paid).reduce((sum, s) => sum + s.grand_total, 0);
   const summary = result.data?.summary;
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 space-y-6 break-keep [overflow-wrap:anywhere]">
       <h1 className="text-[1.75rem] font-bold">내 정산</h1>
 
-      <div className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white p-1.5">
-        <button
-          type="button"
-          aria-label="이전 달"
-          className="flex h-14 w-14 items-center justify-center rounded-md hover:bg-slate-100"
-          onClick={() => go(-1)}
-        >
-          <Arrow dir="left" />
-        </button>
-        <p className="text-xl font-bold" aria-live="polite">
-          {monthLabel(month)}
-        </p>
-        <button
-          type="button"
-          aria-label="다음 달"
-          className="flex h-14 w-14 items-center justify-center rounded-md hover:bg-slate-100 disabled:opacity-30"
-          disabled={month >= thisMonth()}
-          onClick={() => go(1)}
-        >
-          <Arrow dir="right" />
-        </button>
-      </div>
+      {custom ? (
+        <div className="space-y-2 rounded-lg border border-slate-200 bg-white p-4">
+          <p className="text-xl font-bold" aria-live="polite">
+            {label}
+          </p>
+          <button type="button" className={button} onClick={() => navigate({ from: null, to: null })}>
+            월별로 돌아가기
+          </button>
+        </div>
+      ) : (
+        <div className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white p-1.5">
+          <button
+            type="button"
+            aria-label="이전 달"
+            className="flex h-14 w-14 items-center justify-center rounded-md hover:bg-slate-100"
+            onClick={() => go(-1)}
+          >
+            <Arrow dir="left" />
+          </button>
+          <p className="text-xl font-bold" aria-live="polite">
+            {monthLabel(month)}
+          </p>
+          <button
+            type="button"
+            aria-label="다음 달"
+            className="flex h-14 w-14 items-center justify-center rounded-md hover:bg-slate-100 disabled:opacity-30"
+            disabled={month >= thisMonth()}
+            onClick={() => go(1)}
+          >
+            <Arrow dir="right" />
+          </button>
+        </div>
+      )}
+      <PeriodPicker
+        key={`${start}:${end}`}
+        start={valid ? start : monthly.start}
+        end={valid ? end : monthly.end}
+        onApply={(from, to) => navigate({ from, to })}
+      />
 
-      <ErrorMessage error={result.error ? errorMessage(result.error) : result.error} />
+      <ErrorMessage
+        error={result.error ? errorMessage(result.error) : result.error}
+        onRetry={result.reload}
+      />
       {result.loading && (
         <p role="status" className="text-lg">
           불러오는 중…
@@ -114,16 +151,21 @@ export default function DriverSettlementsPage() {
       {result.data && summary && (
         <>
           <section
-            aria-label="이번 달 금액"
+            aria-label={custom ? '선택 기간 지급 금액' : '이번 달 금액'}
             className="overflow-hidden rounded-lg border border-slate-200 bg-white"
           >
+            {custom && (
+              <p className="border-b border-slate-200 px-4 py-3 text-sm text-slate-700">
+                받은 돈·받을 돈은 선택 기간과 겹치는 지급명세 기준입니다.
+              </p>
+            )}
             {/* 금액이 커져도 줄이 바뀌지 않도록 한 줄에 하나씩 둔다. */}
             <dl className="divide-y divide-slate-200">
-              <div className="flex items-baseline justify-between gap-3 p-4">
+              <div className="flex flex-wrap items-baseline justify-between gap-3 p-4">
                 <dt className="shrink-0 font-semibold text-slate-700">받은 돈</dt>
                 <dd className="num text-2xl font-bold whitespace-nowrap text-emerald-700">{money(paid)}</dd>
               </div>
-              <div className="flex items-baseline justify-between gap-3 p-4">
+              <div className="flex flex-wrap items-baseline justify-between gap-3 p-4">
                 <dt className="shrink-0 font-semibold text-slate-700">받을 돈</dt>
                 <dd className="num text-2xl font-bold whitespace-nowrap">{money(unpaid)}</dd>
               </div>
@@ -147,17 +189,15 @@ export default function DriverSettlementsPage() {
             </h2>
             {!statements.length && (
               <p className="rounded-lg bg-white p-5 text-slate-700">
-                {monthLabel(month)}에 확정된 지급명세가 아직 없습니다.
+                {label}에 확정된 지급명세가 아직 없습니다.
               </p>
             )}
             {statements.map((s) => (
               <article key={s.id} className="rounded-lg border border-slate-200 bg-white p-4">
-                <div className="flex items-start justify-between gap-3">
+                <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
                     <h3 className="num font-bold break-all">{s.statement_no}</h3>
-                    <p className="num whitespace-nowrap text-slate-700">
-                      {periodLabel(s.period_start, s.period_end)}
-                    </p>
+                    <p className="num text-slate-700">{periodLabel(s.period_start, s.period_end)}</p>
                   </div>
                   <span
                     className={`shrink-0 rounded-full px-3 py-1 font-bold ${s.paid ? 'bg-emerald-50 text-emerald-800' : 'bg-orange-50 text-orange-800'}`}
@@ -165,7 +205,7 @@ export default function DriverSettlementsPage() {
                     {s.paid ? '지급 완료' : '미지급'}
                   </span>
                 </div>
-                <p className="num mt-3 text-[1.75rem] font-bold">{money(s.grand_total)}</p>
+                <p className="num mt-3 text-[1.5rem] font-bold whitespace-nowrap">{money(s.grand_total)}</p>
                 <p className="text-slate-700">
                   {s.paid ? '입금되었습니다.' : '지급 예정입니다.'} 공급가 {money(s.supply_total)} + 세액{' '}
                   {money(s.tax_total)}
@@ -199,32 +239,14 @@ export default function DriverSettlementsPage() {
 
           <section className="space-y-3" aria-labelledby="uses-title">
             <h2 id="uses-title" className="text-xl font-bold">
-              {Number(month.slice(5, 7))}월 운행
+              {custom ? '선택 기간 운행' : `${Number(month.slice(5, 7))}월 운행`}
             </h2>
             {!result.data.uses.length && (
-              <p className="rounded-lg bg-white p-5 text-slate-700">이 달 운행이 없습니다.</p>
+              <p className="rounded-lg bg-white p-5 text-slate-700">
+                {custom ? '이 기간 운행이 없습니다.' : '이 달 운행이 없습니다.'}
+              </p>
             )}
-            <ul className="divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-200 bg-white">
-              {result.data.uses.map((use) => (
-                <li key={use.id}>
-                  <article className="flex items-center justify-between gap-3 px-4 py-3">
-                    <div className="min-w-0">
-                      <p className="font-semibold">
-                        {use.use_date} · {use.project_name}
-                      </p>
-                      <p className="break-keep text-slate-700">
-                        <span className="num">{use.use_no}</span> · {reviews[use.review_status]}
-                        {use.held_count > 0 && ` · 보류 ${use.held_count}건`}
-                      </p>
-                    </div>
-                    <p className="num shrink-0 text-right font-bold">
-                      <span className="sr-only">인정 공급가 </span>
-                      {use.review_status === 'APPROVED' ? money(use.approved_supply) : '검수 전'}
-                    </p>
-                  </article>
-                </li>
-              ))}
-            </ul>
+            <UseViews data={result.data} view={view} onView={(next) => navigate({ view: next })} />
           </section>
         </>
       )}

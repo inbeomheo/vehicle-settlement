@@ -87,9 +87,4 @@ export const adjustmentSchema = z
     effective_date: dateString.optional(),
   })
   .strict();
-export const driverSettlementSchema = z
-  .object({
-    periodStart: dateString,
-    periodEnd: dateString,
-  })
-  .refine((v) => v.periodStart <= v.periodEnd, '조회 기간을 확인하세요.');
+export { driverSettlementPeriodSchema as driverSettlementSchema } from '../../shared/driver-settlement-period';
