@@ -15,7 +15,10 @@ export function bindCreatedRows(current: FormValues, original: FormValues, serve
         (!charge.billing_unit || line.billing_unit === charge.billing_unit) &&
         (!charge.quantity || (line.quantity !== null && new Decimal(line.quantity).eq(charge.quantity))) &&
         (line.reason ?? '') === (charge.reason ?? '') &&
-        (charge.charge_type === 'BASE' || line.requested_amount === Number(charge.requested_amount)),
+        line.requested_amount ===
+          (charge.charge_type === 'BASE' && charge.requested_amount === ''
+            ? null
+            : Number(charge.requested_amount)),
     );
     if (index >= 0) ids.set(charge.key, available.splice(index, 1)[0].id);
   }

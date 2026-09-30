@@ -1,6 +1,6 @@
 'use client';
 import { useContext, useEffect, useState } from 'react';
-import type { UseDetail } from '@/client/types';
+import type { RecentRoute, UseDetail } from '@/client/types';
 import { operationLabels } from '@/client/types';
 import {
   Field,
@@ -20,6 +20,8 @@ export function TripFields({
   trips,
   onChange,
   recent,
+  recentRoutes = [],
+  onRecentRoute,
   billingUnits = [],
   step,
   done,
@@ -27,6 +29,8 @@ export function TripFields({
   trips: FormTrip[];
   onChange: (trips: FormTrip[]) => void;
   recent: UseDetail[];
+  recentRoutes?: RecentRoute[];
+  onRecentRoute?: (trips: FormTrip[], route: RecentRoute) => void;
   billingUnits?: FormCharge['billing_unit'][];
   step?: number;
   done?: boolean;
@@ -97,9 +101,23 @@ export function TripFields({
   const isCollapsed = (trip: FormTrip, index: number) =>
     collapsed.has(trip.client_row_id) &&
     !attention.some((fix) => fix.target.startsWith(`trip:${index + 1}.`));
-  const routes = [
-    ...new Map(recent.flatMap((u) => u.trips).map((t) => [`${t.origin} → ${t.destination}`, t])).entries(),
-  ].slice(0, 8);
+  const routes: [
+    string,
+    { origin: string; destination: string; via?: string[] | null; last_amount?: number | null },
+  ][] = recentRoutes.length
+    ? recentRoutes
+        .filter(
+          (route, index, rows) =>
+            rows.findIndex(
+              (candidate) => candidate.origin === route.origin && candidate.destination === route.destination,
+            ) === index,
+        )
+        .map((route) => [`${route.origin} → ${route.destination}`, route])
+    : [
+        ...new Map(
+          recent.flatMap((u) => u.trips).map((t) => [`${t.origin} → ${t.destination}`, t]),
+        ).entries(),
+      ].slice(0, 8);
   const change = (i: number, patch: Partial<FormTrip>) =>
     onChange(trips.map((t, j) => (i === j ? { ...t, ...patch } : t)));
   const move = (i: number, offset: number) => {
@@ -273,13 +291,22 @@ export function TripFields({
                         key={name}
                         type="button"
                         className={`inline-flex min-h-11 shrink-0 items-center rounded-full border px-3.5 text-[0.9375rem] font-semibold ${t.origin === route.origin && t.destination === route.destination ? 'border-blue-700 bg-blue-50 text-blue-900' : 'border-slate-300 bg-white text-ink'}`}
-                        onClick={() =>
-                          change(i, {
+                        onClick={() => {
+                          const patch = {
                             origin: route.origin,
                             destination: route.destination,
                             via: route.via?.join(', ') ?? '',
-                          })
-                        }
+                          };
+                          const recentRoute = recentRoutes.find(
+                            (r) => r.origin === route.origin && r.destination === route.destination,
+                          );
+                          if (i === 0 && recentRoute && onRecentRoute)
+                            onRecentRoute(
+                              trips.map((trip, index) => (index === i ? { ...trip, ...patch } : trip)),
+                              recentRoute,
+                            );
+                          else change(i, patch);
+                        }}
                       >
                         {name}
                       </button>

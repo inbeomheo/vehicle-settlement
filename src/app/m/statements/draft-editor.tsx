@@ -50,6 +50,7 @@ export function DraftEditor({
   const holdIdPrefix = useId();
   const existingRows: Candidate[] = statement.items.map((item) => ({
     charge_line_id: item.charge_line_id,
+    estimated_supply: item.supply_amount,
     snapshot: item.snapshot as ItemSnapshot,
     eligible: item.eligible !== false,
     reasons: item.reasons ?? [],
@@ -188,7 +189,10 @@ export function DraftEditor({
                   {chargeUnitLabel(row.snapshot.charge_type, row.snapshot.billing_unit)}
                   {row.snapshot.quantity != null && ` ${formatQuantity(row.snapshot.quantity)}`}
                 </span>{' '}
-                · <span className="num whitespace-nowrap">{money(row.snapshot.supply_amount)}</span>
+                ·{' '}
+                <span className="num whitespace-nowrap">
+                  {money(row.snapshot.supply_amount ?? row.estimated_supply)}
+                </span>
               </p>
               {!row.eligible && <p className="mt-1 text-amber-800">{row.reasons.join(' · ')}</p>}
             </div>

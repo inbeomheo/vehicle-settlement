@@ -1,3 +1,5 @@
+import { proposedAmount } from '../../shared/charge-amount';
+import { proposedAmountSql } from './charge-amount-sql';
 import { routeSummary } from '../domain/route-summary';
 import { createHash } from 'node:crypto';
 import { fixTargetBlockedReason, requiredFieldErrors } from '../../shared/form-settings';
@@ -494,14 +496,28 @@ async function saveCharges(
       unit_price: base ? price : null,
       rate_agreement_id: preserve ? existing.rate_agreement_id : (rate?.id ?? null),
       rate_basis_date: use.use_date,
-      agreement_snapshot: snapshot,
+      agreement_snapshot:
+        snapshot?.source === 'IMPORT' && typeof snapshot.contract_unit_price === 'number'
+          ? {
+              ...snapshot,
+              contract_computed_amount:
+                q === null
+                  ? null
+                  : computeAmount(
+                      q,
+                      snapshot.contract_unit_price,
+                      rounding,
+                      snapshot.contract_min_charge as number | null,
+                    ),
+            }
+          : snapshot,
       tax_mode: taxMode,
       rounding,
       computed_amount: computed,
-      requested_amount: base ? null : input.requested_amount,
+      requested_amount: input.requested_amount ?? null,
       approved_amount: null,
       tax_amount: null,
-      price_status: (computed !== null || (!base && input.requested_amount != null)
+      price_status: (computed !== null || input.requested_amount != null
         ? 'CONFIRMED'
         : 'PENDING') as Charge['price_status'],
       line_review_status: 'PENDING' as const,
@@ -759,7 +775,7 @@ async function applyDecision(ctx: Context, line: Charge, decision?: z.output<typ
       invalid(chargeQuantityMessage(line), { charge_line_id: line.id, target: `charge:${line.id}.quantity` });
     if (line.price_status === 'PENDING' && decision?.approved_amount === undefined)
       invalid('단가 미확정 비용의 승인액을 지정하세요.', { charge_line_id: line.id });
-    const amount = line.included_in_base ? 0 : (line.computed_amount ?? line.requested_amount);
+    const amount = proposedAmount(line);
     // Adjustments store a supply difference; other VAT_INCLUDED costs store gross.
     const calculated =
       amount === null
@@ -1042,7 +1058,7 @@ export async function listUses(ctx: Context, raw: unknown = {}) {
     ? await ctx.db
         .select({
           use_id: chargeLines.vehicle_use_id,
-          amount: chargeLines.computed_amount,
+          amount: sql<number | null>`${proposedAmountSql}`,
           approved: chargeLines.approved_amount,
           status: chargeLines.line_review_status,
         })

@@ -89,7 +89,7 @@ export function ConfirmSubmitSheet({
         <Row label="사진·증빙">{summary.evidenceCount}건</Row>
         <Row label="예상 금액">
           {summary.amount === null ? (
-            <span className="text-base text-slate-700">담당자가 확인 후 정합니다</span>
+            <span className="text-base text-slate-700">금액 미정(담당자가 정함)</span>
           ) : (
             <span className="num">{summary.amount.toLocaleString('ko-KR')}원</span>
           )}

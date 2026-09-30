@@ -185,7 +185,7 @@ commit은 generic 응답 캐시를 사용하지 않는다. job 행 잠금 + 가�
 - 응답 `{ data: { from, to, include, projects, drivers, cells, totals } }`. `projects`는 `{id,name,...합계}`, `drivers`는 `{id,name,affiliations:string[],...합계}`, `cells`는 `{project_id,driver_id,...합계}`다. 합계 필드는 `count`, `approved_supply`, `approved_tax`, `pending_supply`, `pending_unknown_count`. `totals`에 `grand_total`(승인 공급가+세액), `driver_count`, `project_count`를 추가한다.
 - `count`는 사용대장 한 줄(사용 건) 기준이며 비용 줄·회차 수로 중복하지 않는다. `approved`는 승인 공급가가 있는 PAYABLE 줄을 가진 사용 건만(0원 포함), `all`은 취소되지 않은 모든 사용 건을 센다. 보류·반려만 있는 건은 `all`의 건수에는 포함되지만 금액에는 포함되지 않는다.
 - 승인 공급가는 사용대장의 `ledgerBase`를 재사용한다. 사용 건 전체 승인 여부와 별개로 삭제되지 않은 PAYABLE/APPROVED 줄의 저장된 승인 공급가·세액을 합산한다. 취소 사용 건, 삭제·보류·반려 비용, RECEIVABLE은 금액에서 제외한다. 정산 완료 금액도 운행일 기준 집계에 포함하며 명세의 정산 기간/확정/지급 상태로 다시 제한하지 않는다.
-- `all`의 검수 전 금액은 PENDING 줄만 별도 표시한다. 기본운임 포함은 0, 그 외 `computed_amount ?? requested_amount`를 기존 `calculateTax`로 공급가 환산한다. ADJUSTMENT는 저장된 공급가 차액 그대로다. 미정 비용은 금액에 더하지 않고 `pending_unknown_count`로 알린다.
+- `all`의 검수 전 금액은 PENDING 줄만 별도 표시한다. 기본운임 포함은 0, 그 외 `BASE: requested_amount ?? computed_amount`, 그 외 `computed_amount ?? requested_amount`를 기존 `calculateTax`로 공급가 환산한다. ADJUSTMENT는 저장된 공급가 차액 그대로다. 미정 비용은 금액에 더하지 않고 `pending_unknown_count`로 알린다.
 - `ledgerBase`의 기존 `accessibleUseFilter` 권한을 그대로 적용한다. 관리자 및 `all_projects=true` 정산 담당자는 전체, 현장 담당자 및 현장 제한 정산 담당자는 현재 유효 배정 현장만 조회한다. 기사·현장 식별자는 UUID, 이름은 해당 범위 내 최신 사용 스냅샷, 상호는 각 실제 사용일에 유효한 `driver_affiliations → counterparties` 이름을 중복 제거한다.
 - `/m/summary` URL은 `from`, `to`, `include`, `view=projects|drivers|table`을 유지한다. 대장 연결은 기존 `/m/ledger?from&to&project_id&driver_id` 필터를 사용한다.
 
@@ -198,8 +198,20 @@ commit은 generic 응답 캐시를 사용하지 않는다. job 행 잠금 + 가�
 - `dates`: `{ date, ...period_totals, uses }[]`. 실제 운행일 내림차순.
 - 기존 `uses`와 묶음 내부 `uses`의 행: 기존 `id, use_no, use_date, review_status, project_name, held_count, approved_supply`에 `project_id, operation_status, route_summary, trip_count, pending_supply, pending_count, unpriced_count`를 추가한다. 경로는 기존 기사 목록과 같은 첫 경로 + 나머지 회차 요약이다.
 
-승인 공급가는 기존 기사 정산·사용대장과 동일하게 삭제되지 않은 PAYABLE/APPROVED 라인의 `approved_amount` 합이다. 검수 전은 PENDING/HELD의 저장된 `computed_amount ?? requested_amount`를 기존 세금 함수로 공급가 환산한다(기본운임 포함은 0, ADJUSTMENT는 이미 공급가). REJECTED·삭제 비용은 제외한다. 금액이 없는 항목은 `unpriced_count`로 구분하며 합계에 더하지 않는다. 사용 건·개별 회차의 CANCELED는 집계 건수·회차에서 제외하며 취소 사용 건의 금액은 기간·현장·날짜 합계에서 제외한다. 취소 운행 행은 이력 조회를 위해 남긴다.
+승인 공급가는 기존 기사 정산·사용대장과 동일하게 삭제되지 않은 PAYABLE/APPROVED 라인의 `approved_amount` 합이다. 검수 전은 PENDING/HELD의 저장된 `BASE: requested_amount ?? computed_amount`, 그 외 `computed_amount ?? requested_amount`를 기존 세금 함수로 공급가 환산한다(기본운임 포함은 0, ADJUSTMENT는 이미 공급가). REJECTED·삭제 비용은 제외한다. 금액이 없는 항목은 `unpriced_count`로 구분하며 합계에 더하지 않는다. 사용 건·개별 회차의 CANCELED는 집계 건수·회차에서 제외하며 취소 사용 건의 금액은 기간·현장·날짜 합계에서 제외한다. 취소 운행 행은 이력 조회를 위해 남긴다.
 
 지급명세·받은 돈·받을 돈은 기존처럼 **선택 기간과 명세 기간이 겹치는 확정 지급명세의 본인분**을 조회한다. 운행 합계는 **실제 운행일과 세금 제외 공급가** 기준이므로 지급명세 합계(세금 포함·전월분 가능)와 의미가 다르다. 다른 기사·고객 청구 정보는 추가 집계에도 포함하지 않는다.
 
 화면 URL은 기존 `month=YYYY-MM`과 `view=project|date`(기본 project), 직접 기간 `from=YYYY-MM-DD&to=YYYY-MM-DD`를 사용한다. from/to가 있으면 month보다 우선하며 월별 복귀 때 from/to만 제거한다. 새로고침·뒤로가기에서도 선택을 복원한다.
+
+
+## PRICE 운행 금액 직접 입력
+
+- BASE에도 `requested_amount: null | integer(0..2147483647)`를 받는다. 기사 본인·담당자 대리 입력 모두 지원한다. `null`/생략은 요청액 없음이며 기존 요청액을 지울 때는 `null`을 보낸다. 단가·계산액을 일반 입력으로 받지 않는다. 요청액은 줄의 `tax_mode` 기준(기본 VAT_EXCLUDED 공급가)이다.
+- 저장 시 계산액 또는 요청액이 있으면 `price_status=CONFIRMED`이며 승인 상태는 여전히 PENDING이다. 승인액·세액은 담당자 확인 이후 확정된다. 금액 0은 미정과 구분한다.
+- 승인 기본값·검수 전 예상액은 기본운임에서 **요청액 → 계약 계산액** 순이다. 추가비는 기존 계산액 → 요청액 순, 기본운임 포함은 0이다. 승인 `approved_amount`는 최종 공급가로 우선하며 세금 계산·감사·버전·승인 무효화·멱등·명세 잠금 규칙은 그대로다.
+- 대장 `review_base_amount`, `review_extra_amount`, `review_total_amount`는 적용 금액을 공급가로 환산한다. `has_base_amount_difference`는 지급 BASE의 PENDING 줄에서 계약 계산액과 요청액이 모두 있고 다를 때 true다. 검수함은 이를 “계약 단가와 다른 금액”으로 표시하고 바로 승인/일괄 선택에서 제외한다. 계약 없이 요청액만 있으면 다른 문제가 없는 한 바로 승인할 수 있다.
+- 기사 목록 `payable_base_amount`는 승인 전 요청액 → 계산액, 승인 후 승인 공급가를 표시한다(기존 목록의 승인 전 줄 세금모드 기준 표시 유지). 기사 정산·현장/기사 집계의 pending_supply는 같은 선택 규칙으로 공급가 환산한다. 정산 후보의 `estimated_supply`는 승인 공급가 또는 검수 전 예상 공급가이며 `snapshot.supply_amount`를 대체하지 않는다. 승인 전 후보는 포함 불가다. 대시보드는 기존 승인 후 미정산액·확정 미지급액을 사용한다.
+- `GET /api/uses/recent-routes?driver_id=<본인 기사 UUID>`의 각 경로에 `last_amount: number | null`(공급가)을 추가한다. 같은 출발·도착의 가장 최근 제출본 시각, 생성시각, ID 순으로 선택한 제출 스냅샷의 PAYABLE BASE 제안 금액 합이다. 제출 뒤 아직 보내지 않은 수정값과 다른 기사로 귀속된 제출본은 참고하지 않는다. 최신 건의 금액이 미정이면 과거 금액으로 건너뛰지 않는다. 미제출·취소·삭제·반려 비용은 참고 금액에서 제외하고 현재 현장 권한을 검사한다. 기존 `driver_id`/`user_id` 조회 범위는 유지한다. 폼은 선택한 기사 ID를 명시하고, 1회차 최근 경로 선택 시 계약이 없고 빈 요청액에만 채운다. 직접 입력은 덮어쓰지 않는다.
+- 가져오기 단가 열은 기존대로 **단가 × 청구수량**이다. 파일 단가 합계는 기존처럼 계산액에 저장한다(별도 요청액은 null). 기존 단가/계산액/중복 식별자와 사용일·과금단위 변경 시 재조회 동작을 유지한다. `agreement_snapshot.contract_computed_amount`, `contract_min_charge`에 계약 비교 근거를 보관해 다른 금액을 검수 이슈로 표시한다. 같은 계약에서 수량 수정 시 비교 계약액도 갱신한다. 단가 빈칸/계약단가 적용 옵션/0원 처리의 기존 규칙은 유지한다.
+- 폼의 숫자 표시는 천 단위 쉼표이고 API에는 정수만 전송한다. IndexedDB 초안·원본 생성 요청 재생·생성 행 ID 복원에도 BASE 요청액을 보존한다. 최근 금액 표시용 로컬 필드는 API에서 제외한다.

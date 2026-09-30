@@ -365,7 +365,12 @@ export function NewStatement({
                         </td>
                         <td className="p-3 align-top tabular-nums md:text-right">
                           <span className="block text-xs text-slate-600 md:hidden">공급가 / 세액</span>
-                          <p className="whitespace-nowrap">{money(row.snapshot.supply_amount)}</p>
+                          <p>
+                            {money(row.snapshot.supply_amount ?? row.estimated_supply)}
+                            {row.snapshot.supply_amount === null && row.estimated_supply !== null && (
+                              <span className="block text-sm text-slate-600">검수 전 예상액</span>
+                            )}
+                          </p>
                           <p className="whitespace-nowrap text-slate-600">{money(row.snapshot.tax_amount)}</p>
                         </td>
                         <td

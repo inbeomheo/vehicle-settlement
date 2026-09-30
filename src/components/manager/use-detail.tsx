@@ -1,4 +1,5 @@
 'use client';
+import { proposedAmount, proposedSupply, differsFromContract, contractAmount } from '@/shared/charge-amount';
 import { useBusy } from '@/components/ui/use-busy';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
@@ -395,7 +396,8 @@ export function UseDetail({ id, canSettle = false }: { id: string; canSettle?: b
           <section className={panelClass}>
             <h2 className="text-lg font-bold">비용 검수</h2>
             <p className="mt-1 text-sm text-slate-600">
-              승인 공급가는 부가세 제외 금액이며, 비워 두면 계약 단가로 자동 계산합니다.
+              승인 공급가는 부가세 제외 금액입니다. 비워 두면 기본운임은 요청액, 요청액이 없으면 계약 금액을
+              적용합니다.
             </p>
             <div className="mt-4 max-w-full overflow-x-auto">
               <table className="review-costs w-full text-left text-sm">
@@ -449,10 +451,21 @@ export function UseDetail({ id, canSettle = false }: { id: string; canSettle?: b
                           ? '—'
                           : money(line.computed_amount)}
                       </td>
-                      <td data-label="요청액" className="px-3 whitespace-nowrap">
+                      <td
+                        data-label="요청액"
+                        className={`px-3 ${differsFromContract(line) ? 'text-orange-700 font-semibold' : ''}`}
+                      >
                         {line.requested_amount === null && line.charge_type === 'BASE'
                           ? '—'
                           : money(line.requested_amount)}
+                        {differsFromContract(line) && (
+                          <p className="text-sm">
+                            계약 단가와 다름
+                            {line.agreement_snapshot?.source === 'IMPORT' && (
+                              <span className="block">계약 계산액 {money(contractAmount(line))}</span>
+                            )}
+                          </p>
+                        )}
                       </td>
                       <td data-label="승인 공급가(원)" className="min-w-36 px-3">
                         {use.review_status === 'SUBMITTED' ? (
@@ -464,7 +477,7 @@ export function UseDetail({ id, canSettle = false }: { id: string; canSettle?: b
                             step="1"
                             inputMode="numeric"
                             className={inputClass}
-                            placeholder="자동 계산"
+                            placeholder={proposedSupply(line)?.toLocaleString('ko-KR') ?? '금액 미정'}
                             disabled={!canReview}
                             value={decisions[line.id]?.amount ?? ''}
                             onChange={(e) => updateDecision(line.id, { amount: e.target.value })}
@@ -476,7 +489,7 @@ export function UseDetail({ id, canSettle = false }: { id: string; canSettle?: b
                           <p className="mt-1 whitespace-nowrap text-xs text-slate-600">
                             {line.approved_amount !== null && line.tax_amount !== null
                               ? `현재 합계 ${money(sumMoney([line.approved_amount, line.tax_amount]))}`
-                              : `계산 합계 ${money(line.computed_amount ?? line.requested_amount)}`}
+                              : `계산 합계 ${money(proposedAmount(line))}`}
                             {' · 부가세 포함'}
                           </p>
                         )}

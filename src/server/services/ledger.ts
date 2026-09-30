@@ -1,3 +1,4 @@
+import { reviewSupplySql } from './charge-amount-sql';
 import { sumMoney } from '../domain/money';
 import { formatQuantity } from '../../shared/quantity';
 import { sql, type SQL } from 'drizzle-orm';
@@ -65,6 +66,7 @@ export type LedgerRow = {
   review_extra_amount: number | null;
   review_total_amount: number | null;
   has_requested_extra: boolean;
+  has_base_amount_difference: boolean;
   origin: string | null;
   destination: string | null;
   billing_units: string[];
@@ -112,7 +114,7 @@ export async function ledgerBase(ctx: Context) {
     (SELECT COALESCE(jsonb_object_agg(actor.id::text,actor.name),'{}'::jsonb) FROM users actor
       WHERE actor.id=vehicle_uses.created_by_user_id OR EXISTS (SELECT 1 FROM use_revisions r
         WHERE r.vehicle_use_id=vehicle_uses.id AND (r.submitted_by=actor.id OR r.decided_by=actor.id))) AS actor_names,
-    t.origin, t.destination, t.performance, t.trip_details, c.review_base_amount, c.review_extra_amount, COALESCE(c.has_requested_extra,false) AS has_requested_extra, c.billing_units, c.base_amount, c.extra_amount, c.total_amount, c.receivable_amount,
+    t.origin, t.destination, t.performance, t.trip_details, c.review_base_amount, c.review_extra_amount, COALESCE(c.has_requested_extra,false) AS has_requested_extra, COALESCE(c.has_base_amount_difference,false) AS has_base_amount_difference, c.billing_units, c.base_amount, c.extra_amount, c.total_amount, c.receivable_amount,
     COALESCE(e.evidence_count,0)::int AS evidence_count, ${missingEvidenceSql} AS evidence_missing,
     CASE WHEN c.payable_count=0 OR c.locked_count=0 THEN 'UNSETTLED' WHEN c.locked_count=c.payable_count THEN 'SETTLED' ELSE 'PARTIAL' END AS settlement_status,
     CASE WHEN c.locked_count=0 THEN 'NOT_SETTLED' WHEN c.paid_count=0 THEN 'UNPAID' WHEN c.paid_count=c.locked_count THEN 'PAID' ELSE 'PARTIAL' END AS payment_status,
@@ -126,9 +128,10 @@ export async function ledgerBase(ctx: Context) {
       FROM trips WHERE vehicle_use_id=vehicle_uses.id) t ON true
     LEFT JOIN LATERAL (SELECT count(*) AS evidence_count FROM evidence WHERE vehicle_use_id=vehicle_uses.id AND deleted_at IS NULL AND replaced_by_id IS NULL AND upload_status='UPLOADED') e ON true
     LEFT JOIN LATERAL (SELECT
-      CASE WHEN bool_or(direction='PAYABLE' AND charge_type='BASE' AND line_review_status<>'REJECTED' AND COALESCE(approved_amount,computed_amount) IS NULL) THEN NULL ELSE sum(COALESCE(approved_amount,computed_amount)) FILTER (WHERE direction='PAYABLE' AND charge_type='BASE' AND line_review_status<>'REJECTED') END AS review_base_amount,
-      CASE WHEN bool_or(direction='PAYABLE' AND charge_type<>'BASE' AND line_review_status<>'REJECTED' AND COALESCE(approved_amount,requested_amount,computed_amount) IS NULL) THEN NULL ELSE COALESCE(sum(COALESCE(approved_amount,requested_amount,computed_amount)) FILTER (WHERE direction='PAYABLE' AND charge_type<>'BASE' AND line_review_status<>'REJECTED'),0) END AS review_extra_amount,
+      CASE WHEN bool_or(direction='PAYABLE' AND charge_type='BASE' AND line_review_status<>'REJECTED' AND ${reviewSupplySql} IS NULL) THEN NULL ELSE sum(${reviewSupplySql}) FILTER (WHERE direction='PAYABLE' AND charge_type='BASE' AND line_review_status<>'REJECTED') END AS review_base_amount,
+      CASE WHEN bool_or(direction='PAYABLE' AND charge_type<>'BASE' AND line_review_status<>'REJECTED' AND ${reviewSupplySql} IS NULL) THEN NULL ELSE COALESCE(sum(${reviewSupplySql}) FILTER (WHERE direction='PAYABLE' AND charge_type<>'BASE' AND line_review_status<>'REJECTED'),0) END AS review_extra_amount,
       bool_or(direction='PAYABLE' AND charge_type<>'BASE' AND requested_amount IS NOT NULL AND line_review_status='PENDING') AS has_requested_extra,
+      bool_or(direction='PAYABLE' AND charge_type='BASE' AND line_review_status='PENDING' AND COALESCE((agreement_snapshot->>'contract_computed_amount')::integer,computed_amount) IS NOT NULL AND COALESCE(requested_amount,computed_amount) IS NOT NULL AND COALESCE((agreement_snapshot->>'contract_computed_amount')::integer,computed_amount)<>COALESCE(requested_amount,computed_amount)) AS has_base_amount_difference,
       array_agg(DISTINCT billing_unit::text) FILTER (WHERE direction='PAYABLE') AS billing_units,
       sum(approved_amount) FILTER (WHERE direction='PAYABLE' AND line_review_status='APPROVED' AND charge_type='BASE') AS base_amount,
       sum(approved_amount) FILTER (WHERE direction='PAYABLE' AND line_review_status='APPROVED' AND charge_type<>'BASE') AS extra_amount,

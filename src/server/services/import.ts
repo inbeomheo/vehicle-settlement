@@ -366,6 +366,16 @@ export async function commitImport(ctx: Context, id: string) {
                   ...data.rate,
                   unit_price: data.price,
                   contract_unit_price: data.rate?.unit_price ?? null,
+                  contract_min_charge: data.rate?.min_charge ?? null,
+                  contract_computed_amount:
+                    data.rate && data.input.quantity != null
+                      ? computeAmount(
+                          data.input.quantity,
+                          data.rate.unit_price,
+                          data.rate.rounding,
+                          data.rate.min_charge,
+                        )
+                      : null,
                   min_charge: data.price === data.rate?.unit_price ? data.rate?.min_charge : null,
                   source: 'IMPORT',
                   imported_unit_price: data.importedPrice,
