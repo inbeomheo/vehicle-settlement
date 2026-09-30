@@ -34,7 +34,7 @@ function Chevron() {
   );
 }
 
-const setupSteps = [
+const setupSteps: { key: string; title: string; hint: string; href: string; optional?: boolean }[] = [
   {
     key: 'company',
     title: '회사 정보',
@@ -58,9 +58,10 @@ const setupSteps = [
   },
   {
     key: 'rates',
-    title: '계약·단가',
-    hint: '기사 화면에서 금액이 자동으로 계산되게',
+    title: '계약·단가 (선택)',
+    hint: '정해진 단가가 있으면 자동 계산, 운행마다 다르면 기사가 금액을 직접 넣습니다',
     href: '/m/master/rates',
+    optional: true,
   },
   { key: 'people', title: '사람 초대', hint: '기사·현장 담당자·정산 담당자에게 초대 링크', href: '/m/users' },
 ];
@@ -69,8 +70,9 @@ const setupSteps = [
 function SetupChecklist() {
   const { data } = useRemote<Counts>('/api/setup-status');
   if (!data) return null;
-  const done = setupSteps.filter((step) => data[step.key] > 0).length;
-  if (done === setupSteps.length) return null;
+  const required = setupSteps.filter((step) => !step.optional);
+  const done = required.filter((step) => data[step.key] > 0).length;
+  if (done === required.length) return null;
   return (
     <section aria-labelledby="setup-title" className="mb-8 rounded-lg border-2 border-signal bg-white p-5">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -78,7 +80,7 @@ function SetupChecklist() {
           시작 준비
         </h2>
         <p className="num text-sm font-semibold text-slate-600">
-          {done} / {setupSteps.length} 완료
+          {done} / {required.length} 완료
         </p>
       </div>
       <p className="mt-1 text-[0.9375rem] text-slate-600">

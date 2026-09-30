@@ -330,12 +330,12 @@ export function Summary({ initial, today }: { initial: Record<string, string>; t
         <>
           <div className="mb-5 grid min-w-0 gap-3 lg:grid-cols-3" aria-label="집계 요약">
             <section className={panelClass}>
-              <h2 className="text-sm text-slate-600">전체 합계 · 승인 공급가</h2>
+              <h2 className="text-sm text-slate-600">전체 합계 (부가세 별도)</h2>
               <div className="mt-2 text-xl">
                 <Amount value={data.totals} pending={data.include === 'all'} />
               </div>
               <p className="mt-2 text-right text-sm text-slate-600 tabular-nums">
-                세액 포함 {money(data.totals.grand_total)}
+                부가세 포함 {money(data.totals.grand_total)}
               </p>
             </section>
             <section className={panelClass}>
@@ -343,21 +343,18 @@ export function Summary({ initial, today }: { initial: Record<string, string>; t
               <p className="mt-2 text-2xl font-bold tabular-nums">
                 {data.totals.count.toLocaleString('ko-KR')}건
               </p>
-              <p className="mt-2 text-sm text-slate-600">사용대장 1줄을 1건으로 셉니다.</p>
             </section>
             <section className={panelClass}>
               <h2 className="text-sm text-slate-600">기사 수 · 현장 수</h2>
               <p className="mt-2 text-2xl font-bold tabular-nums">
                 {data.totals.driver_count}명 · {data.totals.project_count}곳
               </p>
-              <p className="mt-2 text-sm text-slate-600">선택한 기간과 포함 기준에 해당하는 수입니다.</p>
             </section>
           </div>
           <p className="mb-4 text-sm text-slate-600">
-            금액은 승인된 공급가입니다. 취소된 운행과 보류·반려된 비용은 금액에서 제외합니다.
-            {data.include === 'all' &&
-              ' 회색 금액은 검수 전 예상 공급가이며 승인 합계에 더하지 않습니다.'}{' '}
-            이름을 누르면 사용대장을 엽니다.
+            금액은 담당자가 승인한 금액(부가세 별도)입니다. 취소된 운행과 보류·반려된 비용은 빠집니다.
+            {data.include === 'all' && ' 회색 금액은 아직 승인 전 금액이라 합계에 넣지 않았습니다.'} 이름을
+            누르면 사용대장을 엽니다.
           </p>
           <div className="mb-4 flex flex-wrap gap-2" role="group" aria-label="보기 전환">
             {[
