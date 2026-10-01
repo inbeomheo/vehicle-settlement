@@ -1,3 +1,5 @@
+import { quickApprovable } from '../../shared/quick-approval';
+import { getLedger } from './ledger';
 import { validateReviewer } from './use-reviewers';
 import { proposedAmount } from '../../shared/charge-amount';
 import { proposedAmountSql } from './charge-amount-sql';
@@ -833,8 +835,26 @@ export async function approveUse(ctx: Context, id: string, raw: z.input<typeof a
   return atomic(ctx, async (tx) => {
     const before = await rawUse(tx, id, true);
     await assertCanReview(tx, before);
+    const changed = () => {
+      throw new AppError('VERSION_CONFLICT', '내용이 바뀌었습니다. 다시 확인한 뒤 승인하세요.', {
+        current_version: before.version,
+      });
+    };
+    if (input.quick_approval && before.version !== input.version) changed();
     assertVersion(before, input.version);
     await assertUnlocked(tx, id);
+    if (input.quick_approval) {
+      // Parent and charge locks keep this check and approval on the same displayed revision.
+      const row = (await getLedger(tx, { use_id: id })).rows[0];
+      if (
+        !row ||
+        !quickApprovable(row) ||
+        row.review_base_amount !== input.quick_approval.review_base_amount ||
+        row.review_extra_amount !== input.quick_approval.review_extra_amount ||
+        row.review_total_amount !== input.quick_approval.review_total_amount
+      )
+        changed();
+    }
     assertTransition(before.review_status, 'approve');
     await assertEvidenceSatisfied(tx, before);
     const lines = await tx.db

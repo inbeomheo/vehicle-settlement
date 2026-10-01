@@ -47,6 +47,7 @@ export const ledgerQuerySchema = z
   });
 export type LedgerRow = {
   id: string;
+  version: number;
   use_no: string;
   use_date: string;
   project_id: string;
@@ -124,7 +125,7 @@ export async function ledgerBase(ctx: Context) {
     vehicle_uses.snapshot->>'driver_name' AS driver_name, vehicle_uses.snapshot->>'plate_no' AS plate_no,
     vehicle_uses.snapshot->>'vehicle_type' AS vehicle_type, vehicle_uses.snapshot->>'tonnage' AS tonnage,
     vehicle_uses.snapshot->>'payee_name' AS payee_name, w.name AS work_type_name, u.name AS creator_name,
-    COALESCE(reviewer.name, vehicle_uses.snapshot->>'reviewer_name') AS reviewer_name,
+    COALESCE(vehicle_uses.snapshot->>'reviewer_name', reviewer.name) AS reviewer_name,
     (SELECT COALESCE(jsonb_object_agg(actor.id::text,actor.name),'{}'::jsonb) FROM users actor
       WHERE actor.id=vehicle_uses.created_by_user_id OR EXISTS (SELECT 1 FROM use_revisions r
         WHERE r.vehicle_use_id=vehicle_uses.id AND (r.submitted_by=actor.id OR r.decided_by=actor.id))) AS actor_names,

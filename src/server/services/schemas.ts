@@ -98,8 +98,22 @@ export const lineDecision = z
   })
   .strict();
 export const approveSchema = versionInput
-  .extend({ lines: z.array(lineDecision).max(100).optional(), comment: z.string().max(5000).optional() })
-  .strict();
+  .extend({
+    lines: z.array(lineDecision).max(100).optional(),
+    comment: z.string().max(5000).optional(),
+    quick_approval: z
+      .object({
+        review_base_amount: z.number().int().safe(),
+        review_extra_amount: z.number().int().safe(),
+        review_total_amount: z.number().int().safe(),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict()
+  .refine((input) => !input.quick_approval || input.lines === undefined, {
+    message: '바로 승인은 비용별 검수와 함께 요청할 수 없습니다.',
+  });
 export const fixSchema = versionInput
   .extend({
     comment: z.string().max(5000).optional(),

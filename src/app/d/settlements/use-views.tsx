@@ -28,11 +28,11 @@ function Amount({ use }: { use: Use }) {
         <>
           <span className="text-xs font-semibold text-slate-500">검수 전</span>
           <span className="num text-lg font-bold whitespace-nowrap text-slate-500">
-            {use.pending_count > 0 && use.pending_supply !== 0 ? money(use.pending_supply) : '금액 미정'}
+            {use.pending_count > use.unpriced_count ? money(use.pending_supply) : '금액 미정'}
           </span>
         </>
       )}
-      {approved && use.pending_count > 0 && use.pending_supply !== 0 && (
+      {approved && use.pending_count > use.unpriced_count && (
         <span className="num text-xs whitespace-nowrap text-slate-500">
           + 검수 전 {money(use.pending_supply)}
         </span>
