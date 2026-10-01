@@ -79,18 +79,41 @@ export async function assertDriverEvidenceAccess(ctx: Context, id: string) {
     .where(and(eq(evidence.id, id), driverEvidenceFilter(ctx)));
   if (!visible) notFound();
 }
-// Apply to complete nested responses, revision snapshots and audit payloads before exposing them to a driver.
+// Apply to nested responses, revision snapshots, audit payloads and cached replays.
+// Site managers need driver phone numbers for dispatch, but not financial identity.
 export function redactForDriver<T>(
   ctx: Context,
   value: T,
   hiddenEvidenceIds: ReadonlySet<string> = new Set(),
 ): T {
-  if (canSeeReceivable(ctx)) return value;
+  const isDriver = ctx.user.role === 'DRIVER';
+  if (!isDriver && ctx.user.role !== 'SITE_MANAGER') return value;
+  const hiddenKeys = isDriver
+    ? [
+        'phone',
+        'driver_phone',
+        'contact_name',
+        'bank_account',
+        'customer_counterparty_id',
+        'customer_name',
+        'customer',
+        'password_hash',
+        'token_hash',
+      ]
+    : [
+        'biz_no',
+        'payee_biz_no',
+        'driver_biz_no',
+        'bank_account',
+        'payee_bank_account',
+        'driver_bank_account',
+      ];
   const visit = (v: unknown): unknown => {
     if (v instanceof Date || v === null || typeof v !== 'object') return v;
     if (Array.isArray(v))
       return v
         .filter((x) => {
+          if (!isDriver) return true;
           if (!x || typeof x !== 'object') return true;
           if ('direction' in x && x.direction === 'RECEIVABLE') return false;
           if ('revision_no' in x && 'snapshot' in x) return x.snapshot?.driver_id === ctx.user.driver_id;
@@ -105,20 +128,7 @@ export function redactForDriver<T>(
         .map(visit);
     return Object.fromEntries(
       Object.entries(v)
-        .filter(
-          ([k]) =>
-            ![
-              'phone',
-              'driver_phone',
-              'contact_name',
-              'bank_account',
-              'customer_counterparty_id',
-              'customer_name',
-              'customer',
-              'password_hash',
-              'token_hash',
-            ].includes(k),
-        )
+        .filter(([k]) => !hiddenKeys.includes(k))
         .map(([k, val]) => [k, visit(val)]),
     );
   };
