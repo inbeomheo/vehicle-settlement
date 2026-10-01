@@ -60,10 +60,16 @@ export function Drivers() {
     dateTime(row.created_at).slice(0, 10),
   ];
   const titles = ['전화번호', '상호', '사업자번호', '차량번호', '차종·톤수', '배정 현장', '가입일'];
-  function actions(row: DriverProfile) {
+  function actions(row: DriverProfile, compact = false) {
     return (
       canEditAffiliation && (
-        <div className="flex flex-wrap gap-2">
+        <div
+          className={
+            compact
+              ? 'grid grid-cols-2 gap-2 [&>button]:px-2 [&>button]:text-sm [&>button]:whitespace-normal [&>button:last-child]:col-span-2'
+              : 'flex flex-wrap gap-2'
+          }
+        >
           <button
             className={secondaryClass}
             disabled={!row.affiliations.length}
@@ -175,11 +181,18 @@ export function Drivers() {
             ))}
           </div>
           <div className="hidden max-w-full overflow-x-auto rounded-lg border border-slate-200 bg-white md:block">
-            <table className="w-full text-left text-sm">
+            <table className="w-full table-fixed text-left text-sm">
               <thead className="bg-slate-100">
                 <tr>
-                  {['이름', ...titles, '계정 상태', ...(canEditAffiliation ? ['관리'] : [])].map((title) => (
-                    <th key={title} className="px-4 py-3 whitespace-nowrap">
+                  {[
+                    '기사 · 연락처',
+                    '상호 · 사업자번호',
+                    '차량 · 차종',
+                    '배정 현장',
+                    '가입일 · 상태',
+                    ...(canEditAffiliation ? ['관리'] : []),
+                  ].map((title) => (
+                    <th key={title} className={`px-3 py-3 ${title === '관리' ? 'w-64' : ''}`}>
                       {title}
                     </th>
                   ))}
@@ -192,7 +205,7 @@ export function Drivers() {
                     className={`border-t border-slate-200 ${admin ? 'cursor-pointer hover:bg-slate-50' : ''}`}
                     onClick={admin ? () => setEditing(row) : undefined}
                   >
-                    <td className="min-w-28 px-4 py-3 font-semibold">
+                    <td className="px-3 py-3 break-words font-semibold">
                       {admin ? (
                         <button
                           className="min-h-11 text-left underline"
@@ -206,18 +219,28 @@ export function Drivers() {
                       ) : (
                         row.name
                       )}
+                      <span className="mt-1 block text-sm font-normal text-slate-600">
+                        {row.phone ?? '—'}
+                      </span>
                     </td>
-                    {properties(row).map((value, index) => (
-                      <td key={index} className="min-w-32 px-4 py-3">
-                        {value}
-                      </td>
-                    ))}
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-3 break-words">
+                      {row.business_name ?? '—'}
+                      <span className="mt-1 block text-slate-600">{row.biz_no ?? '—'}</span>
+                    </td>
+                    <td className="px-3 py-3 break-words">
+                      {row.plate_no ?? '—'}
+                      <span className="mt-1 block text-slate-600">
+                        {row.vehicle_type ?? '—'} · {row.tonnage ?? '—'}톤
+                      </span>
+                    </td>
+                    <td className="px-3 py-3 break-words">{properties(row)[5]}</td>
+                    <td className="px-3 py-3 break-words">
+                      <span className="mb-2 block">{dateTime(row.created_at).slice(0, 10)}</span>
                       <Badge value={row.status} />
                     </td>
                     {canEditAffiliation && (
-                      <td className="min-w-60 px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                        {actions(row)}
+                      <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
+                        {actions(row, true)}
                       </td>
                     )}
                   </tr>

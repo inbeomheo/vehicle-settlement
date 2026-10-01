@@ -109,3 +109,18 @@ PORT=3183 npx playwright test tests/e2e/FIX-REQ-manual.spec.ts tests/e2e/MANUAL-
 `PG_PORT=54397`, `PORT=3197`의 전용 로컬 서버에서 `BASE=http://localhost:3197 node docs/manual/capture/join-business.mjs`를 실행하면 `46-join-link` 원본·공개 PNG만 갱신한다. 사업자 입력은 시연용이며 링크를 실제로 생성하지 않는다. `BASE=http://localhost:3197 node docs/manual/export.mjs`로 사진 선택·소속 사업자 지정 안내를 포함한 PDF를 다시 만든다. 기존 운영 현장 정책은 이 작업의 마이그레이션으로 변경하지 않는다.
 
 F4-JOINBIZ 검증: 타입·린트·포맷 검사, Vitest 87개 파일/513건, 관련 E2E 20건 통과. PDF 34쪽 렌더링 및 사진 선택·소속 지정 안내 페이지 확대 확인 완료. 상세 내용은 [F4-JOINBIZ 보고서](../reports/F4-JOINBIZ.md)를 참고한다.
+
+### 집계 상세·거래명세표 부분 촬영 (F4-DETAIL)
+
+이 워크트리는 `.env.local`의 `PG_PORT=54396`, 웹 `PORT=3196`만 사용한다. 모든 아래 명령은 명시한 전용 로컬 DB와 연결하며 운영 설정은 읽지 않는다.
+
+```sh
+DOTENV_CONFIG_PATH=.env.local PG_PORT=54396 DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54396/vehicle_app npm run db:migrate
+DOTENV_CONFIG_PATH=.env.local PG_PORT=54396 DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54396/vehicle_app npm run seed
+DOTENV_CONFIG_PATH=.env.local PG_PORT=54396 DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54396/vehicle_app npm run seed:demo
+DOTENV_CONFIG_PATH=.env.local PG_PORT=54396 DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54396/vehicle_app PORT=3196 npm run dev -- --port 3196
+BASE=http://localhost:3196 node docs/manual/capture/summary-detail.mjs
+BASE=http://localhost:3196 node docs/manual/export.mjs
+```
+
+부분 촬영은 시연 데이터만 사용해 `29b-summary-detail`(상세와 합계), `45-drivers`(기사관리 관리 열)의 원본·공개 PNG를 갱신한다. 공용 도구의 로컬 허용 목록에 3196을 추가했고 외부 요청 차단은 유지한다.

@@ -1,6 +1,7 @@
 'use client';
 import { formatQuantity } from '@/shared/quantity';
 import Link from 'next/link';
+import { SummaryDetail } from './summary-detail';
 import { useEffect, useState } from 'react';
 import type { SummaryAmounts, SummaryCell, SummaryResult } from '@/server/services/summary';
 import {
@@ -16,7 +17,17 @@ import {
   useRemote,
 } from './common';
 
-type Query = { from: string; to: string; include: string; view: string };
+type Query = {
+  from: string;
+  to: string;
+  include: string;
+  view: string;
+  project_id: string;
+  driver_id: string;
+  payee_counterparty_id: string;
+  detail: string;
+  sort: string;
+};
 function monthPeriod(today: string, offset = 0) {
   const date = new Date(`${today}T00:00:00Z`);
   date.setUTCDate(1);
@@ -53,7 +64,15 @@ function Amount({
 function ledgerHref(query: Query, cell: SummaryCell) {
   return `/m/ledger?${new URLSearchParams({ from: query.from, to: query.to, project_id: cell.project_id, driver_id: cell.driver_id })}`;
 }
-function SummaryCards({ data, query }: { data: SummaryResult; query: Query }) {
+function SummaryCards({
+  data,
+  query,
+  onDetail,
+}: {
+  data: SummaryResult;
+  query: Query;
+  onDetail: (id: string, byProject: boolean) => void;
+}) {
   const byProject = query.view !== 'drivers';
   const groups = byProject ? data.projects : data.drivers;
   const pending = data.include === 'all';
@@ -80,7 +99,12 @@ function SummaryCards({ data, query }: { data: SummaryResult; query: Query }) {
                 )}
                 <p className="mt-1 text-sm text-slate-600">운행 {group.count.toLocaleString('ko-KR')}건</p>
               </div>
-              <Amount value={group} pending={pending} />
+              <div className="min-w-0 text-right">
+                <Amount value={group} pending={pending} />
+                <button className={`${secondaryClass} mt-2`} onClick={() => onDetail(group.id, byProject)}>
+                  자세히 보기
+                </button>
+              </div>
             </header>
             <ul className="divide-y divide-slate-100">
               {cells.map((cell) => {
@@ -201,21 +225,52 @@ function SummaryTable({ data, query }: { data: SummaryResult; query: Query }) {
   );
 }
 export function Summary({ initial, today }: { initial: Record<string, string>; today: string }) {
-  const defaults = { ...monthPeriod(today), include: 'approved', view: 'projects' };
+  const defaults = {
+    ...monthPeriod(today),
+    include: 'approved',
+    view: 'projects',
+    project_id: '',
+    driver_id: '',
+    payee_counterparty_id: '',
+    detail: '',
+    sort: 'date',
+  };
   const readQuery = (input: Record<string, string>): Query => ({
     from: input.from ?? defaults.from,
     to: input.to ?? defaults.to,
     include: input.include ?? defaults.include,
     view: ['projects', 'drivers', 'table'].includes(input.view) ? input.view : 'projects',
+    project_id: input.project_id ?? '',
+    driver_id: input.driver_id ?? '',
+    payee_counterparty_id: input.payee_counterparty_id ?? '',
+    detail: input.detail ?? '',
+    sort: input.sort ?? 'date',
   });
   const [query, setQuery] = useState<Query>(() => readQuery(initial));
   const [draft, setDraft] = useState(() => ({ from: query.from, to: query.to }));
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState('');
-  const apiQuery = new URLSearchParams({ from: query.from, to: query.to, include: query.include }).toString();
+  const apiQuery = new URLSearchParams({
+    from: query.from,
+    to: query.to,
+    include: query.include,
+    project_id: query.project_id,
+    driver_id: query.driver_id,
+    payee_counterparty_id: query.payee_counterparty_id,
+    sort: query.sort,
+  }).toString();
   const { data, loading, error, refresh } = useRemote<SummaryResult>(`/api/summary?${apiQuery}`);
   useEffect(() => {
-    const defaults = { ...monthPeriod(today), include: 'approved', view: 'projects' };
+    const defaults = {
+      ...monthPeriod(today),
+      include: 'approved',
+      view: 'projects',
+      project_id: '',
+      driver_id: '',
+      payee_counterparty_id: '',
+      detail: '',
+      sort: 'date',
+    };
     const current = { ...defaults, ...Object.fromEntries(new URLSearchParams(window.location.search)) };
     window.history.replaceState(null, '', `/m/summary?${queryString(current)}`);
     const restore = () => {
@@ -233,11 +288,13 @@ export function Summary({ initial, today }: { initial: Record<string, string>; t
     setExportError('');
     window.history.pushState(null, '', `/m/summary?${queryString(next)}`);
   };
-  const download = async () => {
+  const download = async (trade = false) => {
     setExporting(true);
     setExportError('');
     try {
-      const response = await fetch(`/api/summary/export.xlsx?${apiQuery}`, { cache: 'no-store' });
+      const response = await fetch(`/api/summary/${trade ? 'trade' : 'export'}.xlsx?${apiQuery}`, {
+        cache: 'no-store',
+      });
       if (!response.ok) {
         const body = await response.json();
         throw new Error(body.error?.message ?? '엑셀을 받지 못했습니다. 다시 시도해 주세요.');
@@ -245,7 +302,7 @@ export function Summary({ initial, today }: { initial: Record<string, string>; t
       const url = URL.createObjectURL(await response.blob());
       const anchor = document.createElement('a');
       anchor.href = url;
-      anchor.download = `현장기사별집계_${query.from}_${query.to}.xlsx`;
+      anchor.download = `${trade ? '거래명세표' : '현장기사별집계'}_${query.from}_${query.to}.xlsx`;
       anchor.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (reason) {
@@ -266,9 +323,17 @@ export function Summary({ initial, today }: { initial: Record<string, string>; t
           type="button"
           className={secondaryClass}
           disabled={exporting || loading || !data}
-          onClick={download}
+          onClick={() => download()}
         >
-          {exporting ? '엑셀 준비 중…' : '엑셀로 받기'}
+          엑셀로 받기
+        </button>
+        <button
+          type="button"
+          className={secondaryClass}
+          disabled={exporting || loading || !data}
+          onClick={() => download(true)}
+        >
+          거래명세표 엑셀
         </button>
       </Heading>
       <section aria-label="조회 조건" className={`${panelClass} mb-5`}>
@@ -312,6 +377,38 @@ export function Summary({ initial, today }: { initial: Record<string, string>; t
         <p className="mt-2 text-sm text-slate-600">
           19일~다음 달 18일처럼 마감 기간을 직접 선택할 수 있습니다. 최대 1년까지 조회합니다.
         </p>
+        <div className="mt-4 grid min-w-0 gap-3 sm:grid-cols-2">
+          <Field title="지급처">
+            <select
+              className={inputClass}
+              aria-label="지급처"
+              value={query.payee_counterparty_id}
+              onChange={(e) => change({ ...query, payee_counterparty_id: e.target.value })}
+            >
+              <option value="">전체 지급처</option>
+              {data?.options.payees.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field title="현장">
+            <select
+              className={inputClass}
+              aria-label="현장"
+              value={query.project_id}
+              onChange={(e) => change({ ...query, project_id: e.target.value })}
+            >
+              <option value="">전체 현장</option>
+              {data?.options.projects.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+        </div>
         <div className="mt-4 flex flex-wrap gap-2" role="group" aria-label="포함 기준">
           {[
             ['approved', '승인된 금액만'],
@@ -377,6 +474,18 @@ export function Summary({ initial, today }: { initial: Record<string, string>; t
               </button>
             ))}
           </div>
+          {query.detail && (
+            <SummaryDetail
+              data={data}
+              driverId={query.driver_id}
+              sort={query.sort}
+              onDriver={(id) => change({ ...query, driver_id: id })}
+              onSort={(sort) => change({ ...query, sort })}
+              onClose={() => change({ ...query, detail: '', driver_id: '' })}
+              onExport={() => download(true)}
+              exporting={exporting}
+            />
+          )}
           {data.cells.length === 0 ? (
             <div className={panelClass}>
               <Empty>선택한 기간에 해당하는 운행이 없습니다. 기간이나 포함 기준을 바꿔 보세요.</Empty>
@@ -384,7 +493,17 @@ export function Summary({ initial, today }: { initial: Record<string, string>; t
           ) : query.view === 'table' ? (
             <SummaryTable data={data} query={query} />
           ) : (
-            <SummaryCards data={data} query={query} />
+            <SummaryCards
+              data={data}
+              query={query}
+              onDetail={(id, byProject) => {
+                change({
+                  ...query,
+                  detail: byProject ? 'project' : 'driver',
+                  ...(byProject ? { project_id: id, driver_id: '' } : { driver_id: id }),
+                });
+              }}
+            />
           )}
         </>
       )}
