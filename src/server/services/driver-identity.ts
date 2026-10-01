@@ -1,4 +1,5 @@
 import { and, eq, sql } from 'drizzle-orm';
+import Decimal from 'decimal.js';
 import type { Db } from '../db/client';
 import { counterparties, vehicles, drivers, driverAffiliations } from '../db/schema';
 import { todaySeoul } from '../context';
@@ -19,22 +20,42 @@ export async function saveDriverIdentity(
   const today = todaySeoul();
   const duplicates = await db.execute(sql`SELECT id FROM drivers WHERE active
     AND id IS DISTINCT FROM ${driverId ?? null}::uuid
-    AND (regexp_replace(phone, '[^0-9]', '', 'g')=${input.phone}
-      OR default_vehicle_id IN (SELECT id FROM vehicles WHERE regexp_replace(upper(plate_no), '\\s', '', 'g')=${input.plate_no}))`);
+    AND regexp_replace(phone, '[^0-9]', '', 'g')=${input.phone}`);
   if (duplicates.rows.length)
     invalid('같은 전화번호 또는 차량번호가 다른 사용 중인 기사에 연결되어 있습니다. 관리자에게 문의하세요.');
-  let [party] = await db
-    .select()
-    .from(counterparties)
-    .where(
-      and(
-        allowExistingBusiness ? eq(counterparties.kind, 'DRIVER_BUSINESS') : undefined,
-        sql`regexp_replace(${counterparties.biz_no}, '[^0-9]', '', 'g')=${input.biz_no.replaceAll('-', '')}`,
-      ),
-    )
-    .orderBy(counterparties.created_at, counterparties.id)
-    .limit(1)
-    .for('update');
+  // Prefer the current affiliation even when legacy duplicate business numbers
+  // exist. A contact/vehicle edit must never turn a CARRIER into DRIVER_BUSINESS.
+  const [currentParty] = driverId
+    ? await db
+        .select({ party: counterparties })
+        .from(driverAffiliations)
+        .innerJoin(counterparties, eq(counterparties.id, driverAffiliations.counterparty_id))
+        .where(
+          and(
+            eq(driverAffiliations.driver_id, driverId),
+            sql`${driverAffiliations.valid_from}<=${today}::date`,
+            sql`(${driverAffiliations.valid_to} IS NULL OR ${driverAffiliations.valid_to}>=${today}::date)`,
+          ),
+        )
+        .orderBy(sql`${driverAffiliations.valid_from} DESC`, driverAffiliations.id)
+        .limit(1)
+        .for('update')
+    : [];
+  const sameBusiness = currentParty?.party.biz_no?.replace(/\D/g, '') === input.biz_no.replaceAll('-', '');
+  let [party] = sameBusiness
+    ? [currentParty.party]
+    : await db
+        .select()
+        .from(counterparties)
+        .where(
+          and(
+            allowExistingBusiness ? eq(counterparties.kind, 'DRIVER_BUSINESS') : undefined,
+            sql`regexp_replace(${counterparties.biz_no}, '[^0-9]', '', 'g')=${input.biz_no.replaceAll('-', '')}`,
+          ),
+        )
+        .orderBy(counterparties.created_at, counterparties.id)
+        .limit(1)
+        .for('update');
   const ownsParty =
     party &&
     driverId &&
@@ -83,12 +104,31 @@ export async function saveDriverIdentity(
     .limit(1)
     .for('update');
   if (vehicle && !vehicle.active) invalid('사용 중지된 차량입니다. 관리자에게 문의하세요.');
+  let sharedVehicle = false;
+  if (vehicle) {
+    const others = await db.execute(sql`SELECT 1 WHERE
+      EXISTS (SELECT 1 FROM drivers WHERE default_vehicle_id=${vehicle.id}::uuid
+        AND id IS DISTINCT FROM ${driverId ?? null}::uuid)
+      OR EXISTS (SELECT 1 FROM vehicle_uses WHERE vehicle_id=${vehicle.id}::uuid
+        AND driver_id IS DISTINCT FROM ${driverId ?? null}::uuid)`);
+    sharedVehicle = others.rows.length > 0;
+    if (sharedVehicle) {
+      const [owner] = driverId ? await db.select().from(drivers).where(eq(drivers.id, driverId)) : [];
+      if (
+        owner?.default_vehicle_id !== vehicle.id ||
+        vehicle.vehicle_type !== input.vehicle_type ||
+        vehicle.tonnage === null ||
+        !new Decimal(vehicle.tonnage).eq(input.tonnage)
+      )
+        invalid('이미 다른 기사님 차량으로 등록된 번호예요. 관리자에게 문의해 주세요.');
+    }
+  }
   if (!vehicle)
     [vehicle] = await db
       .insert(vehicles)
       .values({ plate_no: input.plate_no, vehicle_type: input.vehicle_type, tonnage: input.tonnage })
       .returning();
-  else
+  else if (!sharedVehicle)
     [vehicle] = await db
       .update(vehicles)
       .set({ vehicle_type: input.vehicle_type, tonnage: input.tonnage, updated_at: new Date() })
