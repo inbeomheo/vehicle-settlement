@@ -1,6 +1,6 @@
-import { and, eq, gt, isNull } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import type { Db } from '../db/client';
-import { sessions, users } from '../db/schema';
+import { sessions, users, pushSubscriptions } from '../db/schema';
 import { AppError } from '../errors';
 import { hashToken, newToken } from './password';
 import type { Context } from '../context';
@@ -32,19 +32,24 @@ export async function authenticate(db: Db, request: Request, requestId: string):
     .select({ user: users, session: sessions })
     .from(sessions)
     .innerJoin(users, eq(users.id, sessions.user_id))
-    .where(
-      and(
-        eq(sessions.token_hash, hashToken(token)),
-        isNull(sessions.revoked_at),
-        gt(sessions.expires_at, new Date()),
-      ),
-    );
-  if (!row || row.user.status !== 'ACTIVE') {
-    if (row)
-      await db
-        .update(sessions)
-        .set({ revoked_at: new Date(), updated_at: new Date() })
-        .where(eq(sessions.user_id, row.user.id));
+    .where(eq(sessions.token_hash, hashToken(token)));
+  if (
+    !row ||
+    row.user.status !== 'ACTIVE' ||
+    row.session.revoked_at ||
+    row.session.expires_at <= new Date()
+  ) {
+    if (row) {
+      if (row.user.status !== 'ACTIVE') {
+        await db
+          .update(sessions)
+          .set({ revoked_at: new Date(), updated_at: new Date() })
+          .where(eq(sessions.user_id, row.user.id));
+        await db.delete(pushSubscriptions).where(eq(pushSubscriptions.user_id, row.user.id));
+      } else {
+        await db.delete(pushSubscriptions).where(eq(pushSubscriptions.session_id, row.session.id));
+      }
+    }
     throw new AppError('UNAUTHENTICATED', '다시 로그인해 주세요.');
   }
   await db

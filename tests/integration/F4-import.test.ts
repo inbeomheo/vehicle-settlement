@@ -45,6 +45,7 @@ it('동명이지만 서로 다른 담당자에게 배정된 현장은 UUID로 �
   const secondManager = await s.f.user({ role: 'SITE_MANAGER' });
   await s.f.assignment(firstManager.id, s.project.id);
   await s.f.assignment(secondManager.id, otherProject.id);
+  await s.f.assignment(s.driverUser.id, otherProject.id);
   const firstContext = s.f.context(firstManager);
   const secondContext = s.f.context(secondManager);
   const values = row(s);

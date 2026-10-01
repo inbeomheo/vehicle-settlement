@@ -99,6 +99,13 @@
       "when": 1790667400000,
       "tag": "0720_flow_form_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1790667500000,
+      "tag": "0740_sec_push_session",
+      "breakpoints": true
     }
   ]
 }

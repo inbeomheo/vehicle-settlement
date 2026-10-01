@@ -95,7 +95,7 @@ it('제한 롤: 모든 연결의 vehicle search_path, 내장 UUID, 마이그레�
     connections.forEach((client) => client.release());
   }
   await migrateDatabase(database.db);
-  expect((await database.pool.query('SELECT count(*) FROM __drizzle_migrations')).rows[0].count).toBe('14');
+  expect((await database.pool.query('SELECT count(*) FROM __drizzle_migrations')).rows[0].count).toBe('15');
   expect((await owner.query("SELECT tablename FROM pg_tables WHERE schemaname='public'")).rows).toEqual([
     { tablename: 'other_app' },
   ]);

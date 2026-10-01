@@ -178,7 +178,9 @@ it('web-push 경계: 다중 기기·금액·링크, 성공 이력, 404/410 삭�
     .where(eq(vehicleUses.id, use.id));
   use = await submitUse(s.driverCtx, use.id, { version: use.version });
   const inputs = Array.from({ length: 4 }, subscription);
-  for (const input of inputs) await savePushSubscription(s.adminCtx, input, 'test');
+  const session = await s.f.session(s.admin.id);
+  for (const input of inputs)
+    await savePushSubscription({ ...s.adminCtx, session_id: session.session.id }, input, 'test');
   vi.mocked(webPush.sendNotification).mockImplementation(async ({ endpoint }) => {
     const index = inputs.findIndex((input) => input.endpoint === endpoint);
     if (index > 0) throw { statusCode: [0, 404, 410, 503][index] };
@@ -209,8 +211,8 @@ it('커밋 이후 예약, 멱등 재생·실패는 미발송, 보완과 재제�
     .db.update(vehicleUses)
     .set({ reviewer_user_id: s.admin.id })
     .where(eq(vehicleUses.id, use.id));
-  await savePushSubscription(s.adminCtx, subscription(), null);
-  await savePushSubscription(s.driverCtx, subscription(), null);
+  await savePushSubscription({ ...s.adminCtx, session_id: admin.session.id }, subscription(), null);
+  await savePushSubscription({ ...s.driverCtx, session_id: driver.session.id }, subscription(), null);
   const options = {
     method: 'POST',
     path: `/api/uses/${use.id}/submit`,

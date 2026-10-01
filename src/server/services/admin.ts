@@ -5,7 +5,7 @@ import type { Context } from '../context';
 import { assertActive, assertAdmin, accessibleProjectIds } from '../authz';
 import { audit } from '../audit';
 import { AppError, invalid, notFound } from '../errors';
-import { users, sessions, projectAssignments, drivers, projects } from '../db/schema';
+import { users, sessions, pushSubscriptions, projectAssignments, drivers, projects } from '../db/schema';
 import { publicUser } from '../auth/session';
 import { atomic } from './uses';
 import {
@@ -44,6 +44,8 @@ export function masterResource(value: string): MasterResource {
 }
 export async function listMaster(ctx: Context, resource: MasterResource) {
   await managerOnly(ctx);
+  if (ctx.user.role === 'SITE_MANAGER')
+    throw new AppError('FORBIDDEN', '관리자 또는 정산 담당자 권한이 필요합니다.');
   if (resource === 'company' || resource === 'affiliations') assertAdmin(ctx);
   const ids = resource === 'projects' ? await accessibleProjectIds(ctx) : null;
   const scope =
@@ -182,11 +184,13 @@ export async function updateUser(ctx: Context, id: string, raw: unknown) {
       .set({ ...input, version: version + 1, updated_at: new Date() })
       .where(eq(users.id, id))
       .returning();
-    if (after.status === 'DISABLED')
+    if (after.status === 'DISABLED') {
       await tx.db
         .update(sessions)
         .set({ revoked_at: new Date(), updated_at: new Date() })
         .where(and(eq(sessions.user_id, id), isNull(sessions.revoked_at)));
+      await tx.db.delete(pushSubscriptions).where(eq(pushSubscriptions.user_id, id));
+    }
     await audit(tx, 'UPDATE_USER', 'user', id, publicUser(before), publicUser(after));
     return publicUser(after);
   });

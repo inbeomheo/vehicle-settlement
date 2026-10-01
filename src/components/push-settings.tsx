@@ -38,10 +38,11 @@ export function PushSettings({ manager = false }: { manager?: boolean }) {
         setConfig(next);
         const registration = await navigator.serviceWorker.getRegistration('/');
         const subscription = await registration?.pushManager.getSubscription();
-        if (subscription) {
-          const status = await api<{ subscribed: boolean }>(
-            `/api/push/subscriptions?endpoint=${encodeURIComponent(subscription.endpoint)}`,
-          );
+        if (subscription && next.enabled) {
+          const status = await api<{ subscribed: boolean }>('/api/push/subscriptions', {
+            method: 'POST',
+            body: JSON.stringify(subscription.toJSON()),
+          });
           if (alive) setSubscribed(status.subscribed);
         }
         if (alive)

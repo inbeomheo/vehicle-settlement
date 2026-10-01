@@ -153,7 +153,9 @@ export async function registerDriver(
           'IDEMPOTENCY_MISMATCH',
           '같은 가입 요청에 다른 정보를 보낼 수 없습니다. 새로고침 후 다시 가입하세요.',
         );
-      const [user] = await tx.select().from(users).where(eq(users.id, prior.user_id));
+      // Serialize password verification/session issuance with password replacement.
+      // This path takes no throttle locks; reset/change never take the join lock.
+      const [user] = await tx.select().from(users).where(eq(users.id, prior.user_id)).for('update');
       if (!user || user.status !== 'ACTIVE' || !(await verifyPassword(input.password, user.password_hash)))
         notFound();
       const session = await createSession(tx, user.id);
@@ -166,6 +168,13 @@ export async function registerDriver(
       .from(users)
       .where(eq(users.login_id, input.login_id));
     if (existing) invalid('이미 사용 중인 아이디입니다. 다른 아이디를 입력하세요.');
+    const linkedVehicle =
+      await tx.execute(sql`SELECT 1 FROM drivers d JOIN vehicles v ON v.id=d.default_vehicle_id
+      WHERE regexp_replace(upper(v.plate_no), '\\s', '', 'g')=${input.profile.plate_no} LIMIT 1`);
+    if (linkedVehicle.rows.length)
+      invalid(
+        '같은 차량번호가 다른 기사에 연결되어 있습니다. 관리자에게 기사 추가(개별 초대)를 요청해 주세요.',
+      );
     const driver = await saveDriverIdentity(tx, input.profile);
     const [user] = await tx
       .insert(users)
