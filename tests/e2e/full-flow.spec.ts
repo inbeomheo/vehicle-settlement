@@ -60,6 +60,8 @@ async function inputUse(
   const response = await created;
   expect(response.status()).toBe(200);
   const use = (await response.json()).data as Use;
+  // 서버 상태가 먼저 바뀌어도 폼의 자동 상세 이동이 끝나기 전에는 다음 화면으로 이동하지 않는다.
+  await page.waitForURL((url) => url.pathname === `/${options.manager ? 'm' : 'd'}/uses/${use.id}`);
   if (!options.manager) await expect(page.getByText('담당자에게 보냈습니다', { exact: true })).toBeVisible();
   await expect
     .poll(async () => (await (await page.request.get(`/api/uses/${use.id}`)).json()).data.review_status)

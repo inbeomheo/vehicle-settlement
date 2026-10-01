@@ -2,7 +2,7 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 import { createDatabase } from '../../src/server/db/client';
 import { setupScenario } from '../helpers/factories';
 import { approveUse, createUse, getUse, requestFix, submitUse } from '../../src/server/services/uses';
-import { submitDriverForm } from './submit-helper';
+import { fillFlowFields, submitDriverForm } from './submit-helper';
 
 const database = createDatabase(process.env.DATABASE_URL!);
 test.use({ viewport: { width: 390, height: 844 }, actionTimeout: 15000 });
@@ -155,6 +155,7 @@ for (const action of ['save', 'submit'] as const) {
     await login(page, s.driverUser.login_id, `/d/new?project=${s.project.id}`);
     await page.getByLabel('1회차 출발', { exact: true }).fill('창고');
     await page.getByLabel('1회차 도착', { exact: true }).fill('현장');
+    if (action === 'submit') await fillFlowFields(page);
     let count = 0;
     let release!: () => void;
     const gate = new Promise<void>((resolve) => {
@@ -284,10 +285,10 @@ test('계약·예상 금액·조회 실패는 정중한 실시간 알림 영역�
 test('숨긴 사진 입력에 탭으로 접근하면 보이는 레이블에 포커스 테두리를 표시한다', async ({ page }) => {
   const s = await setupScenario(database.db);
   await login(page, s.driverUser.login_id, `/d/new?project=${s.project.id}`);
-  // 증빙 영역은 큰 사진 추가 영역 → 카메라 바로 촬영 순서로 탭 이동한다.
+  // 기본 폼에서 특이사항은 숨김이고, FLOW 순서의 증빙 직전은 추가 비용 버튼이다. 사진 선택 → 촬영의 키보드 접근을 확인한다.
   await expect(page.getByLabel('1회차 출발', { exact: true })).toBeVisible();
   await expect(page.getByLabel('사진·파일 선택', { exact: true })).toBeEnabled();
-  await page.getByRole('button', { name: '직전 회차 복사', exact: true }).focus();
+  await page.getByRole('button', { name: '+ 추가 비용', exact: true }).focus();
   for (const name of ['사진·파일 선택', '카메라 촬영']) {
     await page.keyboard.press('Tab');
     const input = page.getByLabel(name, { exact: true });
