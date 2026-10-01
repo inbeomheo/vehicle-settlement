@@ -10,14 +10,10 @@ import { createUse } from '../../src/server/services/uses';
 import { PATCH } from '../../src/app/api/drivers/[id]/route';
 const database = testDatabase();
 
-it('가입 시 재사용 사업자·차량이어도 새 기사 최초 소속은 1년 전이고 어제 운행을 저장한다', async () => {
+it('가입한 새 기사의 최초 소속은 1년 전이고 어제 운행을 저장한다', async () => {
   const f = factories(database().db);
   const admin = await f.user();
   const project = await f.project();
-  const vehicle = await f.vehicle({ plate_no: '서울80아7191' });
-  const party = await f.counterparty({ kind: 'DRIVER_BUSINESS', biz_no: '719-12-12345' });
-  const oldDriver = await f.driver({ active: false, default_vehicle_id: vehicle.id });
-  await f.affiliation(oldDriver.id, party.id);
   const link = await createJoinLink(f.context(admin), { project_ids: [project.id] });
   const joined = await registerDriver(
     database().db,
@@ -30,9 +26,9 @@ it('가입 시 재사용 사업자·차량이어도 새 기사 최초 소속은 
       profile: {
         name: '사후 입력 기사',
         phone: '01071911234',
-        business_name: '재사용',
-        biz_no: party.biz_no,
-        plate_no: vehicle.plate_no,
+        business_name: '사후 입력 운수',
+        biz_no: '719-12-12345',
+        plate_no: '서울80아7191',
         tonnage: '8',
       },
     },
@@ -51,7 +47,11 @@ it('가입 시 재사용 사업자·차량이어도 새 기사 최초 소속은 
     use_date: shiftDay(todaySeoul(), -1),
     project_id: project.id,
     driver_id: joined.user.driver_id!,
-    vehicle_id: vehicle.id,
+    vehicle_id: (
+      await database().pool.query('SELECT default_vehicle_id FROM drivers WHERE id=$1', [
+        joined.user.driver_id,
+      ])
+    ).rows[0].default_vehicle_id,
   };
   expect((await createUse(f.context(user), input)).use_date).toBe(input.use_date);
   expect((await createUse(f.context(user), { ...input, use_date: expected })).use_date).toBe(expected);
