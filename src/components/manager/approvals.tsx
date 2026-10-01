@@ -1,10 +1,11 @@
 'use client';
+import { ReviewOtherAmounts } from './review-other-amounts';
 import { useRef, useState } from 'react';
 import type { LedgerRow } from '@/server/services/ledger';
 import type { getApprovals } from '@/server/services/approvals';
 import { approvalLabels, approvalStatuses } from '@/shared/approvals';
 import { ApprovalDates, ApprovalSelect, ApprovalTabs, useApprovalQuery } from '../approval-filters';
-import { approveUse, quickApprovable } from './quick-approval';
+import { approveUse, quickApprovable, quickApprovalIssues } from './quick-approval';
 import {
   Empty,
   Heading,
@@ -155,9 +156,16 @@ export function Approvals() {
   const amounts = (row: LedgerRow) => (
     <div className="num space-y-1">
       <p>
-        <span className="block text-xs text-slate-600">입력·검토</span>
+        <span className="block text-xs text-slate-600">입력·검토 지급</span>
         {money(row.review_total_amount)}
       </p>
+      <ReviewOtherAmounts row={row} />
+      {row.review_status === 'SUBMITTED' &&
+        quickApprovalIssues(row).map((issue) => (
+          <p key={issue} className="font-semibold text-orange-700">
+            {issue}
+          </p>
+        ))}
       <p className="font-bold">
         <span className="block text-xs text-slate-600">승인</span>
         {money(row.total_amount)}

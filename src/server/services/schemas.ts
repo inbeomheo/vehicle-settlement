@@ -106,6 +106,7 @@ export const approveSchema = versionInput
         review_base_amount: z.number().int().safe(),
         review_extra_amount: z.number().int().safe(),
         review_total_amount: z.number().int().safe(),
+        review_receivable_amount: z.number().int().safe().nullable().default(null),
       })
       .strict()
       .optional(),

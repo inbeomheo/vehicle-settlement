@@ -78,6 +78,13 @@ export type LedgerRow = {
   review_base_amount: number | null;
   review_extra_amount: number | null;
   review_total_amount: number | null;
+  review_receivable_amount: number | null;
+  receivable_needs_review: boolean;
+  has_held_lines: boolean;
+  held_payable_amount: number | null;
+  held_receivable_amount: number | null;
+  has_held_payable: boolean;
+  has_held_receivable: boolean;
   has_requested_extra: boolean;
   has_base_amount_difference: boolean;
   origin: string | null;
@@ -129,7 +136,10 @@ export async function ledgerBase(ctx: Context) {
     (SELECT COALESCE(jsonb_object_agg(actor.id::text,actor.name),'{}'::jsonb) FROM users actor
       WHERE actor.id=vehicle_uses.created_by_user_id OR EXISTS (SELECT 1 FROM use_revisions r
         WHERE r.vehicle_use_id=vehicle_uses.id AND (r.submitted_by=actor.id OR r.decided_by=actor.id))) AS actor_names,
-    t.origin, t.destination, t.performance, t.trip_details, c.review_base_amount, c.review_extra_amount, COALESCE(c.has_requested_extra,false) AS has_requested_extra, COALESCE(c.has_base_amount_difference,false) AS has_base_amount_difference, c.billing_units, c.base_amount, c.extra_amount, c.total_amount, c.receivable_amount,
+    t.origin, t.destination, t.performance, t.trip_details,
+    c.review_receivable_amount, COALESCE(c.receivable_needs_review,false) AS receivable_needs_review,
+    COALESCE(c.has_held_lines,false) AS has_held_lines, c.held_payable_amount, c.held_receivable_amount,
+    COALESCE(c.has_held_payable,false) AS has_held_payable, COALESCE(c.has_held_receivable,false) AS has_held_receivable, c.review_base_amount, c.review_extra_amount, COALESCE(c.has_requested_extra,false) AS has_requested_extra, COALESCE(c.has_base_amount_difference,false) AS has_base_amount_difference, c.billing_units, c.base_amount, c.extra_amount, c.total_amount, c.receivable_amount,
     COALESCE(e.evidence_count,0)::int AS evidence_count, ${missingEvidenceSql} AS evidence_missing,
     CASE WHEN c.payable_count=0 OR c.locked_count=0 THEN 'UNSETTLED' WHEN c.locked_count=c.payable_count THEN 'SETTLED' ELSE 'PARTIAL' END AS settlement_status,
     CASE WHEN c.locked_count=0 THEN 'NOT_SETTLED' WHEN c.paid_count=0 THEN 'UNPAID' WHEN c.paid_count=c.locked_count THEN 'PAID' ELSE 'PARTIAL' END AS payment_status,
@@ -144,8 +154,19 @@ export async function ledgerBase(ctx: Context) {
       FROM trips WHERE vehicle_use_id=vehicle_uses.id) t ON true
     LEFT JOIN LATERAL (SELECT count(*) AS evidence_count FROM evidence WHERE vehicle_use_id=vehicle_uses.id AND deleted_at IS NULL AND replaced_by_id IS NULL AND upload_status='UPLOADED') e ON true
     LEFT JOIN LATERAL (SELECT
-      CASE WHEN bool_or(direction='PAYABLE' AND charge_type='BASE' AND line_review_status<>'REJECTED' AND ${reviewSupplySql} IS NULL) THEN NULL ELSE sum(${reviewSupplySql}) FILTER (WHERE direction='PAYABLE' AND charge_type='BASE' AND line_review_status<>'REJECTED') END AS review_base_amount,
-      CASE WHEN bool_or(direction='PAYABLE' AND charge_type<>'BASE' AND line_review_status<>'REJECTED' AND ${reviewSupplySql} IS NULL) THEN NULL ELSE COALESCE(sum(${reviewSupplySql}) FILTER (WHERE direction='PAYABLE' AND charge_type<>'BASE' AND line_review_status<>'REJECTED'),0) END AS review_extra_amount,
+      CASE WHEN bool_or(direction='PAYABLE' AND charge_type='BASE' AND line_review_status IN ('PENDING','APPROVED') AND ${reviewSupplySql} IS NULL) THEN NULL ELSE COALESCE(sum(${reviewSupplySql}) FILTER (WHERE direction='PAYABLE' AND charge_type='BASE' AND line_review_status IN ('PENDING','APPROVED')), CASE WHEN bool_or(direction='PAYABLE' AND charge_type='BASE' AND line_review_status='HELD') THEN 0 END) END AS review_base_amount,
+      CASE WHEN bool_or(direction='PAYABLE' AND charge_type<>'BASE' AND line_review_status IN ('PENDING','APPROVED') AND ${reviewSupplySql} IS NULL) THEN NULL ELSE COALESCE(sum(${reviewSupplySql}) FILTER (WHERE direction='PAYABLE' AND charge_type<>'BASE' AND line_review_status IN ('PENDING','APPROVED')),0) END AS review_extra_amount,
+      CASE WHEN bool_or(direction='RECEIVABLE' AND line_review_status IN ('PENDING','APPROVED') AND ${reviewSupplySql} IS NULL) THEN NULL ELSE sum(${reviewSupplySql}) FILTER (WHERE direction='RECEIVABLE' AND line_review_status IN ('PENDING','APPROVED')) END AS review_receivable_amount,
+      bool_or(direction='RECEIVABLE' AND line_review_status='PENDING' AND (
+        price_status='PENDING' OR ${reviewSupplySql} IS NULL OR rate_agreement_id IS NULL
+        OR COALESCE((agreement_snapshot->>'contract_computed_amount')::integer,computed_amount) IS NULL
+        OR (requested_amount IS NOT NULL AND requested_amount<>COALESCE((agreement_snapshot->>'contract_computed_amount')::integer,computed_amount))
+      )) AS receivable_needs_review,
+      bool_or(line_review_status='HELD') AS has_held_lines,
+      bool_or(direction='PAYABLE' AND line_review_status='HELD') AS has_held_payable,
+      bool_or(direction='RECEIVABLE' AND line_review_status='HELD') AS has_held_receivable,
+      CASE WHEN bool_or(direction='PAYABLE' AND line_review_status='HELD' AND ${reviewSupplySql} IS NULL) THEN NULL ELSE sum(${reviewSupplySql}) FILTER (WHERE direction='PAYABLE' AND line_review_status='HELD') END AS held_payable_amount,
+      CASE WHEN bool_or(direction='RECEIVABLE' AND line_review_status='HELD' AND ${reviewSupplySql} IS NULL) THEN NULL ELSE sum(${reviewSupplySql}) FILTER (WHERE direction='RECEIVABLE' AND line_review_status='HELD') END AS held_receivable_amount,
       bool_or(direction='PAYABLE' AND charge_type<>'BASE' AND requested_amount IS NOT NULL AND line_review_status='PENDING') AS has_requested_extra,
       bool_or(direction='PAYABLE' AND charge_type='BASE' AND line_review_status='PENDING' AND COALESCE((agreement_snapshot->>'contract_computed_amount')::integer,computed_amount) IS NOT NULL AND COALESCE(requested_amount,computed_amount) IS NOT NULL AND COALESCE((agreement_snapshot->>'contract_computed_amount')::integer,computed_amount)<>COALESCE(requested_amount,computed_amount)) AS has_base_amount_difference,
       array_agg(DISTINCT billing_unit::text) FILTER (WHERE direction='PAYABLE') AS billing_units,
@@ -245,6 +266,9 @@ export async function getLedger(ctx: Context, raw: unknown, exportAll = false): 
       'receivable_amount',
       'review_base_amount',
       'review_extra_amount',
+      'review_receivable_amount',
+      'held_payable_amount',
+      'held_receivable_amount',
     ] as const)
       if (row[key] !== null) row[key] = safeMoney(row[key]);
     row.review_total_amount =

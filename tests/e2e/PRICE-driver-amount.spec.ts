@@ -36,7 +36,11 @@ async function send(page: Page, amount: string) {
   const sheet = page.getByRole('dialog', { name: '이대로 보낼까요?' });
   await expect(sheet).toContainText(`${amount}원`);
   await sheet.getByRole('button', { name: '보내기', exact: true }).click();
-  await expect(page.getByRole('heading', { name: '보냈습니다', exact: true })).toBeVisible();
+  await page.waitForURL(/\/d\/uses\/[^?]+\?submitted=1/, { waitUntil: 'domcontentloaded', timeout: 15000 });
+  // The destination hydrates and fetches the submitted detail before rendering success.
+  await expect(page.getByRole('heading', { name: '보냈습니다', exact: true })).toBeVisible({
+    timeout: 15000,
+  });
 }
 async function noOverflow(page: Page) {
   expect(await page.evaluate(() => getComputedStyle(document.documentElement).fontSize)).toBe('20px');
@@ -197,4 +201,38 @@ test('생성 응답 유실 뒤 재전송은 원래 금액으로 복구하고 새
   const saved = await getUse(s.driverCtx, use.id);
   expect(saved.charge_lines).toHaveLength(1);
   expect(saved.charge_lines[0]).toMatchObject({ id: original.charge_lines[0].id, requested_amount: 190000 });
+});
+
+test.describe('제출 완료 이동 회귀', () => {
+  test.use({ serviceWorkers: 'block' });
+  test('보내기 완료는 한 번만 이동하고 느린 상세 조회 뒤 완료 화면을 표시한다', async ({ page }) => {
+    const s = await fixture();
+    await login(page, s.driverUser.login_id, `/d/new?project=${s.project.id}`);
+    await enterRoute(page);
+    await page.getByLabel('이번 운행 금액(원)', { exact: true }).fill('140000');
+    let navigations = 0;
+    await page.route('**/d/uses/*?submitted=1', async (route) => {
+      navigations++;
+      // Let both the queue event and the send handler observe completion before unloading.
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      await route.continue();
+    });
+    let delayed = false;
+    await page.route('**/api/uses/*', async (route) => {
+      if (
+        route.request().method() === 'GET' &&
+        page.url().includes('submitted=1') &&
+        /\/api\/uses\/[0-9a-f-]{36}$/.test(route.request().url())
+      ) {
+        delayed = true;
+        await new Promise((resolve) => setTimeout(resolve, 6500));
+      }
+      await route.continue();
+    });
+    await send(page, '140,000');
+    expect(delayed).toBe(true);
+    expect(navigations).toBe(1);
+    const [use] = await database.db.select().from(vehicleUses).where(eq(vehicleUses.driver_id, s.driver.id));
+    expect((await getUse(s.driverCtx, use.id)).review_status).toBe('SUBMITTED');
+  });
 });
