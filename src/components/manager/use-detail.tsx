@@ -81,6 +81,8 @@ export function UseDetail({ id, canSettle = false }: { id: string; canSettle?: b
   const driverModes =
     driverSettings.data?.project_id === use.project_id ? driverSettings.data.driver_modes : undefined;
   const fixOptions = [
+    { target: 'reviewer', label: '담당자' },
+    { target: 'load_tonnage', label: '적재용량' },
     { target: 'evidence', label: '증빙' },
     { target: 'cargo_desc', label: '운반 내용' },
     { target: 'requester', label: '요청자' },
@@ -149,6 +151,9 @@ export function UseDetail({ id, canSettle = false }: { id: string; canSettle?: b
     <>
       <Heading title={use.use_no} description={`${use.use_date} · ${snapshot('project_name')}`}>
         <div className="flex flex-wrap gap-2">
+          <a className={secondaryClass} href={`/api/uses/${id}/report.pdf`}>
+            보고서 PDF
+          </a>
           <Link href="/m/review" className={secondaryClass}>
             검수함
           </Link>
@@ -158,6 +163,10 @@ export function UseDetail({ id, canSettle = false }: { id: string; canSettle?: b
         </div>
       </Heading>
       <div className="mb-5 flex flex-wrap items-center gap-3">
+        <span>
+          담당: {snapshot('reviewer_name')} · 적재용량:{' '}
+          {use.load_tonnage ? `${formatQuantity(use.load_tonnage)}톤` : '—'}
+        </span>
         <Badge value={use.review_status} />
         <Badge value={use.operation_status} />
         <span className="text-xs text-slate-600">

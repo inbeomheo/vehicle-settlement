@@ -1,4 +1,5 @@
 'use client';
+import { formatQuantity } from '@/shared/quantity';
 import { useEffect, useState } from 'react';
 import type { LedgerResult, LedgerRow } from '@/server/services/ledger';
 import {
@@ -34,6 +35,12 @@ const columns: { key: keyof LedgerRow; title: string; render?: (row: LedgerRow) 
   { key: 'work_type_name', title: '공종' },
   { key: 'requester', title: '요청자' },
   { key: 'driver_name', title: '기사' },
+  { key: 'reviewer_name', title: '담당자' },
+  {
+    key: 'load_tonnage',
+    title: '적재용량',
+    render: (row) => (row.load_tonnage ? `${formatQuantity(row.load_tonnage)}톤` : '—'),
+  },
   { key: 'plate_no', title: '차량', render: (row) => <Plate value={row.plate_no} size="sm" /> },
   { key: 'payee_name', title: '운송사/지급처' },
   {
@@ -79,6 +86,8 @@ const defaultColumns: (keyof LedgerRow)[] = [
   'use_date',
   'project_name',
   'driver_name',
+  'reviewer_name',
+  'load_tonnage',
   'plate_no',
   'route_summary',
   'total_amount',
@@ -90,6 +99,8 @@ const mobileCoreColumns: (keyof LedgerRow)[] = [
   'use_date',
   'project_name',
   'driver_name',
+  'reviewer_name',
+  'load_tonnage',
   'plate_no',
   'total_amount',
   'review_status',
@@ -247,6 +258,21 @@ export function Ledger({ initial = {} }: { initial?: Search }) {
                 className={inputClass}
                 value={draft.period ?? ''}
                 onChange={(e) => draftValue('period', e.target.value)}
+              />
+            </Field>
+            <Field title="담당자 이름">
+              <input
+                className={inputClass}
+                value={draft.reviewer_name ?? ''}
+                onChange={(e) => draftValue('reviewer_name', e.target.value)}
+              />
+            </Field>
+            <Field title="적재용량 (톤)">
+              <input
+                className={inputClass}
+                inputMode="decimal"
+                value={draft.load_tonnage ?? ''}
+                onChange={(e) => draftValue('load_tonnage', e.target.value)}
               />
             </Field>
             {optionField('기사', 'driver_id', lookups.data?.drivers ?? [])}
@@ -523,6 +549,10 @@ function ReviewCard({
             <span className="font-semibold">{row.driver_name}</span>
             <span className="text-sm text-slate-500">{row.project_name}</span>
           </div>
+          <p className="mt-1 break-words text-sm">
+            담당: {row.reviewer_name ?? '미지정'} · 적재용량:{' '}
+            {row.load_tonnage ? `${formatQuantity(row.load_tonnage)}톤` : '—'}
+          </p>
           <p className="mt-1.5 truncate text-[0.9375rem]">
             {row.route_summary}
             {/* 조출·장재물 같은 운반 내용은 금액이 달라지는 이유라 함께 보여 준다. */}
@@ -579,12 +609,13 @@ export function ReviewInbox({ initialTab = 'SUBMITTED' }: { initialTab?: string 
     ['SUBMITTED', 'NEEDS_FIX', 'MISSING'].includes(initialTab) ? initialTab : 'SUBMITTED',
   );
   const [page, setPage] = useState(1);
+  const [reviewerScope, setReviewerScope] = useState<'auto' | 'mine' | 'all'>('auto');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [results, setResults] = useState<Record<string, CardResult>>({});
   const [bulkBusy, setBulkBusy] = useState(false);
   const filter = tab === 'MISSING' ? 'evidence_missing=true' : `review_status=${tab}`;
   const { data, error, loading, refresh } = useRemote<LedgerResult>(
-    `/api/ledger?${filter}&page=${page}&pageSize=20&sort=use_date&order=asc`,
+    `/api/ledger?${filter}&reviewer_scope=${reviewerScope}&page=${page}&pageSize=20&sort=use_date&order=asc`,
   );
   const quickRows = data?.rows.filter((row) => quickApprovable(row) && results[row.id] !== 'approved') ?? [];
   const chosen = quickRows.filter((row) => selected.has(row.id));
@@ -624,6 +655,28 @@ export function ReviewInbox({ initialTab = 'SUBMITTED' }: { initialTab?: string 
             : undefined
         }
       />
+      <div role="group" aria-label="담당 범위" className="mb-4 flex flex-wrap gap-2">
+        {(['mine', 'all'] as const).map((scope) => (
+          <button
+            key={scope}
+            type="button"
+            disabled={bulkBusy}
+            aria-pressed={(reviewerScope === 'auto' ? data?.reviewer_scope : reviewerScope) === scope}
+            className={
+              (reviewerScope === 'auto' ? data?.reviewer_scope : reviewerScope) === scope
+                ? buttonClass
+                : secondaryClass
+            }
+            onClick={() => {
+              setReviewerScope(scope);
+              setPage(1);
+              setSelected(new Set());
+            }}
+          >
+            {scope === 'mine' ? '내 담당만' : '전체'}
+          </button>
+        ))}
+      </div>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div
           role="group"

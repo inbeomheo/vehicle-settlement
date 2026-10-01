@@ -161,6 +161,8 @@ export async function setupScenario(
     adminCtx: f.context(admin),
     driverCtx: f.context(driverUser),
     input: {
+      reviewer_user_id: admin.id,
+      load_tonnage: '1',
       use_date: '2026-09-15',
       project_id: project.id,
       driver_id: driver.id,

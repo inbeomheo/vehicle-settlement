@@ -118,7 +118,7 @@ it('엑셀은 같은 필터의 전체 행·전체 열·합계를 API와 일치�
   await book.xlsx.load(await exported.arrayBuffer());
   const sheet = book.worksheets[0];
   expect(sheet.rowCount).toBe(data.total + 2);
-  expect(sheet.columnCount).toBe(27);
+  expect(sheet.columnCount).toBe(29);
   expect(sheet.getRow(sheet.rowCount).getCell(18).value).toBe(data.totals.filteredSum);
   const sum = Array.from({ length: data.total }, (_, i) =>
     Number(sheet.getRow(i + 2).getCell(18).value),

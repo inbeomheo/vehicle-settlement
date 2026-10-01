@@ -1,4 +1,5 @@
 'use client';
+import { formatQuantity } from '@/shared/quantity';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import type { SummaryAmounts, SummaryCell, SummaryResult } from '@/server/services/summary';
@@ -68,6 +69,10 @@ function SummaryCards({ data, query }: { data: SummaryResult; query: Query }) {
             <header className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 pb-4">
               <div className="min-w-0 break-words">
                 <h2 className="text-lg font-bold text-ink">{group.name}</h2>
+                <p className="mt-1 break-words text-sm text-slate-600">
+                  담당: {group.reviewers.join(', ')} · 적재용량:{' '}
+                  {group.loads.map((value) => `${formatQuantity(value)}톤`).join(', ') || '—'}
+                </p>
                 {driver && (
                   <p className="mt-1 text-sm text-slate-600">
                     {driver.affiliations.join(', ') || '소속 정보 없음'}

@@ -1,4 +1,5 @@
 'use client';
+import { ReviewerFields, useReviewerOptions } from './reviewer-fields';
 import type { RecentRoute } from '@/client/types';
 import { proposedAmount } from '@/shared/charge-amount';
 import { RestrictedEvidenceNotice } from '@/components/evidence/restricted-notice';
@@ -128,6 +129,20 @@ export function UseFormPage({ mode, useId }: { mode: Mode; useId?: string }) {
 export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mode; useId?: string }) {
   const [draft, setDraft] = useState<Draft>();
   const settings = useFormSettings(boot.user.id, draft?.form.project_id, mode);
+  const reviewerOptions = useReviewerOptions(boot.user.id, draft?.form.project_id, draft?.form.driver_id);
+  const reviewerDefaultContext = useRef('');
+  const reviewerContext = `${draft?.id}:${draft?.form.project_id}:${draft?.form.driver_id}`;
+  useEffect(() => {
+    if (!reviewerOptions.data || reviewerDefaultContext.current === reviewerContext) return;
+    reviewerDefaultContext.current = reviewerContext;
+    const id = reviewerOptions.data.default_reviewer_id;
+    if (!id) return;
+    setDraft((value) =>
+      value && !value.serverId && !value.form.reviewer_user_id
+        ? { ...value, form: { ...value.form, reviewer_user_id: id } }
+        : value,
+    );
+  }, [reviewerOptions.data, reviewerContext]);
   const current = useRef<Draft | undefined>(undefined);
   const [lookups, setLookups] = useState(boot.lookups);
   const [recentRoutes, setRecentRoutes] = useState<RecentRoute[]>([]);
@@ -802,6 +817,12 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
   };
   const firstTrip = form.trips[0];
   const summary: SubmitSummary = {
+    reviewer:
+      reviewerOptions.data?.reviewers.find((user) => user.id === form.reviewer_user_id)?.name ??
+      (form.reviewer_user_id && form.reviewer_user_id === draft.server?.reviewer_user_id
+        ? String(draft.server.snapshot.reviewer_name ?? '미지정')
+        : '미지정'),
+    load: form.load_tonnage || '',
     date: form.use_date,
     project: lookups.projects.find((p) => p.id === form.project_id)?.name ?? '',
     plate:
@@ -817,6 +838,24 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
   };
   const dateFields = (
     <>
+      <Field label="현장" target="project_id" group={chipProjects}>
+        {chipProjects ? (
+          <ChoiceChips
+            name="project_id"
+            value={form.project_id}
+            onChange={(project_id) => change({ project_id, reviewer_user_id: '' })}
+            choices={sortedProjects.map((p) => ({ value: p.id, name: p.name, label: p.name }))}
+          />
+        ) : (
+          <select
+            className={control}
+            value={form.project_id}
+            onChange={(e) => change({ project_id: e.target.value, reviewer_user_id: '' })}
+          >
+            {options(sortedProjects, form.project_id, draft.server?.snapshot.project_name)}
+          </select>
+        )}
+      </Field>
       <Field label="사용일" target="use_date">
         <input
           className={control}
@@ -837,24 +876,6 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
           value={form.end_date}
           onChange={(e) => change({ end_date: e.target.value })}
         />
-      </Field>
-      <Field label="현장" target="project_id" group={chipProjects}>
-        {chipProjects ? (
-          <ChoiceChips
-            name="project_id"
-            value={form.project_id}
-            onChange={(project_id) => change({ project_id })}
-            choices={sortedProjects.map((p) => ({ value: p.id, name: p.name, label: p.name }))}
-          />
-        ) : (
-          <select
-            className={control}
-            value={form.project_id}
-            onChange={(e) => change({ project_id: e.target.value })}
-          >
-            {options(sortedProjects, form.project_id, draft.server?.snapshot.project_name)}
-          </select>
-        )}
       </Field>
     </>
   );
@@ -1390,6 +1411,11 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
             )}
           </p>
         )}
+        {draft.serverId && (
+          <a className={button} href={`/api/uses/${draft.serverId}/report.pdf`}>
+            보고서 PDF
+          </a>
+        )}
         {readOnly ? (
           <ReadOnlyUse use={draft.server!} />
         ) : (
@@ -1403,20 +1429,40 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
             <fieldset disabled={locked} className="min-w-0 space-y-5">
               {mode === 'driver' ? (
                 <>
-                  <Section title="현장·날짜" target="use" step={1} done={stepDone.site}>
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      {dateFields}
-                      {extraUseFields}
+                  <Section title="프로젝트·운행일" target="use" step={1} done={stepDone.site}>
+                    <div className="grid gap-4 sm:grid-cols-2">{dateFields}</div>
+                  </Section>
+                  <Section
+                    title="담당자·적재용량"
+                    step={2}
+                    done={!!form.reviewer_user_id && !!form.load_tonnage}
+                  >
+                    <div className="grid gap-4">
+                      <ReviewerFields
+                        form={form}
+                        change={change}
+                        options={reviewerOptions}
+                        tonnage={lookups.vehicles.find((v) => v.id === form.vehicle_id)?.tonnage}
+                      />
                     </div>
                   </Section>
-                  <Section title="차량" step={2} done={stepDone.vehicle}>
+                  <details className="rounded-lg border border-slate-200 bg-white p-4">
+                    <summary className="min-h-11 cursor-pointer font-semibold">
+                      차량 확인·변경 · {lookups.vehicles.find((v) => v.id === form.vehicle_id)?.plate_no}
+                    </summary>
                     <div className="grid gap-4">{vehicleFields}</div>
-                  </Section>
+                  </details>
                 </>
               ) : (
                 <Section title="운행 정보" target="use">
                   <div className="grid gap-4 sm:grid-cols-2">
                     {dateFields}
+                    <ReviewerFields
+                      form={form}
+                      change={change}
+                      options={reviewerOptions}
+                      tonnage={lookups.vehicles.find((v) => v.id === form.vehicle_id)?.tonnage}
+                    />
                     {vehicleFields}
                     {extraUseFields}
                   </div>
@@ -1451,10 +1497,41 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
                   .filter((charge) => charge.charge_type === 'BASE')
                   .map((charge) => charge.billing_unit)}
               />
+              <div className="grid gap-4">{mode === 'driver' && extraUseFields}</div>
+            </fieldset>
+            <fieldset disabled={locked} className="min-w-0 space-y-5">
+              <ChargeFields
+                step={mode === 'driver' ? 4 : undefined}
+                done={stepDone.fee}
+                onEstimate={reportEstimate}
+                form={displayForm}
+                mode={mode}
+                onChange={(charges, automatic) => change({ charges }, automatic)}
+                userId={boot.user.id}
+                saved={draft.server}
+              />
+            </fieldset>
+            <fieldset disabled={locked} className="min-w-0 space-y-5">
+              {(settings.modes.notes !== 'HIDDEN' ||
+                revealed.has('notes') ||
+                fieldErrors.some((error) => error.target === 'notes') ||
+                form.notes ||
+                fixes.some((fix) => ['notes', 'use.notes'].includes(fix.target))) && (
+                <Section title="특이사항">
+                  <Field label="특이사항" target="notes">
+                    <textarea
+                      className={control}
+                      rows={4}
+                      value={form.notes}
+                      onChange={(e) => change({ notes: e.target.value })}
+                    />
+                  </Field>
+                </Section>
+              )}
             </fieldset>
             <RestrictedEvidenceNotice count={draft.server?.restricted_evidence_count} />
             <EvidenceEditor
-              step={mode === 'driver' ? 4 : undefined}
+              step={mode === 'driver' ? 5 : undefined}
               done={stepDone.evidence}
               validationError={
                 evidenceValidation || inputErrors?.find((error) => error.target === 'evidence')?.reason
@@ -1475,34 +1552,6 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
               }}
               onDelete={deleteStoredEvidence}
             />
-            <fieldset disabled={locked} className="min-w-0 space-y-5">
-              <ChargeFields
-                step={mode === 'driver' ? 5 : undefined}
-                done={stepDone.fee}
-                onEstimate={reportEstimate}
-                form={displayForm}
-                mode={mode}
-                onChange={(charges, automatic) => change({ charges }, automatic)}
-                userId={boot.user.id}
-                saved={draft.server}
-              />
-              {(settings.modes.notes !== 'HIDDEN' ||
-                revealed.has('notes') ||
-                fieldErrors.some((error) => error.target === 'notes') ||
-                form.notes ||
-                fixes.some((fix) => ['notes', 'use.notes'].includes(fix.target))) && (
-                <Section title="특이사항">
-                  <Field label="특이사항" target="notes">
-                    <textarea
-                      className={control}
-                      rows={4}
-                      value={form.notes}
-                      onChange={(e) => change({ notes: e.target.value })}
-                    />
-                  </Field>
-                </Section>
-              )}
-            </fieldset>
             <div
               className={`sticky z-10 -mx-4 border-t border-slate-200 bg-concrete/95 px-4 pt-3 backdrop-blur ${mode === 'driver' ? 'bottom-[calc(3.8rem+env(safe-area-inset-bottom))] pb-3' : 'bottom-0 pb-[max(0.75rem,env(safe-area-inset-bottom))]'}`}
             >

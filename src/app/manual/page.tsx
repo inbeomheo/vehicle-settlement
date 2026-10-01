@@ -244,12 +244,13 @@ export default function ManualPage() {
             </Step>
             <Step
               n={2}
-              title="운반 내용만 적습니다"
+              title="프로젝트·운행일·담당자·적재용량을 확인합니다"
               shot={<Shot src="05-step1-2" alt="현장·날짜와 운반 내용" phone />}
             >
               <p>
-                날짜는 오늘, 현장은 담당 현장, 차량은 내 차로 이미 골라져 있습니다. 다 채운 단계는 초록 체크가
-                됩니다.
+                프로젝트(현장) → 운행일 → 담당자 → 적재용량(톤) → 운송내역 → 이번 운행 금액 순서로 입력합니다.
+                차량은 내 차가 기본이며 바꿀 수 있습니다. 사진·증빙은 마지막에 추가합니다. 다 채운 단계는 초록
+                체크가 됩니다.
               </p>
             </Step>
             <Step
@@ -264,16 +265,6 @@ export default function ManualPage() {
             </Step>
             <Step
               n={4}
-              title="인수증을 찍습니다"
-              shot={<Shot src="07-step4-photo" alt="인수증 사진 첨부" phone />}
-            >
-              <p>
-                점선 상자 <B>사진 촬영·추가</B>를 눌러 찍거나 앨범에서 고릅니다. 통신이 약해도 보낼 때 함께
-                올라갑니다.
-              </p>
-            </Step>
-            <Step
-              n={5}
               title="이번 운행 금액을 확인합니다"
               shot={<Shot src="08b-amount-input" alt="이번 운행 금액 직접 입력" phone />}
             >
@@ -287,8 +278,18 @@ export default function ManualPage() {
                 두어도 됩니다.
               </p>
               <p>
-                대기료·통행료가 있었으면 <B>+ 추가 비용</B>에 금액과 이유를 적고, 영수증도 4번에서 함께
+                대기료·통행료가 있었으면 <B>+ 추가 비용</B>에 금액과 이유를 적고, 영수증도 5번에서 함께
                 찍습니다.
+              </p>
+            </Step>
+            <Step
+              n={5}
+              title="인수증을 찍습니다"
+              shot={<Shot src="07-step4-photo" alt="인수증 사진 첨부" phone />}
+            >
+              <p>
+                점선 상자 <B>사진 촬영·추가</B>를 눌러 찍거나 앨범에서 고릅니다. 통신이 약해도 보낼 때 함께
+                올라갑니다.
               </p>
             </Step>
             <Step
@@ -297,8 +298,8 @@ export default function ManualPage() {
               shot={<Shot src="09-confirm-sheet" alt="이대로 보낼까요? 확인 창" phone />}
             >
               <p>
-                “이대로 보낼까요?” 창에 날짜·현장·차량·경로·사진 수·예상 금액이 크게 나옵니다. 맞으면{' '}
-                <B>보내기</B>, 틀리면 <B>고치기</B>.
+                “이대로 보낼까요?” 창에 날짜·현장·담당자·적재용량·차량·경로·사진 수·예상 금액이 크게 나옵니다.
+                맞으면 <B>보내기</B>, 틀리면 <B>고치기</B>.
               </p>
             </Step>
             <Step

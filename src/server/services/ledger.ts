@@ -20,6 +20,13 @@ export const ledgerQuerySchema = z
       .optional(),
     project_id: uuid.optional(),
     driver_id: uuid.optional(),
+    reviewer_user_id: uuid.optional(),
+    reviewer_name: z.string().trim().max(100).optional(),
+    reviewer_scope: z.enum(['mine', 'all', 'auto']).default('all'),
+    load_tonnage: z
+      .string()
+      .regex(/^\d{1,7}(\.\d{1,3})?$/)
+      .optional(),
     vehicle_id: uuid.optional(),
     counterparty_id: uuid.optional(),
     use_id: uuid.optional(),
@@ -45,6 +52,9 @@ export type LedgerRow = {
   vehicle_id: string;
   project_name: string;
   driver_name: string;
+  reviewer_user_id: string | null;
+  reviewer_name: string | null;
+  load_tonnage: string | null;
   plate_no: string;
   vehicle_type: string;
   tonnage: string;
@@ -96,6 +106,7 @@ export type LedgerResult = {
   page: number;
   pageSize: number;
   total: number;
+  reviewer_scope?: 'mine' | 'all';
   totals: { pageSum: number; filteredSum: number };
 };
 // One shared predicate matches W1's submission policy, including replaced/deleted/upload-failed evidence.
@@ -108,6 +119,7 @@ export async function ledgerBase(ctx: Context) {
   await managerOnly(ctx);
   const scope = await accessibleUseFilter(ctx);
   return sql`SELECT vehicle_uses.*, vehicle_uses.snapshot->>'project_name' AS project_name,
+    vehicle_uses.snapshot->>'reviewer_name' AS reviewer_name,
     vehicle_uses.snapshot->>'driver_name' AS driver_name, vehicle_uses.snapshot->>'plate_no' AS plate_no,
     vehicle_uses.snapshot->>'vehicle_type' AS vehicle_type, vehicle_uses.snapshot->>'tonnage' AS tonnage,
     vehicle_uses.snapshot->>'payee_name' AS payee_name, w.name AS work_type_name, u.name AS creator_name,
@@ -154,6 +166,7 @@ export async function getLedger(ctx: Context, raw: unknown, exportAll = false): 
   for (const key of [
     'project_id',
     'driver_id',
+    'reviewer_user_id',
     'vehicle_id',
     'review_status',
     'settlement_status',
@@ -161,6 +174,9 @@ export async function getLedger(ctx: Context, raw: unknown, exportAll = false): 
   ] as const) {
     if (q[key]) clauses.push(sql`${sql.identifier(key)}=${q[key]}`);
   }
+  if (q.reviewer_name)
+    clauses.push(sql`reviewer_name ILIKE ${'%' + q.reviewer_name.replace(/[\\%_]/g, '\\$&') + '%'}`);
+  if (q.load_tonnage) clauses.push(sql`load_tonnage=${q.load_tonnage}::numeric`);
   if (q.use_id) clauses.push(sql`id=${q.use_id}::uuid`);
   if (q.counterparty_id) clauses.push(sql`payee_counterparty_id=${q.counterparty_id}::uuid`);
   if (q.from) clauses.push(sql`use_date>=${q.from}::date`);
@@ -176,6 +192,15 @@ export async function getLedger(ctx: Context, raw: unknown, exportAll = false): 
     clauses.push(
       sql`concat_ws(' ',use_no,project_name,driver_name,plate_no,payee_name,cargo_desc,requester,origin,destination) ILIKE ${'%' + q.search.replace(/[\\%_]/g, '\\$&') + '%'}`,
     );
+  let reviewerScope: 'mine' | 'all' = q.reviewer_scope === 'mine' ? 'mine' : 'all';
+  const mine = sql`(reviewer_user_id=${ctx.user.id}::uuid OR reviewer_user_id IS NULL)`;
+  if (q.reviewer_scope === 'auto') {
+    const count = await ctx.db.execute(
+      sql`WITH enriched AS (${base}) SELECT count(*)::int AS n FROM enriched WHERE ${sql.join(clauses, sql` AND `)} AND ${mine}`,
+    );
+    reviewerScope = Number(count.rows[0].n) > 0 ? 'mine' : 'all';
+  }
+  if (reviewerScope === 'mine') clauses.push(mine);
   const order = sql`${sql.identifier(q.sort)} ${q.order === 'asc' ? sql`ASC` : sql`DESC`} NULLS LAST, id ASC`;
   const result = await ctx.db
     .execute(sql`WITH enriched AS (${base}), filtered AS (SELECT * FROM enriched WHERE ${sql.join(clauses, sql` AND `)}),
@@ -192,6 +217,7 @@ export async function getLedger(ctx: Context, raw: unknown, exportAll = false): 
   };
   const rows = resultRow.rows as LedgerRow[];
   for (const row of rows) {
+    if (row.load_tonnage !== null) row.load_tonnage = String(row.load_tonnage);
     const details = row.trip_details ?? [];
     const routes = [...new Set(details.map((trip) => `${trip.origin} → ${trip.destination}`))];
     row.route_summary = routes.length
@@ -219,6 +245,7 @@ export async function getLedger(ctx: Context, raw: unknown, exportAll = false): 
   }
   return {
     rows,
+    reviewer_scope: reviewerScope,
     page: exportAll ? 1 : q.page,
     pageSize: exportAll ? rows.length : q.pageSize,
     total: Number(resultRow.total),

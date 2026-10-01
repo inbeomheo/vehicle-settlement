@@ -24,8 +24,8 @@ import {
 } from './common';
 
 const groups = [
-  { key: 'use', label: '사용 정보', fields: fieldKeys.slice(0, 6) },
-  { key: 'trips', label: '운행', fields: fieldKeys.slice(6, -1) },
+  { key: 'use', label: '사용 정보', fields: fieldKeys.slice(0, 8) },
+  { key: 'trips', label: '운행', fields: fieldKeys.slice(8, -1) },
   { key: 'costs', label: '비용', fields: fieldKeys.slice(-1) },
 ];
 export function FormFieldSettings({ initialProject = '' }: { initialProject?: string }) {

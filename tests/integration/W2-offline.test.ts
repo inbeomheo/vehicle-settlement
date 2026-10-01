@@ -46,6 +46,8 @@ async function harness(options: { photo?: boolean } = {}) {
   });
   const token = (await s.f.session(s.driverUser.id)).token;
   const form = initialValues(JSON.parse(JSON.stringify(await getLookups(s.driverCtx))));
+  form.reviewer_user_id = s.admin.id;
+  form.load_tonnage = '1';
   form.use_date = s.input.use_date;
   form.trips = Array.from({ length: 5 }, (_, i) => ({
     ...form.trips[0],

@@ -12,6 +12,11 @@ import {
 } from './import-source';
 
 const sourceIdsSchema = z.object({
+  reviewer_user_id: z
+    .string()
+    .uuid()
+    .nullish()
+    .transform((value) => value ?? undefined),
   project_id: z.string().uuid(),
   driver_id: z.string().uuid(),
   vehicle_id: z.string().uuid(),

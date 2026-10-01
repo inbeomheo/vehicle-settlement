@@ -1,7 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import ExcelJS from 'exceljs';
 import { readFile } from 'node:fs/promises';
-import { submitDriverForm } from './submit-helper';
+import { submitDriverForm, fillFlowFields } from './submit-helper';
 
 test.setTimeout(180000);
 async function login(page: Page, id: string) {
@@ -27,9 +27,11 @@ async function inputUse(
 ) {
   await page.goto(options.manager ? '/m/uses/new' : '/d/new');
   await expect(page.getByLabel('1회차 출발', { exact: true })).toBeVisible();
+  await fillFlowFields(page);
   if (options.manager) await page.getByLabel('실제 기사', { exact: true }).selectOption({ label: '김성호' });
   await page.getByLabel('사용일', { exact: true }).fill(options.date);
   // 기사 화면은 현장이 적으면 한 번 누르는 선택 칩, 대리 입력은 드롭다운이다.
+  await fillFlowFields(page);
   if (options.manager) await page.getByLabel('현장', { exact: true }).selectOption({ label: '서울 현장' });
   else await page.getByRole('radio', { name: '서울 현장', exact: true }).check();
   await page.getByLabel('운반 내용', { exact: true }).fill(options.tag);
@@ -52,6 +54,7 @@ async function inputUse(
   const created = page.waitForResponse(
     (r) => new URL(r.url()).pathname === '/api/uses' && r.request().method() === 'POST',
   );
+  await fillFlowFields(page);
   if (options.manager) await page.getByRole('button', { name: '검수 대기로 제출', exact: true }).click();
   else await submitDriverForm(page);
   const response = await created;

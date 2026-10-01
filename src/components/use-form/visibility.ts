@@ -39,6 +39,8 @@ export function revealDraftFields(draft: Draft, modes: FieldModes): Draft {
       ? (draft.server.revisions.find((revision) => revision.decision === 'NEEDS_FIX')?.fix_items ?? [])
       : [];
   for (const key of [
+    'reviewer',
+    'load_tonnage',
     'end_date',
     'work_type',
     'requester',
@@ -46,7 +48,7 @@ export function revealDraftFields(draft: Draft, modes: FieldModes): Draft {
     'operation_status',
     'notes',
   ] as const) {
-    const target = key === 'work_type' ? 'work_type_id' : key;
+    const target = key === 'work_type' ? 'work_type_id' : key === 'reviewer' ? 'reviewer_user_id' : key;
     const hasValue =
       key === 'operation_status'
         ? draft.form.operation_status !== 'COMPLETED'
@@ -54,9 +56,9 @@ export function revealDraftFields(draft: Draft, modes: FieldModes): Draft {
     if (
       modes[key] !== 'HIDDEN' ||
       hasValue ||
-      fixes.some((fix) => [target, `use.${target}`].includes(fix.target))
+      fixes.some((fix) => [key, target, `use.${key}`, `use.${target}`].includes(fix.target))
     )
-      revealed.add(target);
+      revealed.add(key === 'reviewer' ? 'reviewer' : target);
   }
   const { detailKeys } = tripLayout(
     modes,

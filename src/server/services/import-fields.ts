@@ -2,6 +2,8 @@ import { z } from 'zod';
 import type { ImportSourceIds } from './import-source';
 
 export const importFields = {
+  reviewer: ['담당자', '검수담당자'],
+  load_tonnage: ['적재용량', '적재용량(톤)'],
   use_date: ['사용일', '운행일', '일자', '날짜'],
   project: ['현장', '현장명', '현장코드'],
   driver: ['기사', '기사명', '운전자'],

@@ -22,7 +22,7 @@ export async function getDashboard(ctx: Context) {
     SELECT s.id,s.grand_total FROM statements s WHERE s.direction='PAYABLE' AND s.status='CONFIRMED' AND ${statementScope}
       AND NOT EXISTS (SELECT 1 FROM payment_records pr WHERE pr.statement_id=s.id AND pr.voided_at IS NULL)
   ) SELECT
-    (SELECT count(*)::int FROM scoped WHERE review_status='SUBMITTED' AND operation_status<>'CANCELED') AS review_pending,
+    (SELECT count(*)::int FROM scoped WHERE review_status='SUBMITTED' AND operation_status<>'CANCELED' AND (reviewer_user_id=${ctx.user.id}::uuid OR reviewer_user_id IS NULL)) AS review_pending,
     (SELECT count(*)::int FROM scoped WHERE review_status='NEEDS_FIX' AND operation_status<>'CANCELED') AS fix_pending,
     (SELECT count(*)::int FROM scoped WHERE evidence_missing AND operation_status<>'CANCELED') AS evidence_missing,
     (SELECT COALESCE(sum(cl.approved_amount),0)::text FROM charge_lines cl JOIN scoped ON scoped.id=cl.vehicle_use_id

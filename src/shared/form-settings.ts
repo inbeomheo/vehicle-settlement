@@ -1,5 +1,7 @@
 // Shared by the form and server submission checks. Billing and evidence are fixed rules.
 export const fieldKeys = [
+  'reviewer',
+  'load_tonnage',
   'end_date',
   'work_type',
   'requester',
@@ -24,6 +26,8 @@ export type FieldMode = (typeof fieldModes)[number];
 export type FieldModes = Record<FieldKey, FieldMode>;
 export const modeLabels: Record<FieldMode, string> = { HIDDEN: '숨김', OPTIONAL: '선택', REQUIRED: '필수' };
 export const fieldLabels: Record<FieldKey, string> = {
+  reviewer: '담당자',
+  load_tonnage: '적재용량',
   end_date: '종료일',
   work_type: '공종',
   requester: '요청자',
@@ -46,7 +50,11 @@ export function defaultFieldModes(role: 'driver' | 'manager'): FieldModes {
   return Object.fromEntries(
     fieldKeys.map((key) => [
       key,
-      role === 'manager' || key === 'cargo_desc' || key === 'extra_charges' ? 'OPTIONAL' : 'HIDDEN',
+      key === 'reviewer' || key === 'load_tonnage'
+        ? 'REQUIRED'
+        : role === 'manager' || key === 'cargo_desc' || key === 'extra_charges'
+          ? 'OPTIONAL'
+          : 'HIDDEN',
     ]),
   ) as FieldModes;
 }
@@ -66,6 +74,7 @@ export function fieldKeyForTarget(target?: string): FieldKey | undefined {
   if (!target) return;
   if (target.startsWith('trip:')) return tripFieldKeys[target.split('.')[1]];
   const key = target.replace(/^use\./, '');
+  if (key === 'reviewer_user_id') return 'reviewer';
   if (key === 'work_type_id') return 'work_type';
   return fieldKeys.includes(key as FieldKey) ? (key as FieldKey) : undefined;
 }
@@ -104,6 +113,8 @@ export type AdminFieldSettings = {
 export type EffectiveFieldSettings = { project_id: string; modes: FieldModes; driver_modes?: FieldModes };
 
 type Submission = {
+  reviewer_user_id?: unknown;
+  load_tonnage?: unknown;
   end_date?: unknown;
   work_type_id?: unknown;
   requester?: unknown;
@@ -126,6 +137,8 @@ export function requiredFieldErrors(value: Submission, modes: FieldModes) {
     if (modes[key] === 'REQUIRED' && empty(item))
       fields.push({ target, reason: `${prefix}${fieldLabels[key]} 항목을 입력하세요.` });
   };
+  check('reviewer', value.reviewer_user_id, 'reviewer');
+  check('load_tonnage', value.load_tonnage, 'load_tonnage');
   for (const key of [
     'end_date',
     'work_type',

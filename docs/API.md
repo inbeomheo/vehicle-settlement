@@ -215,3 +215,15 @@ commit은 generic 응답 캐시를 사용하지 않는다. job 행 잠금 + 가�
 - `GET /api/uses/recent-routes?driver_id=<본인 기사 UUID>`의 각 경로에 `last_amount: number | null`(공급가)을 추가한다. 같은 출발·도착의 가장 최근 제출본 시각, 생성시각, ID 순으로 선택한 제출 스냅샷의 PAYABLE BASE 제안 금액 합이다. 제출 뒤 아직 보내지 않은 수정값과 다른 기사로 귀속된 제출본은 참고하지 않는다. 최신 건의 금액이 미정이면 과거 금액으로 건너뛰지 않는다. 미제출·취소·삭제·반려 비용은 참고 금액에서 제외하고 현재 현장 권한을 검사한다. 기존 `driver_id`/`user_id` 조회 범위는 유지한다. 폼은 선택한 기사 ID를 명시하고, 1회차 최근 경로 선택 시 계약이 없고 빈 요청액에만 채운다. 직접 입력은 덮어쓰지 않는다.
 - 가져오기 단가 열은 기존대로 **단가 × 청구수량**이다. 파일 단가 합계는 기존처럼 계산액에 저장한다(별도 요청액은 null). 기존 단가/계산액/중복 식별자와 사용일·과금단위 변경 시 재조회 동작을 유지한다. `agreement_snapshot.contract_computed_amount`, `contract_min_charge`에 계약 비교 근거를 보관해 다른 금액을 검수 이슈로 표시한다. 같은 계약에서 수량 수정 시 비교 계약액도 갱신한다. 단가 빈칸/계약단가 적용 옵션/0원 처리의 기존 규칙은 유지한다.
 - 폼의 숫자 표시는 천 단위 쉼표이고 API에는 정수만 전송한다. IndexedDB 초안·원본 생성 요청 재생·생성 행 ID 복원에도 BASE 요청액을 보존한다. 최근 금액 표시용 로컬 필드는 API에서 제외한다.
+
+
+## FLOW 담당자·적재용량·운행 보고서
+
+- 생성/수정 본문에 `reviewer_user_id: uuid|null`, `load_tonnage: string|null`을 받는다. 적재용량은 0보다 큰 `numeric(10,3)` 범위(정수부 7자리, 소수부 최대 3자리), 기사 UI는 소수 1자리까지 입력한다. 담당자는 활성 ADMIN 또는 현재 현장에 검수 권한이 있는 SITE_MANAGER/SETTLEMENT_MANAGER만 허용한다. 배정 기간·회수·all_projects는 기존 authz를 재사용하며 제출 때도 재검증한다.
+- 입력 설정 키 `reviewer`, `load_tonnage`는 기사·대리 입력 모두 기본 REQUIRED다. DRAFT 저장은 빈 값을 허용하고 제출 시 필수 설정을 검사한다. HIDDEN/OPTIONAL 재정의와 `reviewer`, `load_tonnage` 보완 대상, 개정본·스냅샷·감사·오프라인 재전송을 지원한다. 과거 null 기록은 보존하며 재제출 시 현재 설정을 적용한다.
+- `GET /api/uses/reviewers?project_id=<uuid>&driver_id=<uuid>`: 현장 접근 범위 검사, 기사는 본인 driver_id만 허용. `{reviewers:[{id,name,role}],default_reviewer_id,recent_loads}`. 담당자 연락처/계정 정보는 반환하지 않는다. 취소 제외 최근 30건에서 활성 후보인 마지막 선택과 최근 적재용량 최대 5개를 제공한다. 클라이언트는 사용자·현장·기사별로 오프라인 캐시를 분리한다.
+- 사용대장 조회·내보내기: `reviewer_user_id`, `reviewer_name`(부분 일치), `load_tonnage`(정확한 숫자 일치), `reviewer_scope=mine|all|auto` 추가. mine은 본인 담당+미지정, auto는 해당 범위가 없으면 전체다. 기본 대장은 all, 검수함은 auto다. 응답 행에 담당자 이름·ID·적재용량, 응답에 적용된 reviewer_scope를 포함한다. 지정 담당자가 달라도 기존 현장 검수 권한이 있으면 승인 가능하다.
+- 대시보드 `review_pending` 및 이를 사용하는 메뉴 배지는 접근 가능한 SUBMITTED/취소 제외 중 본인 담당+미지정만 센다.
+- 현장·기사 집계의 각 group에 `reviewers`(당시 담당자 이름 목록), `loads`(적재용량 목록)를 추가한다. 여러 운행의 적재용량을 합산하거나 차량 제원 톤수로 대체하지 않는다.
+- 엑셀 가져오기 `reviewer`, `load_tonnage`는 선택 열이다. 담당자 이름 또는 UUID를 현재 현장 검수 가능 후보와 정확히 매칭하며 동명이인은 UUID가 필요하다. 값이 있는 새 열만 원본 중복 식별자에 포함하여 기존 파일 해시를 유지한다. 사용대장 Excel 뒤에 담당자·적재용량 열을 추가한다.
+- `GET /api/uses/:id/report.pdf`: 기존 사용 상세와 동일한 본인·현장 권한, no-store PDF. 프로젝트·작성일·담당자·차량/기사/차종/적재용량·운행일·회차별 경로/운반내용·지급 공급가·현재 승인자/승인시각을 출력한다. 고객 청구 금액은 출력하지 않는다. 기본 A4 한 장이며 많은 회차·긴 내용은 누락 없이 다음 장으로 이어진다. 승인 금액은 승인된 지급 비용만 합산하며 승인 전은 검수 전 금액으로 구분한다.

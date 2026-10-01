@@ -1,3 +1,4 @@
+import { validateReviewer } from './use-reviewers';
 import { proposedAmount } from '../../shared/charge-amount';
 import { proposedAmountSql } from './charge-amount-sql';
 import { routeSummary } from '../domain/route-summary';
@@ -319,7 +320,13 @@ async function resolveHeader(ctx: Context, input: CreateUseInput, previous?: Use
       (!customer.active && previous?.customer_counterparty_id !== customer.id))
   )
     invalid('고객을 확인하세요.');
+  const reviewer = input.reviewer_user_id
+    ? await validateReviewer(ctx, project.id, input.reviewer_user_id)
+    : null;
   const snapshot = {
+    reviewer_name: reviewer?.name ?? null,
+    reviewer_role: reviewer?.role ?? null,
+    load_tonnage: input.load_tonnage ?? null,
     driver_name: driver.name,
     driver_phone: driver.phone,
     plate_no: vehicle.plate_no,
@@ -331,6 +338,8 @@ async function resolveHeader(ctx: Context, input: CreateUseInput, previous?: Use
     customer_name: customer?.name ?? null,
   };
   return {
+    reviewer_user_id: input.reviewer_user_id ?? null,
+    load_tonnage: input.load_tonnage ?? null,
     use_date: input.use_date,
     end_date: input.end_date ?? null,
     project_id: project.id,
@@ -698,6 +707,7 @@ export async function updateUse(ctx: Context, id: string, raw: UpdateUseInput) {
   });
 }
 async function assertFormFieldsSatisfied(ctx: Context, use: Use, lines?: Charge[]) {
+  if (use.reviewer_user_id) await validateReviewer(ctx, use.project_id, use.reviewer_user_id);
   const tripRows = await ctx.db.select().from(trips).where(eq(trips.vehicle_use_id, use.id));
   const chargeRows =
     lines ??
@@ -988,6 +998,8 @@ export async function copyUse(ctx: Context, id: string, raw: z.input<typeof copy
     const created = await createUse(tx, {
       client_request_id: input.client_request_id,
       use_date: input.use_date ?? todaySeoul(),
+      reviewer_user_id: source.reviewer_user_id,
+      load_tonnage: source.load_tonnage,
       project_id: source.project_id,
       work_type_id: source.work_type_id,
       requester: source.requester,

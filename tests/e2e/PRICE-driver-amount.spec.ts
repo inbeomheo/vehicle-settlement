@@ -1,3 +1,4 @@
+import { fillFlowFields } from './submit-helper';
 import { expect, test, type Page } from '@playwright/test';
 import { eq } from 'drizzle-orm';
 import { createDatabase } from '../../src/server/db/client';
@@ -30,6 +31,7 @@ async function enterRoute(page: Page) {
   await page.getByLabel('1회차 도착', { exact: true }).fill('P5그린동');
 }
 async function send(page: Page, amount: string) {
+  await fillFlowFields(page);
   await page.getByRole('button', { name: '담당자에게 보내기', exact: true }).click();
   const sheet = page.getByRole('dialog', { name: '이대로 보낼까요?' });
   await expect(sheet).toContainText(`${amount}원`);
@@ -95,6 +97,7 @@ test('계약과 다른 요청액은 바로 승인에서 제외하고 상세의 �
   const amount = page.getByLabel('이번 운행 금액(원)', { exact: true });
   await amount.fill('350000');
   await amount.fill('');
+  await fillFlowFields(page);
   await page.getByRole('button', { name: '담당자에게 보내기', exact: true }).click();
   await expect(page.getByRole('dialog')).toContainText('300,000원');
   await page.getByRole('button', { name: '고치기', exact: true }).click();

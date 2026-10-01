@@ -157,6 +157,8 @@ export async function seedDemo(db: Db) {
       if (!driver.default_vehicle_id) throw new Error('기사 기본 차량이 필요합니다.');
       const author = sample.customer ? ctx : { ...ctx, user: account };
       let use = await createUse(author, {
+        reviewer_user_id: ctx.user.id,
+        load_tonnage: sample.driver === 0 ? '1' : '5',
         client_request_id: requestId(index),
         use_date: sample.date,
         project_id: project.id,

@@ -236,7 +236,12 @@ describe('PRICE 기사 운행 금액 → 담당자 확인', () => {
     const job = await uploadImport(s.adminCtx, '금액.csv', bytes);
     await previewImport(s.adminCtx, job.id, { sheet: 0, header_row: 1, mapping: job.sheets[0].mapping });
     const result = await commitImport(s.adminCtx, job.id);
-    const use = await getUse(s.adminCtx, result.preview[0].use_id!);
+    let use = await getUse(s.adminCtx, result.preview[0].use_id!);
+    use = await updateUse(s.adminCtx, use.id, {
+      version: use.version,
+      reviewer_user_id: s.admin.id,
+      load_tonnage: '1',
+    });
     expect(use.charge_lines[0]).toMatchObject({
       unit_price: 140000,
       computed_amount: 140000,

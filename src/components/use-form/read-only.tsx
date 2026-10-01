@@ -12,6 +12,8 @@ export function ReadOnlyUse({ use }: { use: UseDetail }) {
           {(
             [
               ['사용일', use.use_date],
+              ['담당자', String(use.snapshot.reviewer_name ?? '미지정')],
+              ['적재용량', use.load_tonnage ? `${formatQuantity(use.load_tonnage)}톤` : '—'],
               ['현장', String(use.snapshot.project_name)],
               ['차량', <Plate key="plate" value={String(use.snapshot.plate_no)} />],
               ['요청자', use.requester || '—'],

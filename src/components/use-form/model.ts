@@ -25,6 +25,8 @@ export type FormCharge = Omit<ChargeInput, 'requested_amount' | 'quantity' | 'bi
   amountSource?: 'recent' | 'manual';
 };
 export type FormValues = {
+  reviewer_user_id: string;
+  load_tonnage: string;
   use_date: string;
   end_date: string;
   project_id: string;
@@ -89,6 +91,8 @@ export function initialValues(lookups: Lookups, project = ''): FormValues {
   const driver = lookups.drivers[0];
   const date = todaySeoul();
   return {
+    reviewer_user_id: '',
+    load_tonnage: '',
     use_date: date,
     end_date: '',
     project_id: lookups.projects.find((item) => item.id === project)?.id ?? lookups.projects[0]?.id ?? '',
@@ -124,6 +128,8 @@ function savedQuantitySource(charge: UseDetail['charge_lines'][number], previous
 }
 export function fromUse(use: UseDetail, mode: Mode, previous?: FormValues): FormValues {
   return {
+    reviewer_user_id: use.reviewer_user_id ?? '',
+    load_tonnage: plainNumber(use.load_tonnage),
     use_date: use.use_date,
     end_date: use.end_date ?? '',
     project_id: use.project_id,
@@ -172,6 +178,8 @@ export function fromUse(use: UseDetail, mode: Mode, previous?: FormValues): Form
 }
 export function toInput(form: FormValues, mode: Mode): CreateUseInput {
   return {
+    reviewer_user_id: form.reviewer_user_id || null,
+    load_tonnage: form.load_tonnage || null,
     use_date: form.use_date,
     end_date: form.end_date || null,
     project_id: form.project_id,
@@ -267,6 +275,11 @@ export function validateFields(form: FormValues, intent: 'save' | 'submit' = 'sa
       if (!c.reason?.trim()) add(`${target}.reason`, message);
     }
   });
+  if (
+    form.load_tonnage &&
+    (!/^\d{1,7}(\.\d{1,3})?$/.test(form.load_tonnage) || !new Decimal(form.load_tonnage).gt(0))
+  )
+    add('load_tonnage', '적재용량은 0보다 큰 숫자로 입력하세요.');
   if (intent === 'submit') {
     if (modes)
       errors.push(

@@ -1,3 +1,4 @@
+import { eligibleReviewers } from './use-reviewers';
 import { randomUUID } from 'node:crypto';
 import { storageDriver, writeStoredFile, readStoredFile, deleteStoredFile } from '../storage';
 import { uploadLimit, uploadLimitMessage } from '../upload-limits';
@@ -175,10 +176,16 @@ async function resolveRow(
       '지급처',
     ),
   );
+  const reviewerCandidates = get('reviewer') && project ? await eligibleReviewers(ctx, project.id) : [];
+  const reviewer =
+    get('reviewer') && project
+      ? collect(() => matchOne(reviewerCandidates, get('reviewer'), ['id', 'name'], '담당자'))
+      : undefined;
   const source = parseImportSource(
     values,
     mapping,
     {
+      reviewer_user_id: reviewer?.id,
       project_id: project?.id,
       driver_id: driver?.id,
       vehicle_id: vehicle?.id,

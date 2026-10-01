@@ -12,6 +12,10 @@ it('기존 public/drizzle 이력의 알려진 해시만 보정하고 업무 자�
   const client = await database().pool.connect();
   try {
     const before = await logicalDump(client);
+    await client.query('ALTER TABLE form_field_settings DROP CONSTRAINT form_field_settings_field_key_check');
+    await client.query(
+      "ALTER TABLE form_field_settings ADD CONSTRAINT form_field_settings_field_key_check CHECK (field_key IN ('end_date','work_type','requester','cargo_desc','operation_status','notes','via','cargo','quantity','quantity_unit','hours','depart_at','arrive_at','trip_status','is_empty_return','trip_notes','extra_charges'))",
+    );
     await client.query('DROP TABLE evidence_blobs, password_resets');
     await client.query('ALTER TABLE vehicle_uses DROP COLUMN reviewer_user_id, DROP COLUMN load_tonnage');
     await client.query('DELETE FROM drizzle.__drizzle_migrations WHERE created_at >= $1', [
