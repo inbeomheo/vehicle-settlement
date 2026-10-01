@@ -88,7 +88,7 @@
 2. 파일은 PENDING으로 생성. `PUT /api/evidence/:id/content`에 원시 바이트, 정확한 Content-Type을 전송.
 3. 서버는 크기·MIME·파일 시그니처·선택 SHA-256을 검사하고 자체 SHA-256을 계산. 실패는 FAILED, 성공은 UPLOADED.
 4. 메타 생성은 client_upload_id, 파일 업로드는 같은 파일 해시로 멱등. 실패 파일은 같은 증빙 id로 재시도하며, 콘텐츠 PUT은 JSON Idempotency-Key 응답 저장 대신 파일 자체 멱등성을 사용한다. 로그인·초대 수락 또한 JSON 응답 키 저장 없이 세션/1회 토큰 규칙을 사용한다.
-5. MIME: image/jpeg, image/png, image/webp, image/heic, image/heif, application/pdf. 최대 20MB. SVG/HTML은 허용하지 않는다. 메타와 실제 크기·형식이 일치해야 한다.
+5. MIME: image/jpeg, image/png, image/webp, image/heic, image/heif, application/pdf. 최대 4MiB(화면 표시 4MB, 공용 `EVIDENCE_MAX_BYTES`). `MAX_UPLOAD_BYTES`가 더 작으면 그 값을 적용한다. PDF는 파일 선택 즉시, 이미지는 리사이즈 후 같은 한도를 검사한다. SVG/HTML은 허용하지 않는다. 메타와 실제 크기·형식이 일치해야 한다.
 6. SLIP_NO 또는 CONFIRMATION의 text_value는 메타 단계에서 UPLOADED 처리. PHOTO_REQUIRED는 파일 필요, PHOTO_OR_ALTERNATIVE는 해당 텍스트도 가능.
 7. `GET /api/evidence/:id/file`: 사용 건 접근 검사 후 다운로드. 교체된 원파일도 권한 범위 안에서 revision 이력으로 조회 가능. 논리삭제 파일은 404.
 8. `POST /api/evidence/:id/replace`: `{ reason, evidence: 새 메타 입력 }`. 새 client_upload_id 필수. 원본 replaced_by_id/replace_reason과 실제 파일은 보존. 새 파일이 업로드되기 전에는 필수 증빙을 충족하지 않는다.
@@ -115,7 +115,7 @@
 | --- | --- |
 | `POST /api/import/upload` | multipart `file`: xlsx 또는 UTF-8 csv. 10MB/20시트/선택 시트 2,000행/100열, 셀 500자·작업 JSON 5MB. XLSX는 시트별 첫 20행 rows·추천 header_row·mapping 반환; preview에서 선택 시트 전체를 제한 내 스트리밍 |
 | `GET /api/import` | 본인의 최근 100개 작업(파일명·작성자명·일시·상태·summary) |
-| `GET /api/import/:id` | 원본 셀·선택 매핑·미리보기·집계 |
+| `GET /api/import/:id` | 헤더 선택용 첫 20행·선택 매핑·제한된 미리보기·전체 집계 |
 | `POST /api/import/:id/preview` | `{ sheet: 0기반 인덱스, header_row: 1기반 행번호, mapping: { field: 0기반 열번호 }, apply_contract_rate?: boolean(기본 false), excluded_rows?: [1기반 원본 행번호] }` |
 | `POST /api/import/:id/commit` | `{}`. 저장한 매핑을 서버에서 재검증하여 유효 행만 DRAFT/PROXY 생성. 완료 작업 재요청은 기존 결과 반환 |
 | `GET /api/import/:id/errors.xlsx` | 원본 행번호·각 원본 셀·오류 사유가 있는 Excel |
@@ -128,6 +128,8 @@
 행 결과는 `VALID | ERROR | SKIPPED`, `errors`, `warnings`, `source_row_hash`, 검증 성공 시 `source_ids`(매칭된 현장·기사·차량·지급처 UUID), 등록 후 `use_id`다. 검증 실패 행은 `source_row_hash=""`이며 UUID 근거도 저장하지 않는다. summary의 `valid/errors/skipped`는 현재 작업 행 분류, `success`는 이 작업에서 생성된 건수다. 같은 완료 작업 재요청의 success는 최초 성공 건수이며, **새 업로드 작업**으로 정규화된 내용이 동일한 파일을 재저장하여 가져와도 success=0이다.
 
 중복 식별자는 하나다: **SHA-256(정규화된 매핑 값 + 매칭된 현장·기사·차량·지급처 UUID + 파일 내 동일 내용 발생 순번)**. 매핑 값은 사용일·출발·도착·운반내용·운행횟수·과금단위·청구수량·원본 단가 문자열·추가비·사유·비고다. 날짜·Decimal 수량·단위 별칭·금액 표기를 정규화하며 원본 단가의 빈 문자열과 명시적 0은 구분한다. 기준정보 표기는 매칭 UUID로 치환한다. 파일 바이트·파일명·시트/헤더/열 위치·행 번호·계약 적용 단가·세금 등 파생값은 제외한다. 따라서 줄바꿈·열 순서·계약·계약단가 옵션을 바꾸어도 동일 자료의 추가 등록은 0건이고, 동명이어도 UUID가 다른 현장은 별개다. 검증에 성공한 제외 행은 발생 순번에 포함하고, 검증 실패 행은 포함하지 않는다.
+
+가져오기 upload/preview/get/commit 응답은 시트별 첫 20행만 `sheets[].rows`로 제공한다. `preview`는 처음 100행과 모든 오류 행·직접 제외한 행이고 `preview_total`은 전체 검증 행 수다. `summary`와 확정은 항상 서버에 보관한 전체 원본 기준이며 클라이언트가 보낸 행은 사용하지 않는다. `{data}` 전체 UTF-8 JSON이 4MiB를 초과하면 422와 “행이 너무 많습니다. 나눠서 올려 주세요”를 반환한다. 오류 Excel은 제한된 응답이 아닌 서버 저장본의 모든 오류 행을 사용한다.
 
 commit은 generic 응답 캐시를 사용하지 않는다. job 행 잠금 + 가져오기 공통 advisory lock + source_row_hash unique로 멱등성을 제공하며 매 요청에서 현재 권한을 검사한다. 프리셋 저장은 공용 Idempotency-Key 래퍼를 쓴다. upload/preview는 새 파일 및 재검증 요청으로 취급한다. 예상하지 못한 commit 실패는 전체 rollback하여 PREVIEW에서 재시도할 수 있다.
 
@@ -166,7 +168,7 @@ commit은 generic 응답 캐시를 사용하지 않는다. job 행 잠금 + 가�
 
 ## F9 보안 경계
 
-- JSON 요청은 스트리밍 2MiB, 증빙 PUT은 20MiB 제한을 초과하면 `413 PAYLOAD_TOO_LARGE`다.
+- JSON 요청은 스트리밍 2MiB, 증빙 PUT은 4MiB 제한을 초과하면 `413 PAYLOAD_TOO_LARGE`다.
 - 로그인은 계정별 10분 내 5회/IP별 20회 실패 시 15분 잠금(`429 LOGIN_THROTTLED`, `Retry-After: 900`). 성공 시 해당 계정·현재 IP 카운터를 초기화한다. 로그인·초대 수락에서 UTF-8 72바이트 초과 비밀번호는 422이며 한국어 오류를 제공한다.
 - 기사 상세의 revisions는 각 snapshot.driver_id가 본인인 것만 반환한다. 다른 기사에게 속했던 증빙은 현재 목록·자신의 새 제출본에서도 제거하며 파일 직접 접근은 404다. F10부터 증빙 생성 시의 불변 owner_driver_id로 기사 귀속을 판단하며, 다른 기사 귀속·null 귀속은 숨긴다. 담당자는 기존 이력을 유지한다. 감사 API는 계속 담당자 전용이다.
 - 유효 배정 현장이 없는 SITE_MANAGER 및 현장 제한 SETTLEMENT_MANAGER는 가져오기 업로드 단계에서 403이다.
