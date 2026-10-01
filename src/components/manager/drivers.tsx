@@ -19,6 +19,10 @@ import {
   secondaryClass,
   useRemote,
 } from './common';
+function tons(value: string | null | undefined) {
+  if (value == null || value === '') return '—';
+  return `${String(Number(value))}톤`;
+}
 export function Drivers() {
   const me = useRemote<{ role: string }>('/api/me');
   const rows = useRemote<DriverProfile[]>('/api/drivers');
@@ -51,7 +55,7 @@ export function Drivers() {
     row.business_name ?? '—',
     row.biz_no ?? '—',
     row.plate_no ?? '—',
-    `${row.vehicle_type ?? '—'} · ${row.tonnage ?? '—'}톤`,
+    `${row.vehicle_type ?? '—'} · ${tons(row.tonnage)}`,
     row.projects.map((p) => p.name).join(', ') || (
       <span className="rounded border border-orange-200 bg-orange-50 px-2 py-1 font-semibold text-orange-800">
         현장 배정 필요
@@ -230,7 +234,7 @@ export function Drivers() {
                     <td className="px-3 py-3 break-words">
                       {row.plate_no ?? '—'}
                       <span className="mt-1 block text-slate-600">
-                        {row.vehicle_type ?? '—'} · {row.tonnage ?? '—'}톤
+                        {row.vehicle_type ?? '—'} · {tons(row.tonnage)}
                       </span>
                     </td>
                     <td className="px-3 py-3 break-words">{properties(row)[5]}</td>
