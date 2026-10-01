@@ -78,7 +78,7 @@ for (const font of ['보통', '아주 크게']) {
       await page.setViewportSize({ width: 1440, height: 1000 });
       const row = page.getByRole('row').filter({ hasText: `수정 기사 ${suffix}` });
       await expect(row).toBeVisible();
-      await expect(row).toContainText('10.500톤');
+      await expect(row).toContainText('10.5톤');
       await row.getByRole('button', { name: '비밀번호 재설정 링크', exact: true }).click();
       await expect(page.getByRole('dialog').getByLabel('비밀번호 재설정 링크')).toHaveValue(/\/reset\//);
       await page.keyboard.press('Escape');

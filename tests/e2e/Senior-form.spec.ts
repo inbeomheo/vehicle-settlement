@@ -23,8 +23,10 @@ test('번호 단계·보내기 전 확인 시트(Esc·고치기)·보낸 뒤 결
   expect(await page.evaluate(() => getComputedStyle(document.documentElement).fontSize)).toBe('20px');
 
   // 순서가 보이는 단계 제목과 완료 표시
-  for (const title of ['프로젝트·운행일', '담당자·적재용량', '출발 → 도착', '요금 확인', '사진·증빙'])
+  for (const title of ['프로젝트·운행일', '담당자·적재용량', '출발 → 도착', '요금 확인'])
     await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
+  // 새 현장 기본 증빙 정책은 '증빙 선택'이라 제목에 (선택)이 붙는다.
+  await expect(page.getByRole('heading', { name: '사진·증빙 (선택)', exact: true })).toBeVisible();
   const site = page
     .locator('section')
     .filter({ has: page.getByRole('heading', { name: '프로젝트·운행일' }) });
