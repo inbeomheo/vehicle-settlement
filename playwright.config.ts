@@ -1,5 +1,12 @@
 import 'dotenv/config';
+import webPush from 'web-push';
 import { defineConfig, devices } from '@playwright/test';
+
+// Disposable VAPID keys for browser subscription API tests; never use production keys.
+const pushKeys = webPush.generateVAPIDKeys();
+process.env.VAPID_PUBLIC_KEY = pushKeys.publicKey;
+process.env.VAPID_PRIVATE_KEY = pushKeys.privateKey;
+process.env.VAPID_SUBJECT = 'mailto:e2e@example.com';
 
 // 워크트리마다 다른 포트를 쓰도록 .env 의 PORT 를 따른다 (기본 3000).
 const port = Number(process.env.PORT ?? 3000);

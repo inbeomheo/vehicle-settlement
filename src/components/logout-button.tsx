@@ -1,4 +1,5 @@
 'use client';
+import { stopBrowserPush } from '@/client/push-logout';
 import { useState } from 'react';
 import { activeUser, flushDrafts, isUnsent, listDrafts, markLoggedOut } from '@/client/offline/store';
 export function LogoutButton({ tone = 'light' }: { tone?: 'light' | 'dark' }) {
@@ -23,6 +24,7 @@ export function LogoutButton({ tone = 'light' }: { tone?: 'light' | 'dark' }) {
               !window.confirm(`전송되지 않은 ${count}건이 있습니다. 로그아웃하면 이 기기에서 볼 수 없습니다`)
             )
               return;
+            await stopBrowserPush();
             markLoggedOut();
             try {
               await fetch('/api/auth/logout', { method: 'POST' });

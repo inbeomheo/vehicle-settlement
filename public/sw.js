@@ -63,3 +63,42 @@ self.addEventListener('fetch', (event) => {
     );
   }
 });
+
+self.addEventListener('push', (event) => {
+  let message = {};
+  try {
+    const parsed = event.data?.json();
+    if (parsed && typeof parsed === 'object') message = parsed;
+  } catch {
+    // A malformed payload still produces a useful user-visible notification.
+  }
+  const safePath = /^\/(?:m|d)\/uses\/[a-f0-9-]{36}$/.test(message.url ?? '') ? message.url : '/';
+  event.waitUntil(
+    self.registration.showNotification(
+      typeof message.title === 'string' ? message.title : '차량 사용·정산 알림',
+      {
+        body: typeof message.body === 'string' ? message.body : '앱에서 새 요청을 확인해 주세요.',
+        icon: '/icons/icon-192.png',
+        badge: '/icons/icon-192.png',
+        tag: typeof message.tag === 'string' ? message.tag : 'vehicle-notification',
+        data: { url: safePath },
+      },
+    ),
+  );
+});
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const path = event.notification.data?.url;
+  const url = new URL(
+    typeof path === 'string' && /^\/(?:m|d)\/uses\/[a-f0-9-]{36}$/.test(path) ? path : '/',
+    self.location.origin,
+  ).href;
+  event.waitUntil(
+    (async () => {
+      const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+      const existing = windows.find((client) => client.url === url);
+      if (existing) return existing.focus();
+      return self.clients.openWindow(url);
+    })(),
+  );
+});

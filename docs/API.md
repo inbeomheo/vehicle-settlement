@@ -215,3 +215,11 @@ commit은 generic 응답 캐시를 사용하지 않는다. job 행 잠금 + 가�
 - `GET /api/uses/recent-routes?driver_id=<본인 기사 UUID>`의 각 경로에 `last_amount: number | null`(공급가)을 추가한다. 같은 출발·도착의 가장 최근 제출본 시각, 생성시각, ID 순으로 선택한 제출 스냅샷의 PAYABLE BASE 제안 금액 합이다. 제출 뒤 아직 보내지 않은 수정값과 다른 기사로 귀속된 제출본은 참고하지 않는다. 최신 건의 금액이 미정이면 과거 금액으로 건너뛰지 않는다. 미제출·취소·삭제·반려 비용은 참고 금액에서 제외하고 현재 현장 권한을 검사한다. 기존 `driver_id`/`user_id` 조회 범위는 유지한다. 폼은 선택한 기사 ID를 명시하고, 1회차 최근 경로 선택 시 계약이 없고 빈 요청액에만 채운다. 직접 입력은 덮어쓰지 않는다.
 - 가져오기 단가 열은 기존대로 **단가 × 청구수량**이다. 파일 단가 합계는 기존처럼 계산액에 저장한다(별도 요청액은 null). 기존 단가/계산액/중복 식별자와 사용일·과금단위 변경 시 재조회 동작을 유지한다. `agreement_snapshot.contract_computed_amount`, `contract_min_charge`에 계약 비교 근거를 보관해 다른 금액을 검수 이슈로 표시한다. 같은 계약에서 수량 수정 시 비교 계약액도 갱신한다. 단가 빈칸/계약단가 적용 옵션/0원 처리의 기존 규칙은 유지한다.
 - 폼의 숫자 표시는 천 단위 쉼표이고 API에는 정수만 전송한다. IndexedDB 초안·원본 생성 요청 재생·생성 행 ID 복원에도 BASE 요청액을 보존한다. 최근 금액 표시용 로컬 필드는 API에서 제외한다.
+
+## PUSH 웹 푸시
+
+- `GET /api/push`: 로그인 필수. `{enabled, publicKey}`만 반환하며 VAPID 비밀키·subject는 노출하지 않는다. 설정 누락·오류 시 false/null.
+- `POST /api/push/subscriptions`: `{endpoint, keys:{p256dh,auth}, expirationTime?:number|null}`. 현재 사용자에게 구독을 저장·갱신한다. endpoint는 HTTPS 브라우저 푸시 서비스(Google/Mozilla/Apple/Windows)만 허용한다. 타인 endpoint 소유권 변경은 403, 사용자 ID 입력은 422. user_agent는 요청 헤더에서 최대 512자로 저장한다. 설정이 꺼져 있으면 저장 없이 `{enabled:false,subscribed:false}`.
+- `GET /api/push/subscriptions?endpoint=...`: 본인 해당 기기의 `{subscribed}`만 반환한다. 타인 구독 정보는 노출하지 않는다.
+- `DELETE /api/push/subscriptions`: `{endpoint}`. 본인 소유만 삭제하며 없으면 같은 성공 응답 `{subscribed:false}`. 등록·삭제는 원자적이며 반복 호출 결과가 동일하다. 별도 Idempotency-Key 응답 저장은 사용하지 않는다(끄기 후 다시 켜기 가능). 감사에는 구독 ID만 남기고 endpoint·구독 키는 제외한다.
+- 제출·보완 API 성공 커밋 후 비동기 발송. 제출·재제출은 `reviewer_user_id` 지정 담당자, 미지정 시 현재 현장 검수 권한자 전원. 지정자가 비활성/권한 밖이면 다른 사람에게 확대 발송하지 않는다. 보완은 해당 기사 계정 중 현재 현장 접근 가능한 활성 사용자에게 보낸다. 지연 발송 시 version·상태가 달라졌으면 생략한다. 사용자에게 표시하는 금액은 저장된 PAYABLE 요청액/계산액만 사용한다.

@@ -1,4 +1,5 @@
 'use client';
+import { PushSettings } from '@/components/push-settings';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -130,6 +131,7 @@ export function ManagerNavigation({
         </div>
         <nav aria-label="주 메뉴" className="flex-1 overflow-y-auto">
           <MenuLinks items={items} />
+          <PushSettings manager />
         </nav>
         <div className="mt-4 border-t border-white/10 px-2 pt-4">
           <p className="mb-1.5 text-sm text-slate-300">글자 크기</p>
@@ -184,8 +186,13 @@ export function ManagerNavigation({
           </button>
         </div>
         {open && (
-          <nav id="manager-menu" aria-label="주 메뉴" className="border-t border-white/10 px-3 pt-2 pb-3">
+          <nav
+            id="manager-menu"
+            aria-label="주 메뉴"
+            className="max-h-[85dvh] overflow-y-auto border-t border-white/10 px-3 pt-2 pb-3"
+          >
             <MenuLinks items={items} onNavigate={() => setOpen(false)} />
+            <PushSettings manager />
             <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-white/10 pt-3">
               <TextSizeControl fallback="normal" tone="dark" />
             </div>

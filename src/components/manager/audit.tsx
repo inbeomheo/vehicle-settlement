@@ -39,6 +39,9 @@ type Result = {
 };
 const auditLabels: Record<string, string> = {
   ...formFieldLabels,
+  PUSH_SUBSCRIBE: '알림 켜기',
+  PUSH_UNSUBSCRIBE: '알림 끄기',
+  push_subscription: '기기 알림',
   CREATE_PASSWORD_RESET: '비밀번호 재설정 링크 생성',
   RESET_PASSWORD: '비밀번호 재설정',
   CHANGE_PASSWORD: '비밀번호 변경',

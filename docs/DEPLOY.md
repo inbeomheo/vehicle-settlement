@@ -118,3 +118,21 @@ CONFIRM_FRESH_START=지우기 APP_URL=https://<배포 주소> npm run start:fres
 ```
 
 관리자가 링크에서 비밀번호를 정하고 로그인하면 대시보드의 "시작 준비"에 회사 정보 → 현장 → 차량 → 운송사·기사 사업자 → 기사 → 기사 소속 → 계약·단가 → 사람 초대 순서가 나온다. 모두 등록하면 사라진다.
+
+## 휴대폰·PC 웹 푸시 (PUSH)
+
+`0730_push_subscriptions`를 먼저 적용한다. `DB_SCHEMA=vehicle`에서도 같은 마이그레이션을 사용한다.
+
+```sh
+npx web-push generate-vapid-keys
+```
+
+출력된 Public Key를 `VAPID_PUBLIC_KEY`, Private Key를 `VAPID_PRIVATE_KEY`, 실제 운영자 이메일을 `VAPID_SUBJECT=mailto:운영자@example.com`으로 Vercel 환경변수에 저장하고 재배포한다. 키는 한 번 생성해 유지한다. 비밀키는 문서·소스·로그에 기록하지 않는다. 대화에 공유했던 키 대신 새 운영 키를 생성한다. 키 교체 후에는 각 기기에서 알림을 껐다 켜 다시 구독한다. 세 값 누락·키 불일치·잘못된 mailto는 알림만 비활성화하고 업무 처리는 유지한다.
+
+담당자는 메뉴 아래, 기사는 홈 아래 **알림 받기**를 눌러 브라우저 권한을 허용한다. 기기마다 켜야 한다. iPhone·iPad는 iOS/iPadOS 16.4 이상에서 **공유 → 홈 화면에 추가**한 앱을 열어 설정한다. HTTPS가 필요하며 개발 localhost는 예외다. 운영 검증은 담당자 기기 구독 → 기사 제출 → 알림 클릭 → 담당자 보완 요청 → 기사 알림 순으로 진행한다. 잠금화면에 기사명·현장·운송내역·금액이 표시될 수 있다.
+
+제출·재제출 및 보완 요청 API의 가장 바깥 트랜잭션이 완료된 뒤 Next.js `after`로 발송한다. 같은 멱등 키의 재생 응답은 발송하지 않는다. 전송 실패는 업무 응답을 바꾸지 않으며 404/410 구독은 삭제, 기타 오류는 `failure_count`에 누적하고 성공 시 0으로 초기화한다. 로그아웃 버튼은 해당 브라우저 구독을 해제한다. 예약 후 상태가 바뀐 이전 알림은 생략한다. 별도 큐·재시도 작업은 없으므로 서버 중단·시간 제한·기기 설정에 따른 미수신 가능성이 있다. 앱 검수함의 내역이 최종 기준이다.
+
+`public/sw.js`는 이 저장소에서 직접 관리하는 원본이다. `npm run pwa:build`의 `src/client/offline/build-shell.mjs`가 그 내용까지 해시해 `public/sw-version.js`를 생성하므로 push/click 처리 변경도 서비스워커 버전에 반영된다. 기존 공개 오프라인 자산 캐시 정책은 유지한다.
+
+참고: [web-push 공식 사용법](https://github.com/web-push-libs/web-push), [Next.js after](https://nextjs.org/docs/app/api-reference/functions/after), [WebKit 홈 화면 웹 푸시](https://webkit.org/blog/13878/web-push-for-web-apps-on-ios-and-ipados/).
