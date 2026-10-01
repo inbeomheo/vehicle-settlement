@@ -25,6 +25,9 @@ export function DriverAssignments({ userId, onChanged }: { userId: string; onCha
     (a) =>
       a.user_id === userId && !a.revoked_at && a.valid_from <= today && (!a.valid_to || a.valid_to >= today),
   );
+  const upcoming = (saved ?? remote.data ?? []).filter(
+    (a) => a.user_id === userId && !a.revoked_at && a.valid_from > today,
+  );
   const ready = !!remote.data && !!projects.data;
   async function change(projectIds: string[], checked: boolean) {
     if (!ready || !begin()) return;
@@ -35,7 +38,13 @@ export function DriverAssignments({ userId, onChanged }: { userId: string; onCha
     try {
       for (const projectId of projectIds) {
         const existing = current.filter((a) => a.project_id === projectId);
+        const reserved = upcoming.filter((a) => a.project_id === projectId);
         if (checked && !existing.length) {
+          // 미래 예약 배정이 있으면 오늘부터 배정과 기간이 겹치므로 먼저 회수한다.
+          for (const assignment of reserved) {
+            const revoked = await mutate<Assignment>(`/api/admin/assignments/${assignment.id}`, 'DELETE');
+            next = next.map((a) => (a.id === revoked.id ? revoked : a));
+          }
           const assignment = await mutate<Assignment>('/api/admin/assignments', 'POST', {
             user_id: userId,
             project_id: projectId,
@@ -43,7 +52,7 @@ export function DriverAssignments({ userId, onChanged }: { userId: string; onCha
           });
           next.push(assignment);
         } else if (!checked) {
-          for (const assignment of existing) {
+          for (const assignment of [...existing, ...reserved]) {
             const revoked = await mutate<Assignment>(`/api/admin/assignments/${assignment.id}`, 'DELETE');
             next = next.map((a) => (a.id === revoked.id ? revoked : a));
           }
@@ -115,7 +124,17 @@ export function DriverAssignments({ userId, onChanged }: { userId: string; onCha
                   }
                   onChange={(event) => void change([project.id], event.target.checked)}
                 />
-                <span className="min-w-0 break-words">{project.name}</span>
+                <span className="min-w-0 break-words">
+                  {project.name}
+                  {!current.some((a) => a.project_id === project.id) &&
+                    upcoming
+                      .filter((a) => a.project_id === project.id)
+                      .map((a) => (
+                        <span key={a.id} className="block text-sm text-orange-700">
+                          {a.valid_from}부터 배정 예약됨 · 체크하면 오늘부터 배정
+                        </span>
+                      ))}
+                </span>
               </label>
             ))}
           </div>
