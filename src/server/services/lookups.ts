@@ -1,9 +1,10 @@
-import { and, eq, inArray, isNull, lte, gte, ne, or, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, lte, gte, or, sql } from 'drizzle-orm';
 import { counterparties, driverAffiliations, drivers, projects, vehicles, workTypes } from '../db/schema';
 import type { Context } from '../context';
 import { dateString } from './schemas';
 import { todaySeoul } from '../context';
 import { accessibleProjectIds } from '../authz';
+import { counterpartySelectionFilter, driverVehicleSelectionFilter } from '../selection-scope';
 
 export async function getLookups(ctx: Context, useDate?: string) {
   const ids = await accessibleProjectIds(ctx);
@@ -11,12 +12,6 @@ export async function getLookups(ctx: Context, useDate?: string) {
   const site = ctx.user.role === 'SITE_MANAGER';
   const today = todaySeoul();
   const date = useDate ? dateString.parse(useDate) : today;
-  const projectScope = ids?.length
-    ? sql`IN (${sql.join(
-        ids.map((id) => sql`${id}::uuid`),
-        sql`,`,
-      )})`
-    : sql`IN (NULL)`;
   // Internal active name lists also support new drivers without an account or work history.
   const driverScope = self ? eq(drivers.id, ctx.user.driver_id!) : undefined;
   const driverRows = await ctx.db
@@ -44,9 +39,6 @@ export async function getLookups(ctx: Context, useDate?: string) {
         or(isNull(driverAffiliations.valid_to), gte(driverAffiliations.valid_to, date)),
       ),
     );
-  const payees = affiliations.map((row) => row.counterparty_id);
-  const relatedParties = payees.length ? inArray(counterparties.id, payees) : sql`false`;
-  const vehicleIds = driverRows.flatMap((row) => (row.default_vehicle_id ? [row.default_vehicle_id] : []));
   const projectRows = await ctx.db
     .select({
       id: projects.id,
@@ -69,36 +61,11 @@ export async function getLookups(ctx: Context, useDate?: string) {
       tonnage: vehicles.tonnage,
     })
     .from(vehicles)
-    .where(
-      and(
-        eq(vehicles.active, true),
-        self
-          ? or(
-              vehicleIds.length ? inArray(vehicles.id, vehicleIds) : sql`false`,
-              sql`${vehicles.id} IN (SELECT vehicle_id FROM vehicle_uses WHERE driver_id=${ctx.user.driver_id}::uuid AND project_id ${projectScope})`,
-            )
-          : undefined,
-      ),
-    );
+    .where(and(eq(vehicles.active, true), self ? driverVehicleSelectionFilter(ctx, ids) : undefined));
   const parties = await ctx.db
     .select({ id: counterparties.id, name: counterparties.name, kind: counterparties.kind })
     .from(counterparties)
-    .where(
-      and(
-        eq(counterparties.active, true),
-        self
-          ? and(ne(counterparties.kind, 'CUSTOMER'), relatedParties)
-          : site
-            ? or(
-                eq(counterparties.kind, 'DRIVER_BUSINESS'),
-                and(ne(counterparties.kind, 'CUSTOMER'), relatedParties),
-                sql`${counterparties.id} IN (SELECT payee_counterparty_id FROM vehicle_uses WHERE project_id ${projectScope}
-        UNION SELECT customer_counterparty_id FROM vehicle_uses WHERE project_id ${projectScope}
-        UNION SELECT counterparty_id FROM rate_agreements WHERE active AND project_id ${projectScope})`,
-              )
-            : undefined,
-      ),
-    );
+    .where(counterpartySelectionFilter(ctx, date, ids));
   const works = await ctx.db
     .select({ id: workTypes.id, name: workTypes.name })
     .from(workTypes)

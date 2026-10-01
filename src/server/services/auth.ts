@@ -24,6 +24,7 @@ import { acceptInviteSchema, inviteSchema, loginSchema } from './schemas';
 import { atomic } from './uses';
 import { adminTransaction } from './admin';
 import { lockDriverIdentity } from './driver-identity';
+import { activeInvitationProjectIds } from './invitation-projects';
 const dummyHash = '$2b$12$xfIAqj/l75DvApKa/BibPuP9PIutJEQowUAsFjkOrNldWxguz5ynK';
 export async function login(db: Db, requestId: string, raw: z.input<typeof loginSchema>, ip = 'unavailable') {
   const input = loginSchema.parse(raw);
@@ -209,6 +210,10 @@ export async function acceptInvite(
       const [account] = await tx.select({ id: users.id }).from(users).where(eq(users.driver_id, driver.id));
       if (account) invalid('이미 계정이 연결된 기사입니다. 관리자에게 문의하세요.');
     }
+    const projectIds =
+      invite.role === 'DRIVER'
+        ? await activeInvitationProjectIds(tx, invite.project_ids)
+        : invite.project_ids;
     const [existing] = await tx.select().from(users).where(eq(users.login_id, input.login_id));
     if (existing) invalid('이미 사용 중인 아이디입니다.');
     const [user] = await tx
@@ -222,9 +227,9 @@ export async function acceptInvite(
         driver_id: invite.driver_id,
       })
       .returning();
-    if (invite.project_ids.length)
+    if (projectIds.length)
       await tx.insert(projectAssignments).values(
-        invite.project_ids.map((project_id) => ({
+        projectIds.map((project_id) => ({
           user_id: user.id,
           project_id,
           valid_from: todaySeoul(),
@@ -238,7 +243,7 @@ export async function acceptInvite(
     const ctx = { db: tx, user, request_id: requestId };
     await audit(ctx, 'ACCEPT_INVITE', 'invite', invite.id, null, {
       user_id: user.id,
-      project_ids: invite.project_ids,
+      project_ids: projectIds,
     });
     return { token: result.token, user: redactForDriver(ctx, publicUser(user)) };
   });

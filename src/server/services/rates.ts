@@ -1,9 +1,9 @@
 import { and, eq, lte, gte, isNull, or, desc } from 'drizzle-orm';
 import Decimal from 'decimal.js';
-import { driverAffiliations, rateAgreements, vehicles } from '../db/schema';
+import { rateAgreements, vehicles } from '../db/schema';
 import type { Db } from '../db/client';
 import type { Context } from '../context';
-import { assertProjectAccess, canSeeReceivable } from '../authz';
+import { assertCounterpartySelection } from '../selection-scope';
 import { notFound } from '../errors';
 import { rateLookupSchema } from './schemas';
 export type RateQuery = {
@@ -50,22 +50,7 @@ export function suggestedQuantity(unit: typeof rateAgreements.$inferSelect.billi
 }
 export async function lookupRate(ctx: Context, raw: unknown) {
   const q = rateLookupSchema.parse(raw);
-  await assertProjectAccess(ctx, q.project_id);
-  if (!canSeeReceivable(ctx)) {
-    if (q.direction === 'RECEIVABLE') notFound();
-    const [aff] = await ctx.db
-      .select()
-      .from(driverAffiliations)
-      .where(
-        and(
-          eq(driverAffiliations.driver_id, ctx.user.driver_id!),
-          eq(driverAffiliations.counterparty_id, q.counterparty_id),
-          lte(driverAffiliations.valid_from, q.use_date),
-          or(isNull(driverAffiliations.valid_to), gte(driverAffiliations.valid_to, q.use_date)),
-        ),
-      );
-    if (!aff) notFound();
-  }
+  await assertCounterpartySelection(ctx, q);
   const rate = await findRate(ctx.db, q);
   const unit = rate?.billing_unit ?? q.billing_unit ?? 'PER_DAY';
   return {
