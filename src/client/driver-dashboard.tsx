@@ -8,7 +8,7 @@ import { useBootstrap, PwaRegistration } from './offline/runtime';
 import { isUnsent, listDrafts, OFFLINE_EVENT, type Draft } from './offline/store';
 import { copyToDevice } from './copy-draft';
 import { syncQueue } from './offline/engine';
-import { button, primary, Section, StatusBadge } from '@/components/use-form/fields';
+import { button, control, primary, Section, StatusBadge } from '@/components/use-form/fields';
 import { ApprovalDates, ApprovalSelect, ApprovalTabs, useApprovalQuery } from '@/components/approval-filters';
 import { Pager } from '@/components/list-controls';
 import { useRemote } from './use-remote';
@@ -26,7 +26,10 @@ export function DriverDashboard() {
   const { data, error, authRequired, retry } = useBootstrap('driver');
   const { query, search, change } = useApprovalQuery(false);
   const filtered = useRemote<
-    UseList & { counts: Record<string, number>; options: { projects: { id: string; name: string }[] } }
+    UseList & {
+      counts: Record<string, number>;
+      options: { projects: { id: string; name: string }[]; reviewers: { id: string; name: string }[] };
+    }
   >(data ? `/api/approvals?${search}` : null);
   const refreshFiltered = filtered.refresh;
   const [list, setList] = useState<UseList>();
@@ -281,8 +284,8 @@ export function DriverDashboard() {
         </div>
         {offline ? (
           <p className="mb-4 text-slate-600">
-            인터넷 연결이 없어 최근 저장된 운행을 보여 드립니다. 날짜·프로젝트 검색은 연결 후 사용할 수
-            있습니다.
+            인터넷 연결이 없어 최근 저장된 운행을 보여 드립니다. 날짜·프로젝트·운송내역·담당자 검색은 연결 후
+            사용할 수 있습니다.
           </p>
         ) : (
           <>
@@ -294,10 +297,10 @@ export function DriverDashboard() {
             />
             <details className="mb-4 rounded-lg border border-slate-200 bg-white p-4">
               <summary className="min-h-11 cursor-pointer font-bold">
-                운송일자·프로젝트 필터 ·{' '}
+                운송일자·프로젝트·운송내역·담당자 필터 ·{' '}
                 {query.from || query.to ? `${query.from || '처음'} ~ ${query.to || '최근'}` : '전체 기간'}
               </summary>
-              <div className="grid gap-4">
+              <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4">
                 <ApprovalDates driver from={query.from} to={query.to} onChange={change} />
                 <label className="grid gap-2">
                   프로젝트
@@ -309,6 +312,40 @@ export function DriverDashboard() {
                     onChange={(value) => change({ project_id: value })}
                   />
                 </label>
+                <label className="grid min-w-0 gap-2">
+                  담당자
+                  <ApprovalSelect
+                    driver
+                    title="담당자"
+                    value={query.reviewer_user_id}
+                    options={filtered.data?.options.reviewers ?? []}
+                    onChange={(value) => change({ reviewer_user_id: value })}
+                  />
+                </label>
+                <form
+                  key={query.transport_search || ''}
+                  className="grid min-w-0 gap-2"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    const form = new FormData(event.currentTarget);
+                    change({ transport_search: String(form.get('transport_search') ?? '').trim() });
+                  }}
+                >
+                  <label className="grid min-w-0 gap-2">
+                    운송내역 검색
+                    <input
+                      className={control}
+                      name="transport_search"
+                      type="search"
+                      maxLength={100}
+                      defaultValue={query.transport_search || ''}
+                      placeholder="출발·도착·운반 내용"
+                    />
+                  </label>
+                  <button className={button} type="submit">
+                    검색
+                  </button>
+                </form>
               </div>
             </details>
           </>
@@ -324,7 +361,7 @@ export function DriverDashboard() {
         {!offline && filtered.loading && <p role="status">내 운행을 불러오는 중…</p>}
         {visibleList?.rows.length === 0 ? (
           <p className="rounded-lg bg-white py-10 text-center text-slate-600">
-            해당하는 운행이 없습니다. 날짜나 프로젝트를 바꿔 보세요.
+            해당하는 운행이 없습니다. 날짜나 필터를 바꿔 보세요.
           </p>
         ) : (
           <ul className="grid grid-cols-[minmax(0,1fr)] gap-2.5">

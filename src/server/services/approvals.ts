@@ -97,7 +97,7 @@ export async function getApprovals(ctx: Context, raw: unknown, exportAll = false
     options: {
       projects: options('project_id', 'project_name'),
       drivers: driver ? [] : options('driver_id', 'driver_name'),
-      reviewers: driver ? [] : options('reviewer_user_id', 'reviewer_name'),
+      reviewers: options('reviewer_user_id', 'reviewer_name'),
     },
   };
 }
