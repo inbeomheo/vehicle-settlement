@@ -64,7 +64,14 @@ export default async function InvitePage({ params }: { params: Promise<{ token: 
             {invite.needs_profile ? (
               <DriverJoinForm token={token} individual name={invite.name} />
             ) : (
-              <InviteForm token={token} />
+              <>
+                {invite.role === 'DRIVER' && (
+                  <p className="mb-4 text-sm text-slate-600">
+                    관리자가 연결한 기사·사업자 정보로 가입합니다.
+                  </p>
+                )}
+                <InviteForm token={token} />
+              </>
             )}
           </>
         )}
