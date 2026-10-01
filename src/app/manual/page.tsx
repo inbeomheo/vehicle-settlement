@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 
 /*
  * 로그인 없이 누구나 여는 사용 설명서. 주소만 문자로 보내면 된다.
- * 화면은 docs/manual/capture 스크립트로 시연 사이트에서 한 달 흐름을 진행하며 찍었다.
+ * 화면은 docs/manual/capture 스크립트로 로컬 시연 환경에서 한 달 흐름을 진행하며 찍었다.
  */
 
 const roles = [
@@ -184,7 +184,7 @@ export default function ManualPage() {
             ))}
           </ol>
           <p className="leading-relaxed text-slate-700">
-            아래 화면은 시연 사이트에서 이 흐름을 처음부터 끝까지 실제로 해 보며 찍었습니다. 기사{' '}
+            아래 화면은 로컬 시연 환경에서 이 흐름을 처음부터 끝까지 실제로 해 보며 찍었습니다. 기사{' '}
             <B>김성호</B>(1톤 카고, 한길 운송), 현장 담당자 <B>박준호</B>, 정산 담당자 <B>최은정</B>이
             나옵니다. 본인 역할만 읽으셔도 됩니다.
           </p>
@@ -214,8 +214,8 @@ export default function ManualPage() {
                 앱처럼 한 번에 열립니다.
               </p>
               <p>
-                <B>글씨가 작으면</B> 화면 위 ‘가 가 가’에서 큰 ‘가’를 누릅니다. 글씨와 버튼이 함께 커지고, 그
-                휴대폰에 기억됩니다.
+                <B>기본 글자 크기는 보통입니다.</B> 글씨가 작으면 화면 위 ‘가 가 가’에서 큰 ‘가’를 누릅니다.
+                글씨와 버튼이 함께 커지고, 그 휴대폰에 기억됩니다.
               </p>
             </Step>
           </ol>
@@ -245,7 +245,12 @@ export default function ManualPage() {
             <Step
               n={2}
               title="프로젝트·운행일·담당자·적재용량을 확인합니다"
-              shot={<Shot src="05-step1-2" alt="프로젝트·운행일 입력 참고 화면" phone />}
+              shot={
+                <div className="space-y-5">
+                  <Shot src="05-step1-2" alt="프로젝트·운행일 입력" phone />
+                  <Shot src="05b-reviewer-load" alt="담당자·적재용량 입력" phone />
+                </div>
+              }
             >
               <p>
                 프로젝트 → 운행일 → 담당자 → 적재용량 → 운송내역 → 금액 → 사진·증빙 순서로 입력합니다.
@@ -278,7 +283,12 @@ export default function ManualPage() {
             <Step
               n={4}
               title="이번 운행 금액을 확인합니다"
-              shot={<Shot src="08b-amount-input" alt="이번 운행 금액 직접 입력" phone />}
+              shot={
+                <div className="space-y-5">
+                  <Shot src="08b-amount-input" alt="이번 운행 금액 직접 입력" phone />
+                  <Shot src="08c-no-contract" alt="계약 단가 없는 운행 금액 입력" phone />
+                </div>
+              }
             >
               <p>
                 정해진 계약 단가가 있으면 금액이 자동으로 나옵니다. 조출 등으로 금액이 다르면{' '}
@@ -341,6 +351,8 @@ export default function ManualPage() {
             운송일자·프로젝트·담당자를 고르거나 <B>운송내역 검색</B>에 출발·도착·운반 내용을 적고
             <B>검색</B>을 누르세요. 본인 운행만 보이며 새로고침해도 선택한 조건이 유지됩니다.
           </p>
+
+          <Shot src="11b-home-filters" alt="기사 홈 목록 탭과 필터" phone />
 
           <h3 className="pt-6 text-xl font-bold md:text-2xl">담당자가 “고쳐 주세요”라고 할 때</h3>
           <Scene>
@@ -415,6 +427,13 @@ export default function ManualPage() {
             </Step>
           </ol>
 
+          <h3 className="pt-6 text-xl font-bold md:text-2xl">알림 받기</h3>
+          <p>
+            홈 아래 <B>알림 받기</B>를 누르고 브라우저 알림을 허용하세요. 보완 요청을 알림으로 받을 수
+            있습니다. 아이폰은 먼저 홈 화면에 추가해 앱을 열어 주세요.
+          </p>
+          <Shot src="19b-notifications" alt="알림 받기 설정" phone />
+
           <h3 className="pt-6 text-xl font-bold md:text-2xl">비밀번호를 바꾸고 싶을 때</h3>
           <ol>
             <Step
@@ -432,7 +451,7 @@ export default function ManualPage() {
         {/* 현장 담당자 */}
         <section className="space-y-6">
           <RoleHeader id="site" role="현장 담당자" title="박준호 씨의 아침 10분 검수" />
-          <Shot src="20-manager-dashboard" alt="처리할 일 — 검수 대기 5건, 보완 대기 1건, 증빙 누락 2건" />
+          <Shot src="20-manager-dashboard" alt="처리할 일 — 검수·보완·증빙 현황" />
           <p className="text-[1.0625rem] leading-relaxed">
             로그인하면 <B>처리할 일</B>이 뜹니다. 숫자를 누르면 그 목록으로 바로 갑니다.
           </p>
@@ -448,7 +467,12 @@ export default function ManualPage() {
             건수가 나옵니다. 검수대기 중 확인할 문제가 없는 건은 승인하거나 여러 건을 선택 승인할 수 있습니다.
             엑셀로 받기는 현재 필터의 전체 결과를 내려받습니다. 휴대폰에서는 같은 내용을 카드로 봅니다.
           </p>
-          <Shot src="21-review-inbox" alt="검수함" />
+          <Shot src="20b-approvals" alt="운행 결재 목록" />
+          <p>
+            <B>내 담당만</B>은 본인 담당과 미지정 운행을 보여 줍니다. 배정된 현장의 다른 담당자 운행까지
+            보려면 <B>전체</B>를 누르세요.
+          </p>
+          <Shot src="21-review-inbox" alt="검수함 — 내 담당만·전체" />
           <p className="text-[1.0625rem] leading-relaxed">
             9월 7일 건은 김성호 씨가 하차 위치를 고쳐 다시 보낸 건입니다. 사용번호를 누르면 운행 실적과 인수증
             사진이 한 화면에 있습니다. 기사가 선택한 <B>담당자</B>와 <B>적재용량</B>, 운송내역·금액·사진을
@@ -466,6 +490,9 @@ export default function ManualPage() {
             서명합니다. 담당자 칸의 작은 전자 확인 정보는 승인자·승인 시각이며, 승인 전에는 ‘승인 전’으로
             나옵니다.
           </p>
+
+          <Shot src="24-approved" alt="승인된 운행과 보고서 PDF 버튼" />
+          <Shot src="24b-use-report" alt="운행 보고서 PDF" />
 
           <h3 className="pt-4 text-xl font-bold md:text-2xl">2. 기사가 넣은 금액 확인하기</h3>
           <p className="text-[1.0625rem] leading-relaxed">
@@ -510,9 +537,9 @@ export default function ManualPage() {
 
           <h3 className="pt-4 text-xl font-bold md:text-2xl">2. 이번 달 건 묶기</h3>
           <p className="text-[1.0625rem] leading-relaxed">
-            왼쪽 메뉴 <B>월 정산</B> → 노란 <B>새 정산</B>. 거래처 한길 운송, 기간은 <B>당월</B> 버튼 한 번,
-            지급 예정일 10월 10일을 넣고 <B>후보 조회</B>. 승인된 비용이 줄마다 나오고 기본은 ‘포함’입니다.
-            아직 승인 안 된 건은 자동으로 ‘제외’입니다.
+            왼쪽 메뉴 <B>월 정산</B> → 노란 <B>새 정산</B>. 거래처 한길 운송, 기간은 9월 1일~30일(이번 달
+            정산이면 <B>당월</B>), 지급 예정일 10월 10일을 넣고 <B>후보 조회</B>. 승인된 비용이 줄마다 나오고
+            기본은 ‘포함’입니다. 아직 승인 안 된 건은 자동으로 ‘제외’입니다.
           </p>
           <Shot src="31-candidates" alt="정산 후보 — 대기료 한 줄을 보류로 돌린 모습" />
           <ul className="grid gap-3 md:grid-cols-2">
@@ -575,6 +602,7 @@ export default function ManualPage() {
             기사가 운행마다 금액을 넣게 하면 됩니다.
           </p>
           <Shot src="42-master" alt="기준정보" />
+          <Shot src="48-project-create" alt="현장 이름만 등록" />
           <h3 className="pt-4 text-xl font-bold">2. 기사 가입 링크·사용자 초대</h3>
           <p>
             <B>기사관리 → 기사 가입 링크 만들기</B>에서 담당 현장과 유효기간(기본 14일)을 고릅니다. 링크
@@ -589,6 +617,12 @@ export default function ManualPage() {
             보내면 받은 사람이 직접 비밀번호를 정합니다. 비밀번호를 잊은 사람에게는 그 사람 옆의 ‘비밀번호
             재설정 링크 만들기’로 링크를 보냅니다.
           </p>
+          <Shot src="45-drivers" alt="기사관리" />
+          <Shot src="46-join-link" alt="기사 가입 링크 만들기" />
+          <div className="flex flex-wrap justify-center gap-5">
+            <Shot src="47-join" alt="기사 가입 화면" phone />
+            <Shot src="47b-join-vehicle" alt="기사 가입 — 사업자·차량 정보" phone />
+          </div>
           <Shot src="41-users" alt="사용자 관리" />
           <h3 className="pt-4 text-xl font-bold">3. 기사가 적을 칸 줄이기</h3>
           <p className="text-[1.0625rem] leading-relaxed">
