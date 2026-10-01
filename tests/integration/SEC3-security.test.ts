@@ -398,7 +398,10 @@ it.each([false, true])(
     ).toHaveLength(0);
     await saveMaster(s.adminCtx, 'projects', { active: true }, s.project.id);
     if (!individual)
-      expect(await getJoinLinkStatus(database().db, token)).toEqual({ project_names: [s.project.name] });
+      expect(await getJoinLinkStatus(database().db, token)).toEqual({
+        project_names: [s.project.name],
+        business: null,
+      });
     const accepted = await registerDriver(database().db, randomUUID(), token, input, individual);
     expect(
       (
