@@ -1,6 +1,7 @@
+import { EVIDENCE_MAX_BYTES, PDF_TOO_LARGE, IMAGE_TOO_LARGE } from '../../shared/upload-limits';
 export async function prepareImage(file: File): Promise<{ blob: Blob; name: string }> {
   if (file.type === 'application/pdf') {
-    if (file.size > 20 * 1024 * 1024) throw new Error('파일은 20MB 이하로 첨부하세요.');
+    if (file.size > EVIDENCE_MAX_BYTES) throw new Error(PDF_TOO_LARGE);
     return { blob: file, name: file.name };
   }
   if (!file.type.startsWith('image/')) throw new Error('사진 또는 PDF 파일을 선택하세요.');
@@ -27,6 +28,7 @@ export async function prepareImage(file: File): Promise<{ blob: Blob; name: stri
         0.8,
       ),
     );
+    if (blob.size > EVIDENCE_MAX_BYTES) throw new Error(IMAGE_TOO_LARGE);
     return { blob, name: file.name.replace(/\.[^.]+$/, '') + '.jpg' };
   } finally {
     bitmap.close();

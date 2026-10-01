@@ -1,4 +1,5 @@
-export function uploadLimit(localDefault = 20 * 1024 * 1024) {
+import { EVIDENCE_MAX_BYTES } from '../shared/upload-limits';
+export function uploadLimit(localDefault = EVIDENCE_MAX_BYTES) {
   const configured = process.env.MAX_UPLOAD_BYTES ?? (process.env.VERCEL ? '4194304' : undefined);
   if (configured === undefined) return localDefault;
   const limit = Number(configured);

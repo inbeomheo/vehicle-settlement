@@ -17,7 +17,7 @@ import { audit } from '../audit';
 import { AppError, invalid, notFound } from '../errors';
 import { assertUnlocked, atomic, contentChanged, rawUse, rawDetail } from './uses';
 import { evidenceSchema } from './schemas';
-export const MAX_UPLOAD_SIZE = 20 * 1024 * 1024;
+export { EVIDENCE_MAX_BYTES as MAX_UPLOAD_SIZE } from '../../shared/upload-limits';
 function publicEvidence(row: typeof evidence.$inferSelect) {
   const { storage_key: _key, ...out } = row;
   void _key;
