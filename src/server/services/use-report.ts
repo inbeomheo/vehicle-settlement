@@ -116,10 +116,30 @@ export async function renderUseReport(ctx: Context, id: string) {
       ? '금액 미정'
       : `${sumMoney(amounts).toLocaleString('ko-KR')}원`,
   );
-  row(
-    '확인',
-    approval?.decided_at ? `${approver?.name ?? '담당자'} · ${dateTime(approval.decided_at)}` : '승인 전',
-  );
+  const half = width / 2;
+  const confirmation = approval?.decided_at
+    ? `전자 확인: ${approver?.name ?? '담당자'} · ${dateTime(approval.decided_at)}`
+    : '전자 확인: 승인 전';
+  doc.fontSize(8);
+  const signatureHeight = Math.max(96, doc.heightOfString(confirmation, { width: half - 20 }) + 74);
+  if (y + 14 + signatureHeight > 765) {
+    doc.addPage();
+    y = 36;
+    heading(`화물차 사용내역 보고서 · ${use.use_no} (계속)`);
+  }
+  y = Math.max(y + 14, 765 - signatureHeight);
+  for (const [index, title] of ['기사 (서명)', '담당자 확인 (서명)'].entries()) {
+    const x = left + index * half;
+    doc.rect(x, y, half, signatureHeight).lineWidth(0.5).strokeColor('#cbd5e1').stroke();
+    doc
+      .fontSize(11)
+      .fillColor('#172b3a')
+      .text(title, x + 10, y + 10, { width: half - 20 });
+  }
+  doc
+    .fontSize(8)
+    .fillColor('#64748b')
+    .text(confirmation, left + half + 10, y + 62, { width: half - 20 });
   const range = doc.bufferedPageRange();
   for (let i = 0; i < range.count; i++) {
     doc.switchToPage(i);

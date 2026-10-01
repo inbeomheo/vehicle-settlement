@@ -337,7 +337,7 @@ test('지급 기록 중복 제출 차단, 연결 실패 후 동일 키로 재시
     await route.abort('failed');
   });
   await page.goto('/m/statements/f8a-payment');
-  const save = page.getByRole('button', { name: '지급 기록 저장' });
+  const save = page.getByRole('button', { name: /원 지급 완료로 기록/ });
   await save.evaluate((element: HTMLButtonElement) => {
     element.form!.requestSubmit();
     element.form!.requestSubmit();

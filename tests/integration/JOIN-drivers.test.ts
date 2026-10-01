@@ -79,7 +79,10 @@ it('공용 링크로 여러 명 가입: 트랜잭션·배정·기본차량·사�
     .from(driverAffiliations)
     .where(sql`${driverAffiliations.driver_id} in (${user.driver_id}::uuid, ${second.user.driver_id}::uuid)`);
   expect(new Set(affiliations.map((a) => a.counterparty_id)).size).toBe(1);
-  expect(affiliations.every((a) => a.valid_from === todaySeoul())).toBe(true);
+  const anniversary = (
+    await database().pool.query("SELECT ($1::date - interval '1 year')::date::text AS day", [todaySeoul()])
+  ).rows[0].day;
+  expect(affiliations.every((a) => a.valid_from === anniversary)).toBe(true);
   const replay = await registerDriver(database().db, randomUUID(), s.token, input);
   expect(replay.user.id).toBe(first.user.id);
   expect((await listJoinLinks(s.ctx)).find((row) => row.id === s.link.id)?.used_count).toBe(2);

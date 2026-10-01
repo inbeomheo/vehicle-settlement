@@ -75,7 +75,13 @@ export function PaymentPanel({ statement, onChange }: { statement: StatementDeta
       <ErrorMessage error={error} />
       {statement.status === 'CONFIRMED' && statement.payment_status === 'UNPAID' && (
         <form onSubmit={record} className="space-y-4 rounded-lg bg-slate-50 p-4">
-          <p className="font-semibold">전액 {money(statement.grand_total)}</p>
+          <p className="font-semibold">
+            명세 전액 {money(statement.grand_total)}을 모두 {word}했는지 확인하세요.
+          </p>
+          <p className="text-sm text-slate-600">
+            전액을 한 번만 기록합니다. 나눠 보낸 금액은 기록할 수 없으며, 메모에 적어도 기록 금액은 바뀌지
+            않습니다.
+          </p>
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label={`${word}일`}>
               <input
@@ -100,8 +106,8 @@ export function PaymentPanel({ statement, onChange }: { statement: StatementDeta
               <input name="memo" className={inputClass} maxLength={2000} />
             </Field>
           </div>
-          <button className={buttonClass} disabled={busy}>
-            {busy ? '처리 중…' : `${word} 기록 저장`}
+          <button className={`${buttonClass} max-w-full whitespace-normal`} disabled={busy}>
+            {busy ? '처리 중…' : `${money(statement.grand_total)} ${word} 완료로 기록`}
           </button>
         </form>
       )}

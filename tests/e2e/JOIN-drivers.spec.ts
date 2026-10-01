@@ -155,7 +155,7 @@ test('기사 연결 없는 개별 초대는 정보 입력 화면, 꺼진 공용 
   }
 });
 
-test('현장·정산 담당자는 기사관리 읽기 전용', async ({ page }) => {
+test('현장·정산 담당자는 일반 기사 정보 읽기 전용, 정산은 소속 시작일만 수정 가능', async ({ page }) => {
   for (const login_id of ['site', 'settlement']) {
     expect(
       (await page.request.post('/api/auth/login', { data: { login_id, password: 'demo1234' } })).ok(),
@@ -164,6 +164,9 @@ test('현장·정산 담당자는 기사관리 읽기 전용', async ({ page }) 
     await expect(page.getByRole('heading', { name: '기사관리', exact: true })).toBeVisible();
     await expect(page.getByRole('table')).toBeVisible();
     await expect(page.getByRole('button', { name: '정보 수정' })).toHaveCount(0);
+    if (login_id === 'site')
+      await expect(page.getByRole('button', { name: '소속 시작일 수정' })).toHaveCount(0);
+    else await expect(page.getByRole('button', { name: '소속 시작일 수정' }).first()).toBeVisible();
     await expect(page.getByRole('button', { name: '기사 가입 링크 만들기' })).toHaveCount(0);
     expect((await page.request.post('/api/driver-join-links', { data: { project_ids: [] } })).status()).toBe(
       403,

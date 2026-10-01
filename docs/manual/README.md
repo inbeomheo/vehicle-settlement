@@ -20,3 +20,13 @@ node driver-c.mjs   # 15 지급 후 내 정산
 
 - `BASE=http://localhost:3000` 으로 로컬 서버를 찍을 수 있다(기본은 시연 사이트).
 - `WATCH=1` 이면 브라우저를 화면에 띄워 사람이 쓰는 속도로 진행한다.
+
+## PDF 본문 갱신
+
+웹 설명서와 같은 본문·기존 캡처로 PDF를 만듭니다. 화면 캡처 자체는 바꾸지 않습니다.
+
+```sh
+BASE=http://localhost:3173 node docs/manual/export.mjs
+```
+
+해당 포트의 로컬 서버가 실행 중이어야 합니다. 생성한 `public/manual/vehicle-manual.pdf`는 텍스트 추출과 페이지 렌더링으로 확인합니다.

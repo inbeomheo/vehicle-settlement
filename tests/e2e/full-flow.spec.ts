@@ -125,7 +125,7 @@ async function settle(page: Page, party: string, uses: Use[], total: number, pri
   }
   await page.getByLabel('지급일', { exact: true }).fill('2026-09-29');
   await page.getByLabel('참고번호', { exact: true }).fill('W5-FULL-FLOW');
-  await page.getByRole('button', { name: '지급 기록 저장' }).click();
+  await page.getByRole('button', { name: /원 지급 완료로 기록/ }).click();
   await expect(page.getByText('지급 완료', { exact: true }).first()).toBeVisible();
   return { id, no };
 }

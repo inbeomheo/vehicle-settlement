@@ -302,7 +302,12 @@ async function resolveHeader(ctx: Context, input: CreateUseInput, previous?: Use
     )
     .orderBy(desc(driverAffiliations.valid_from), desc(driverAffiliations.id));
   const payeeId = input.payee_counterparty_id ?? affiliation?.counterparty_id;
-  if (!payeeId) invalid('사용일에 유효한 기사 소속 또는 지급처를 지정하세요.');
+  if (!payeeId)
+    invalid(
+      ctx.user.role === 'DRIVER'
+        ? "이 날짜에는 기사 등록 정보가 없어요. 관리자에게 기사관리에서 '소속 시작일'을 앞당겨 달라고 하세요."
+        : '사용일에 유효한 기사 소속이 없습니다. 기사관리에서 소속 시작일을 확인하거나 지급처를 지정하세요.',
+    );
   if (
     ctx.user.role === 'DRIVER' &&
     payeeId !== affiliation?.counterparty_id &&
