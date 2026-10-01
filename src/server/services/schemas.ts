@@ -165,7 +165,7 @@ export const inviteSchema = z
     name: z.string().trim().min(1).max(100),
     phone: z.string().max(100).optional(),
     driver_id: uuid.optional(),
-    project_ids: z.array(uuid).max(100).default([]),
+    project_ids: z.array(uuid).max(500).default([]),
   })
   .strict()
   .refine((input) => input.role !== 'DRIVER' || input.project_ids.length > 0, {

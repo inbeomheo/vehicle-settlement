@@ -11,8 +11,10 @@ async function createAccount(page: Page, role: 'DRIVER' | 'SITE_MANAGER') {
     expect(driver.ok()).toBe(true);
     driver_id = (await driver.json()).data.id;
   }
+  const projects = await page.request.get('/api/lookups');
+  const project_ids = role === 'DRIVER' ? [(await projects.json()).data.projects[0].id] : [];
   const response = await page.request.post('/api/invites', {
-    data: { name, role, driver_id, project_ids: [] },
+    data: { name, role, driver_id, project_ids },
   });
   expect(response.ok()).toBe(true);
   const link = (await response.json()).data.invite_url as string;
