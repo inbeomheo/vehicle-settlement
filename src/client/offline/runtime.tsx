@@ -1,9 +1,10 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api, ApiError } from '../api';
 import type { Lookups, Mode, UseList, User } from '../types';
 import {
   activateUser,
+  flushDrafts,
   activeUser,
   cacheValue,
   cachedValue,
@@ -103,8 +104,101 @@ export function useBootstrap(mode: Mode) {
   return { data, error, authRequired, retry: () => setAttempt((value) => value + 1) };
 }
 export function PwaRegistration() {
+  const [waiting, setWaiting] = useState<ServiceWorker>();
+  const [changed, setChanged] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const reloading = useRef(false);
   useEffect(() => {
-    if ('serviceWorker' in navigator) void navigator.serviceWorker.register('/sw.js').catch(() => {});
+    if (!('serviceWorker' in navigator)) return;
+    let alive = true;
+    let registration: ServiceWorkerRegistration | undefined;
+    let installing: ServiceWorker | null = null;
+    let controlled = Boolean(navigator.serviceWorker.controller);
+    const inspect = () => {
+      if (alive && registration?.waiting && navigator.serviceWorker.controller)
+        setWaiting(registration.waiting);
+    };
+    const found = () => {
+      installing?.removeEventListener('statechange', inspect);
+      installing = registration?.installing ?? null;
+      installing?.addEventListener('statechange', inspect);
+      inspect();
+    };
+    const reload = async () => {
+      // Initial installation claims clients too; it must not reload the first visit.
+      if (!controlled) {
+        controlled = true;
+        return;
+      }
+      if (reloading.current) return;
+      reloading.current = true;
+      setChanged(true);
+      setBusy(true);
+      try {
+        await flushDrafts('update');
+        window.location.reload();
+      } catch (cause) {
+        reloading.current = false;
+        setBusy(false);
+        setError(cause instanceof Error ? cause.message : '초안을 저장하지 못했습니다. 다시 시도해 주세요.');
+      }
+    };
+    const check = () => {
+      if (navigator.onLine && document.visibilityState === 'visible')
+        void registration?.update().catch(() => {});
+    };
+    navigator.serviceWorker.addEventListener('controllerchange', reload);
+    void navigator.serviceWorker
+      .register('/sw.js', { updateViaCache: 'none' })
+      .then((value) => {
+        if (!alive) return;
+        registration = value;
+        registration.addEventListener('updatefound', found);
+        found();
+        check();
+      })
+      .catch(() => {});
+    window.addEventListener('online', check);
+    document.addEventListener('visibilitychange', check);
+    return () => {
+      alive = false;
+      navigator.serviceWorker.removeEventListener('controllerchange', reload);
+      registration?.removeEventListener('updatefound', found);
+      installing?.removeEventListener('statechange', inspect);
+      window.removeEventListener('online', check);
+      document.removeEventListener('visibilitychange', check);
+    };
   }, []);
-  return null;
+  async function update() {
+    if (busy) return;
+    setBusy(true);
+    setError('');
+    try {
+      await flushDrafts('update');
+      if (changed) window.location.reload();
+      else waiting?.postMessage({ type: 'SKIP_WAITING' });
+    } catch (cause) {
+      setBusy(false);
+      setError(cause instanceof Error ? cause.message : '초안을 저장하지 못했습니다. 다시 시도해 주세요.');
+    }
+  }
+  if (!waiting && !changed) return null;
+  return (
+    <aside
+      className="sticky top-0 z-50 space-y-2 border-b border-amber-200 bg-amber-50 p-3 text-amber-950"
+      aria-label="앱 업데이트"
+    >
+      <p className="font-semibold">새 버전이 있어요</p>
+      <button
+        type="button"
+        className="min-h-11 rounded-lg bg-ink px-4 py-2 font-semibold text-white disabled:opacity-50"
+        disabled={busy}
+        onClick={() => void update()}
+      >
+        {busy ? '새 버전 적용 중…' : '초안 저장 후 새로고침'}
+      </button>
+      {error && <p role="alert">{error}</p>}
+    </aside>
+  );
 }
