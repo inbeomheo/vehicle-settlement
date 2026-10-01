@@ -68,6 +68,8 @@ for (const size of ['normal', 'xlarge'])
   });
 
 test('FLOW 담당자·적재용량 오프라인 초안 복원·재전송', async ({ page, context }) => {
+  const pageErrors: string[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error.message));
   const s = await setupScenario(database.db);
   await page.request.post('/api/auth/login', {
     data: { login_id: s.driverUser.login_id, password: 'password1234' },
@@ -86,6 +88,12 @@ test('FLOW 담당자·적재용량 오프라인 초안 복원·재전송', async
   await page.getByRole('button', { name: '담당자에게 보내기', exact: true }).click();
   await page.getByRole('dialog').getByRole('button', { name: '보내기', exact: true }).click();
   await expect(page.getByRole('status')).toContainText('제출 대기');
+  expect(pageErrors).toEqual([]);
+  await page.goto('/d');
+  await expect(page.getByRole('heading', { name: '내 운행', exact: true })).toBeVisible();
+  await page.getByRole('link').filter({ hasText: '휴대폰에만 저장됨' }).click();
+  await expect(page.getByLabel('적재용량 (톤)')).toHaveValue('3.5');
+  expect(pageErrors).toEqual([]);
   await context.setOffline(false);
   await expect(page.getByRole('heading', { name: '보냈습니다', exact: true })).toBeVisible();
   const uses = await database.db.select().from(vehicleUses).where(eq(vehicleUses.driver_id, s.driver.id));

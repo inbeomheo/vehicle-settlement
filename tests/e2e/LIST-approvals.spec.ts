@@ -108,10 +108,14 @@ test('기사 홈은 본인 목록·상태·기간·프로젝트를 유지하고 
   await page.setViewportSize({ width: 390, height: 844 });
   await login(page, s.driverUser.login_id, '/d');
   const list = page.locator('section[aria-labelledby="my-uses"]');
-  await expect(list.locator('li')).toHaveCount(2);
+  await expect(list.locator('li')).toHaveCount(3);
+  await expect(list.getByRole('button', { name: '전체 3', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
   await expect(page.getByRole('link', { name: '운행 등록', exact: true }).first()).toBeVisible();
   await expect(page.getByRole('button', { name: /지난번과 같은 운행/ })).toBeVisible();
-  await list.getByRole('button', { name: '검수대기 2', exact: true }).click();
+  await list.getByRole('button', { name: '검수대기 3', exact: true }).click();
   await list.locator('summary').click();
   await list.getByRole('button', { name: '이전 날' }).click();
   await expect(list.locator('li')).toHaveCount(1);
@@ -119,6 +123,12 @@ test('기사 홈은 본인 목록·상태·기간·프로젝트를 유지하고 
   await page.reload();
   await list.locator('summary').click();
   await expect(list.getByLabel('프로젝트', { exact: true })).toHaveValue(s.project.id);
+  await expect(list.locator('li')).toHaveCount(1);
+  await list.getByRole('button', { name: '전체 기간', exact: true }).click();
+  await expect(list.locator('li')).toHaveCount(3);
+  await expect(list.getByLabel('운송 시작일')).toHaveValue('');
+  await expect(list.getByLabel('운송 종료일')).toHaveValue('');
+  await page.goBack();
   await expect(list.locator('li')).toHaveCount(1);
   const api = await page.request.get(
     `/api/approvals?from=${todaySeoul()}&to=${todaySeoul()}&driver_id=${other.id}`,

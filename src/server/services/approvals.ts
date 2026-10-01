@@ -10,8 +10,8 @@ import { reviewSupplySql } from './charge-amount-sql';
 
 export const approvalQuerySchema = z
   .object({
-    from: dateString.default(todaySeoul),
-    to: dateString.default(todaySeoul),
+    from: dateString.optional(),
+    to: dateString.optional(),
     project_id: uuid.optional(),
     driver_id: uuid.optional(),
     reviewer_user_id: z.union([uuid, z.literal('me')]).optional(),
@@ -20,15 +20,27 @@ export const approvalQuerySchema = z
     page: z.coerce.number().int().min(1).max(1000000).default(1),
     pageSize: z.coerce.number().int().min(1).max(100).default(20),
   })
-  .refine((q) => q.from <= q.to, { message: '운송일자 종료일을 확인하세요.', path: ['to'] });
+  .refine((q) => !q.from || !q.to || q.from <= q.to, {
+    message: '운송일자 종료일을 확인하세요.',
+    path: ['to'],
+  });
 
 type Option = { id: string; name: string };
 export async function getApprovals(ctx: Context, raw: unknown, exportAll = false) {
-  const q = approvalQuerySchema.parse(raw);
-  const scope = await accessibleUseFilter(ctx);
   const driver = ctx.user.role === 'DRIVER';
+  const parsed = approvalQuerySchema.parse(raw);
+  const q = driver
+    ? parsed
+    : approvalQuerySchema.parse({
+        ...parsed,
+        from: parsed.from ?? todaySeoul(),
+        to: parsed.to ?? todaySeoul(),
+      });
+  const scope = await accessibleUseFilter(ctx);
   const reviewer = q.reviewer_user_id === 'me' ? ctx.user.id : q.reviewer_user_id;
-  const clauses: SQL[] = [scope ?? sql`true`, sql`use_date BETWEEN ${q.from}::date AND ${q.to}::date`];
+  const clauses: SQL[] = [scope ?? sql`true`];
+  if (q.from) clauses.push(sql`use_date >= ${q.from}::date`);
+  if (q.to) clauses.push(sql`use_date <= ${q.to}::date`);
   if (q.project_id) clauses.push(sql`project_id=${q.project_id}::uuid`);
   if (q.driver_id) clauses.push(sql`driver_id=${q.driver_id}::uuid`);
   if (reviewer) clauses.push(sql`reviewer_user_id=${reviewer}::uuid`);

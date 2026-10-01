@@ -1,21 +1,37 @@
 'use client';
-import { usePathname, useSearchParams } from 'next/navigation';
+import { useSyncExternalStore } from 'react';
 import { todaySeoul } from '@/client/types';
 import { approvalLabels, approvalStatuses, shiftDay } from '@/shared/approvals';
 import { button as driverButton, control as driverControl } from './use-form/fields';
-import { inputClass, secondaryClass } from './manager/common';
+import { inputClass, secondaryClass } from './list-controls';
 
-export function useApprovalQuery() {
-  const params = useSearchParams();
-  const pathname = usePathname();
-  const query = Object.fromEntries(params.entries());
-  query.from ||= todaySeoul();
-  query.to ||= query.from;
+// Both the Next.js screen and the standalone offline shell use this browser URL store.
+const queryEvent = 'vehicle-approval-query';
+function subscribeQuery(notify: () => void) {
+  window.addEventListener('popstate', notify);
+  window.addEventListener(queryEvent, notify);
+  return () => {
+    window.removeEventListener('popstate', notify);
+    window.removeEventListener(queryEvent, notify);
+  };
+}
+export function useApprovalQuery(defaultToday = true) {
+  const currentSearch = useSyncExternalStore(
+    subscribeQuery,
+    () => location.search,
+    () => '',
+  );
+  const query = Object.fromEntries(new URLSearchParams(currentSearch));
+  if (defaultToday) {
+    query.from ||= todaySeoul();
+    query.to ||= query.from;
+  }
   const search = new URLSearchParams(query).toString();
   function change(patch: Record<string, string>) {
     const next = new URLSearchParams({ ...query, page: '1', ...patch });
     for (const [key, value] of [...next]) if (!value) next.delete(key);
-    window.history.pushState(null, '', `${pathname}?${next}`);
+    window.history.pushState(null, '', `${location.pathname}?${next}`);
+    window.dispatchEvent(new Event(queryEvent));
   }
   return { query, search, change };
 }
@@ -53,19 +69,24 @@ export function ApprovalDates({
   onChange,
 }: {
   driver?: boolean;
-  from: string;
-  to: string;
+  from?: string;
+  to?: string;
   onChange: (patch: Record<string, string>) => void;
 }) {
   return (
     <div className="grid min-w-0 gap-2">
       <div className="flex flex-wrap gap-1">
+        {driver && (
+          <button type="button" className={driverButton} onClick={() => onChange({ from: '', to: '' })}>
+            전체 기간
+          </button>
+        )}
         <button
           type="button"
           aria-label="이전 날"
           className={driver ? driverButton : secondaryClass}
           onClick={() => {
-            const day = shiftDay(from, -1);
+            const day = shiftDay(from || todaySeoul(), -1);
             onChange({ from: day, to: day });
           }}
         >
@@ -83,7 +104,7 @@ export function ApprovalDates({
           aria-label="다음 날"
           className={driver ? driverButton : secondaryClass}
           onClick={() => {
-            const day = shiftDay(from, 1);
+            const day = shiftDay(from || todaySeoul(), 1);
             onChange({ from: day, to: day });
           }}
         >
@@ -96,10 +117,9 @@ export function ApprovalDates({
           aria-label="운송 시작일"
           className={driver ? driverControl : inputClass}
           type="date"
-          value={from}
+          value={from || ''}
           onChange={(e) => {
-            if (e.target.value)
-              onChange({ from: e.target.value, to: e.target.value > to ? e.target.value : to });
+            onChange({ from: e.target.value, to: to && e.target.value > to ? e.target.value : (to ?? '') });
           }}
         />
       </label>
@@ -109,10 +129,10 @@ export function ApprovalDates({
           aria-label="운송 종료일"
           className={driver ? driverControl : inputClass}
           type="date"
-          value={to}
+          value={to || ''}
           min={from}
           onChange={(e) => {
-            if (e.target.value) onChange({ to: e.target.value });
+            onChange({ to: e.target.value });
           }}
         />
       </label>
