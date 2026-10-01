@@ -1,3 +1,4 @@
+import { approvedJoinBusiness } from './join-business';
 import { and, eq, sql } from 'drizzle-orm';
 import Decimal from 'decimal.js';
 import type { Db } from '../db/client';
@@ -16,6 +17,7 @@ export async function saveDriverIdentity(
   input: DriverInformation,
   driverId?: string,
   allowExistingBusiness = false,
+  approvedCounterpartyId?: string,
 ) {
   const today = todaySeoul();
   const duplicates = await db.execute(sql`SELECT id FROM drivers WHERE active
@@ -42,20 +44,22 @@ export async function saveDriverIdentity(
         .for('update')
     : [];
   const sameBusiness = currentParty?.party.biz_no?.replace(/\D/g, '') === input.biz_no.replaceAll('-', '');
-  let [party] = sameBusiness
-    ? [currentParty.party]
-    : await db
-        .select()
-        .from(counterparties)
-        .where(
-          and(
-            allowExistingBusiness ? eq(counterparties.kind, 'DRIVER_BUSINESS') : undefined,
-            sql`regexp_replace(${counterparties.biz_no}, '[^0-9]', '', 'g')=${input.biz_no.replaceAll('-', '')}`,
-          ),
-        )
-        .orderBy(counterparties.created_at, counterparties.id)
-        .limit(1)
-        .for('update');
+  let [party] = approvedCounterpartyId
+    ? [await approvedJoinBusiness(db, approvedCounterpartyId)]
+    : sameBusiness
+      ? [currentParty.party]
+      : await db
+          .select()
+          .from(counterparties)
+          .where(
+            and(
+              allowExistingBusiness ? eq(counterparties.kind, 'DRIVER_BUSINESS') : undefined,
+              sql`regexp_replace(${counterparties.biz_no}, '[^0-9]', '', 'g')=${input.biz_no.replaceAll('-', '')}`,
+            ),
+          )
+          .orderBy(counterparties.created_at, counterparties.id)
+          .limit(1)
+          .for('update');
   const ownsParty =
     party &&
     driverId &&
@@ -64,7 +68,7 @@ export async function saveDriverIdentity(
     WHERE driver_id=${driverId}::uuid AND counterparty_id=${party.id}::uuid
     AND valid_from<=${today}::date AND (valid_to IS NULL OR valid_to>=${today}::date)`)
     ).rows.length > 0;
-  if (party && !allowExistingBusiness && !ownsParty)
+  if (party && !approvedCounterpartyId && !allowExistingBusiness && !ownsParty)
     invalid(
       '이미 등록된 사업자번호예요. 같은 사업자로 여러 대를 운행하시면 관리자에게 기사 추가(개별 초대)를 요청해 주세요.',
     );

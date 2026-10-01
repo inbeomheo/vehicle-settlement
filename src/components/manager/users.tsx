@@ -1,5 +1,6 @@
 'use client';
 import { useBusy } from '@/components/ui/use-busy';
+import { JoinBusinessFields, emptyJoinBusiness, joinBusinessPayload } from './join-business-fields';
 import { useState } from 'react';
 import Link from 'next/link';
 import { ConfirmDialog } from '@/components/ui/modal';
@@ -57,6 +58,8 @@ export function Users() {
   const [cancelInvite, setCancelInvite] = useState<Invite | null>(null);
   const [inviteUrl, setInviteUrl] = useState('');
   const [resetLink, setResetLink] = useState<{ userId: string; url: string } | null>(null);
+  const [inviteBusiness, setInviteBusiness] = useState(emptyJoinBusiness);
+  const [inviteDriverId, setInviteDriverId] = useState('');
   const [inviteRole, setInviteRole] = useState('SITE_MANAGER');
   const [projects, setProjects] = useState<string[]>([]);
   const [selected, setSelected] = useState<User | null>(null);
@@ -118,6 +121,9 @@ export function Users() {
                     phone: form.get('phone') || undefined,
                     driver_id: inviteRole === 'DRIVER' ? form.get('driver_id') || undefined : undefined,
                     project_ids: projects,
+                    ...(inviteRole === 'DRIVER' && !inviteDriverId
+                      ? joinBusinessPayload(inviteBusiness)
+                      : {}),
                   });
                   setInviteUrl(result.invite_url);
                 }, '초대를 생성했습니다. 링크를 복사하여 전달하세요.');
@@ -148,6 +154,8 @@ export function Users() {
                     <select
                       className={inputClass}
                       name="driver_id"
+                      value={inviteDriverId}
+                      onChange={(e) => setInviteDriverId(e.target.value)}
                       disabled={users.loading || lookups.loading}
                     >
                       <option value="">가입할 때 기사 정보 직접 입력</option>
@@ -172,6 +180,11 @@ export function Users() {
                   >
                     새 기사 먼저 등록
                   </Link>
+                </div>
+              )}
+              {inviteRole === 'DRIVER' && !inviteDriverId && (
+                <div className="mt-4">
+                  <JoinBusinessFields value={inviteBusiness} onChange={setInviteBusiness} disabled={busy} />
                 </div>
               )}
               <fieldset className="mt-4">

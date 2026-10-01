@@ -1,3 +1,4 @@
+import { resolveJoinBusiness, joinBusinessSummary } from './join-business';
 import { lockLoginCounters, recordLoginFailure } from '../auth/login-throttle';
 import { and, eq, inArray, isNull } from 'drizzle-orm';
 import type { z } from 'zod';
@@ -107,6 +108,7 @@ export async function getInviteStatus(db: Db, token: string) {
       name: invites.name,
       role: invites.role,
       driver_id: invites.driver_id,
+      counterparty_id: invites.counterparty_id,
       used_at: invites.used_at,
       revoked_at: invites.revoked_at,
       expires_at: invites.expires_at,
@@ -115,7 +117,10 @@ export async function getInviteStatus(db: Db, token: string) {
     .where(eq(invites.token_hash, hashToken(token)));
   if (!invite || invite.used_at || invite.revoked_at || invite.expires_at <= new Date())
     return { status: 'INVALID' as const, name: null, role: null };
+  const business = await joinBusinessSummary(db, invite.counterparty_id);
+  if (invite.counterparty_id && !business) return { status: 'INVALID' as const, name: null, role: null };
   return {
+    ...(business ? { business } : {}),
     status: 'VALID' as const,
     name: invite.name,
     role: invite.role,
@@ -147,11 +152,15 @@ export async function createInvite(ctx: Context, raw: z.input<typeof inviteSchem
         .where(and(inArray(projects.id, input.project_ids), eq(projects.active, true)));
       if (found.length !== new Set(input.project_ids).size) notFound();
     }
+    const counterpartyId = await resolveJoinBusiness(tx, input);
+    const { new_business: _business, ...inviteInput } = input;
+    void _business;
     const token = newToken();
     const [row] = await tx.db
       .insert(invites)
       .values({
-        ...input,
+        ...inviteInput,
+        counterparty_id: counterpartyId,
         project_ids: [...new Set(input.project_ids)],
         token_hash: hashToken(token),
         expires_at: new Date(Date.now() + 7 * 86400000),

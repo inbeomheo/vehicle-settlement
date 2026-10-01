@@ -303,3 +303,7 @@ scripts/             db 시작, 시드, 백업/복구
 ## 17. PW 비밀번호 재설정·변경
 
 PW 작업 지시에 따라 `0600_pw_password_resets.sql`에 `password_resets(id, user_id, token_hash unique, expires_at, used_at, revoked_at, created_by, created_at)`를 추가한다. 관리자는 본인 포함 활성 사용자에게 24시간·1회용 링크를 발급하며 이전 미사용 링크를 폐기한다. 재설정은 모든 세션을 폐기하고 해당 계정 잠금을 해제한다. 본인 변경은 현재 비밀번호를 확인하고 현재 세션을 제외한 세션·미사용 재설정 링크를 폐기한다. 확인 실패는 기존 throttle 헬퍼를 재사용한 별도 계정 카운터로 제한한다. 두 입력의 일치와 초대의 비밀번호 길이 규칙을 서버에서 검증한다. 상세 API와 감사 동작은 [API](API.md)의 PW 절을 따른다.
+
+## 18. F4-JOINBIZ 고객 운영 반영
+
+새 현장 증빙 기본값은 `NONE`이다. 기존 정책은 유지하며 기사 화면에서 선택임을 표시한다. 관리자 승인 링크에 `counterparty_id`를 지정하면 같은 활성 DRIVER_BUSINESS/CARRIER에 여러 기사 가입을 허용한다. 지정이 없으면 기존 신규 사업자만 가입 규칙을 유지한다. 기사 연결 없는 개별 초대도 같은 방식을 지원한다. `0750_join_business_optional_evidence.sql`의 두 nullable FK와 상세 계약은 [API](API.md)의 F4-JOINBIZ 절을 따른다.

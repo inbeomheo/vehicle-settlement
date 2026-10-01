@@ -24,7 +24,7 @@ export const masterConfigs: Record<string, MasterConfig> = {
         key: 'evidence_policy',
         title: '증빙 정책',
         type: 'select',
-        options: ['PHOTO_REQUIRED', 'PHOTO_OR_ALTERNATIVE', 'NONE'],
+        options: ['NONE', 'PHOTO_REQUIRED', 'PHOTO_OR_ALTERNATIVE'],
         required: true,
       },
       active,

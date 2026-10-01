@@ -15,7 +15,9 @@ test('웹·PDF 설명서는 입력 순서·필수 항목·전액 1회 지급 안
   expect(text).toContain('전액 지급을 마친 뒤 한 번만');
   expect(text).toContain('적재용량');
   expect(text.indexOf('4 이번 운행 금액을 확인합니다')).toBeGreaterThan(-1);
-  expect(text.indexOf('4 이번 운행 금액을 확인합니다')).toBeLessThan(text.indexOf('5 인수증을 찍습니다'));
+  expect(text.indexOf('4 이번 운행 금액을 확인합니다')).toBeLessThan(
+    text.indexOf('5 필요하면 인수증을 찍습니다'),
+  );
   expect(text).not.toContain('운반 내용만 적습니다');
   expect(text).not.toContain('나눠 보냈으면 보낼 때마다');
 });

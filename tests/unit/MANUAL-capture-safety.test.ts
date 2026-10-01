@@ -31,3 +31,8 @@ it.each([
   expect(result.status).not.toBe(0);
   expect(result.stderr).toContain('설명서 도구는 http://localhost:3183');
 });
+
+it('F4 가입 링크 캡처는 전용 로컬 3197 주소만 추가 허용한다', () => {
+  expect(loadCapture('http://localhost:3197').stdout.trim()).toBe('http://localhost:3197');
+  expect(loadCapture('http://localhost:3197@evil.example').status).not.toBe(0);
+});

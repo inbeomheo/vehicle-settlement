@@ -103,3 +103,9 @@ PORT=3183 npx playwright test tests/e2e/FIX-REQ-manual.spec.ts tests/e2e/MANUAL-
 ### 현장 배정 부분 촬영 (F3-ASSIGN)
 
 `BASE=http://localhost:3191 node docs/manual/capture/assignments.mjs`는 54391의 전용 로컬 시연 DB를 연결한 3191 서버에서 기사관리 배정과 현장 생성 두 장면만 갱신한다. 공용 캡처 도구는 추가로 이 로컬 주소만 허용하며 외부 요청 차단은 유지한다. `45-drivers`, `48-project-create`의 원본과 공개 PNG를 함께 갱신한다.
+
+### 소속 사업자 지정 부분 촬영 (F4-JOINBIZ)
+
+`PG_PORT=54397`, `PORT=3197`의 전용 로컬 서버에서 `BASE=http://localhost:3197 node docs/manual/capture/join-business.mjs`를 실행하면 `46-join-link` 원본·공개 PNG만 갱신한다. 사업자 입력은 시연용이며 링크를 실제로 생성하지 않는다. `BASE=http://localhost:3197 node docs/manual/export.mjs`로 사진 선택·소속 사업자 지정 안내를 포함한 PDF를 다시 만든다. 기존 운영 현장 정책은 이 작업의 마이그레이션으로 변경하지 않는다.
+
+F4-JOINBIZ 검증: 타입·린트·포맷 검사, Vitest 87개 파일/513건, 관련 E2E 20건 통과. PDF 34쪽 렌더링 및 사진 선택·소속 지정 안내 페이지 확대 확인 완료. 상세 내용은 [F4-JOINBIZ 보고서](../reports/F4-JOINBIZ.md)를 참고한다.
