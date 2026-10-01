@@ -1,13 +1,10 @@
 'use client';
-import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { requestJson } from '@/components/ui/request';
-export const inputClass =
-  'w-full min-h-11 min-w-0 rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-base shadow-[inset_0_1px_0_rgb(0_0_0/0.03)] focus:border-blue-700 focus:outline-none focus:ring-3 focus:ring-blue-100 disabled:bg-slate-100 disabled:text-slate-500';
+export { ApiError, api, mutate, useRemote } from '@/client/use-remote';
+import { secondaryClass } from '@/components/list-controls';
+export { inputClass, secondaryClass, Pager } from '@/components/list-controls';
 export const buttonClass =
   'inline-flex min-h-11 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg bg-ink px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 active:translate-y-px disabled:cursor-wait disabled:opacity-50';
-export const secondaryClass =
-  'inline-flex min-h-11 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-ink hover:border-slate-400 hover:bg-slate-50 disabled:opacity-50';
 export const panelClass = 'min-w-0 rounded-lg border border-slate-200 bg-white p-4 sm:p-6';
 /** 가장 중요한 한 가지 행동(승인·확정·제출)에만 쓰는 신호 노랑 버튼 */
 export const signalClass =
@@ -144,76 +141,6 @@ export function Badge({ value }: { value: string }) {
     </span>
   );
 }
-export class ApiError extends Error {
-  constructor(
-    message: string,
-    public status: number,
-  ) {
-    super(message);
-  }
-}
-export async function api<T>(url: string, options: RequestInit = {}): Promise<T> {
-  const { response, body } = await requestJson(url, {
-    cache: 'no-store',
-    ...options,
-    headers: {
-      ...(options.body && !(options.body instanceof FormData) ? { 'content-type': 'application/json' } : {}),
-      ...options.headers,
-    },
-  });
-  if (!response.ok) {
-    const details = Array.isArray(body.error?.details)
-      ? body.error.details
-          .map((item: { message?: string }) => item.message)
-          .filter(Boolean)
-          .join(' ')
-      : '';
-    throw new ApiError(
-      `${body.error?.message ?? '요청에 실패했습니다.'}${details ? ' ' + details : ''}`,
-      response.status,
-    );
-  }
-  return body.data;
-}
-export function mutate<T>(url: string, method: string, data: unknown = {}) {
-  return api<T>(url, {
-    method,
-    body: JSON.stringify(data),
-    headers: { 'idempotency-key': crypto.randomUUID() },
-  });
-}
-export function useRemote<T>(url: string | null) {
-  const [data, setData] = useState<T>();
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [revision, setRevision] = useState(0);
-  const refresh = useCallback(() => setRevision((value) => value + 1), []);
-  useEffect(() => {
-    if (!url) {
-      setLoading(false);
-      return;
-    }
-    const controller = new AbortController();
-    setLoading(true);
-    setData(undefined);
-    setError('');
-    api<T>(url, { signal: controller.signal })
-      .then((value) => {
-        if (!controller.signal.aborted) setData(value);
-      })
-      .catch((reason: Error) => {
-        if (!controller.signal.aborted) {
-          setError(reason.message);
-          setData(undefined);
-        }
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false);
-      });
-    return () => controller.abort();
-  }, [url, revision]);
-  return { data, error, loading, refresh };
-}
 export function Notice({
   error,
   success,
@@ -284,43 +211,6 @@ export function Empty({
     <p role="status" className="px-6 py-12 text-center text-[0.9375rem] text-slate-600">
       {loading ? '불러오는 중…' : children}
     </p>
-  );
-}
-export function Pager({
-  page,
-  pageSize,
-  total,
-  onChange,
-}: {
-  page: number;
-  pageSize: number;
-  total: number;
-  onChange: (page: number) => void;
-}) {
-  return (
-    <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm">
-      <span>
-        전체 {total.toLocaleString('ko-KR')}건 · {page} / {Math.max(1, Math.ceil(total / pageSize))}페이지
-      </span>
-      <div className="flex gap-2">
-        <button
-          type="button"
-          className={secondaryClass}
-          disabled={page <= 1}
-          onClick={() => onChange(page - 1)}
-        >
-          이전
-        </button>
-        <button
-          type="button"
-          className={secondaryClass}
-          disabled={page * pageSize >= total}
-          onClick={() => onChange(page + 1)}
-        >
-          다음
-        </button>
-      </div>
-    </div>
   );
 }
 export function UseLink({ id, children }: { id: string; children: React.ReactNode }) {

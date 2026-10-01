@@ -136,7 +136,7 @@ test('6. 명세 단가·확정 성공·행 순서·조정 대상 비용 종류·
   await fits(page);
 });
 
-test('4·8. 취소 대장 뱃지·핵심 7개 필드·더 보기', async ({ page }) => {
+test('4·8. 취소 대장 뱃지·담당자·적재용량·더 보기', async ({ page }) => {
   await login(page, true);
   await page.goto(`/m/ledger?project_id=${fixture.project}`);
   await expect(page.getByRole('button', { name: /필터.*펼치기/ })).toContainText('필터 (1) 펼치기 +');
@@ -146,7 +146,9 @@ test('4·8. 취소 대장 뱃지·핵심 7개 필드·더 보기', async ({ page
     .locator('article')
     .filter({ hasText: fixture.canceledNo });
   await expect(card.getByText('취소', { exact: true })).toBeVisible();
-  await expect(card.locator(':scope > dl > div')).toHaveCount(6);
+  await expect(card.locator(':scope > dl > div')).toHaveCount(8);
+  await expect(card.getByText('담당자', { exact: true })).toBeVisible();
+  await expect(card.getByText('적재용량', { exact: true })).toBeVisible();
   await expect(card.getByText('운반 내용', { exact: true })).not.toBeVisible();
   await card.getByText('더 보기', { exact: true }).click();
   await expect(card.getByText('운반 내용', { exact: true })).toBeVisible();

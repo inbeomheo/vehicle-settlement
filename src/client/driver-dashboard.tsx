@@ -3,15 +3,15 @@ import { useEffect, useState } from 'react';
 import { api, ApiError } from './api';
 import { errorMessage } from './error-message';
 import { useActionLock } from './use-action-lock';
-import { todaySeoul, type UseList } from './types';
+import { reviewLabels, todaySeoul, type UseList } from './types';
 import { useBootstrap, PwaRegistration } from './offline/runtime';
 import { isUnsent, listDrafts, OFFLINE_EVENT, type Draft } from './offline/store';
 import { copyToDevice } from './copy-draft';
 import { syncQueue } from './offline/engine';
 import { button, primary, Section, StatusBadge } from '@/components/use-form/fields';
 import { ApprovalDates, ApprovalSelect, ApprovalTabs, useApprovalQuery } from '@/components/approval-filters';
-import { Pager, useRemote } from '@/components/manager/common';
-import { approvalLabels } from '@/shared/approvals';
+import { Pager } from '@/components/list-controls';
+import { useRemote } from './use-remote';
 import { Plate } from '@/components/ui/plate';
 
 const weekdays = ['일', '월', '화', '수', '목', '금', '토'];
@@ -24,7 +24,7 @@ function koreanDate(date: string, withWeekday = true) {
 }
 export function DriverDashboard() {
   const { data, error, authRequired, retry } = useBootstrap('driver');
-  const { query, search, change } = useApprovalQuery();
+  const { query, search, change } = useApprovalQuery(false);
   const filtered = useRemote<
     UseList & { counts: Record<string, number>; options: { projects: { id: string; name: string }[] } }
   >(data ? `/api/approvals?${search}` : null);
@@ -294,7 +294,8 @@ export function DriverDashboard() {
             />
             <details className="mb-4 rounded-lg border border-slate-200 bg-white p-4">
               <summary className="min-h-11 cursor-pointer font-bold">
-                운송일자·프로젝트 필터 · {query.from}
+                운송일자·프로젝트 필터 ·{' '}
+                {query.from || query.to ? `${query.from || '처음'} ~ ${query.to || '최근'}` : '전체 기간'}
               </summary>
               <div className="grid gap-4">
                 <ApprovalDates driver from={query.from} to={query.to} onChange={change} />
@@ -359,7 +360,7 @@ export function DriverDashboard() {
                       <span className="mt-1.5 flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
                         <Plate value={String(row.snapshot.plate_no)} size="sm" />
                         <StatusBadge warning={fix}>
-                          {canceled ? '취소' : approvalLabels[row.review_status]}
+                          {canceled ? '취소' : reviewLabels[row.review_status]}
                         </StatusBadge>
                       </span>
                       {!canceled && (

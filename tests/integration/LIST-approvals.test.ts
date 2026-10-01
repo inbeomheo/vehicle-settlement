@@ -1,4 +1,6 @@
 import { expect, it } from 'vitest';
+import { todaySeoul } from '../../src/server/context';
+import { shiftDay } from '../../src/shared/approvals';
 import { eq } from 'drizzle-orm';
 import ExcelJS from 'exceljs';
 import { testDatabase } from '../helpers/database';
@@ -175,4 +177,36 @@ it('0원·미확정·부가세 포함과 고객청구 제외를 공급가 합계
   expect(driver.summary).toEqual(data.summary);
   expect(driver.total).toBe(3);
   expect(JSON.stringify(driver)).not.toContain('990000');
+});
+
+it('기사 기본 목록은 전체 기간 최신순이고 명시한 기간·프로젝트만 적용하며 담당자는 오늘을 유지한다', async () => {
+  const s = await scenario();
+  const today = todaySeoul();
+  const yesterday = shiftDay(today, -1);
+  const older = shiftDay(today, -40);
+  const ids = [];
+  for (const use_date of [older, yesterday, today]) {
+    const use = await createUse(s.driverCtx, { ...s.input, use_date });
+    ids.push(use.id);
+  }
+  const all = await getApprovals(s.driverCtx, {});
+  expect(all.rows.map((row) => row.id)).toEqual([...ids].reverse());
+  expect(all.total).toBe(3);
+  expect(all.counts.ALL).toBe(3);
+  expect(all.counts.DRAFT).toBe(3);
+  expect(all.summary.count).toBe(3);
+  const filtered = await getApprovals(s.driverCtx, { from: yesterday, to: today, project_id: s.project.id });
+  expect(filtered.rows.map((row) => row.id)).toEqual([ids[2], ids[1]]);
+  expect(filtered.counts.ALL).toBe(2);
+  expect(filtered.summary.count).toBe(2);
+  expect((await getApprovals(s.driverCtx, { to: yesterday })).rows.map((row) => row.id)).toEqual([
+    ids[1],
+    ids[0],
+  ]);
+  expect((await getApprovals(s.driverCtx, { from: today })).rows.map((row) => row.id)).toEqual([ids[2]]);
+  expect((await getApprovals(s.driverCtx, { project_id: crypto.randomUUID() })).total).toBe(0);
+  const manager = await getApprovals(s.managerCtx, {});
+  expect(manager.rows.map((row) => row.id)).toEqual([ids[2]]);
+  expect(manager.counts.ALL).toBe(1);
+  expect(manager.summary.count).toBe(1);
 });
