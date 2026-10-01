@@ -5,7 +5,6 @@ try {
   await login(page, 'driver1');
   await page.goto(BASE + '/d?from=2026-09-01&to=2026-09-30');
   await page.waitForLoadState('networkidle');
-  await page.locator('summary').filter({ hasText: '운송일자·프로젝트' }).click();
   await top(page, page.getByRole('heading', { name: '내 운행', exact: true }));
   await shot(page, '11b-home-filters');
   await top(page, page.getByRole('region', { name: '알림 설정' }), 300);

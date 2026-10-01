@@ -2,7 +2,7 @@
 import pg from 'pg';
 import { open, shot, login } from './lib.mjs';
 const client = new pg.Client({
-  connectionString: 'postgresql://postgres:postgres@127.0.0.1:54375/vehicle_app',
+  connectionString: 'postgresql://postgres:postgres@127.0.0.1:54383/vehicle_app',
 });
 await client.connect();
 const { rows } = await client.query('SELECT * FROM company_settings');
