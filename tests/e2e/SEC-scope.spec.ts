@@ -7,7 +7,7 @@ const database = createDatabase(process.env.DATABASE_URL!);
 test.afterAll(async () => database.pool.end());
 test.setTimeout(90000);
 
-test('SEC-01 현장 담당자는 제한된 선택지로 대리 입력하고 기준정보 우회는 거부된다', async ({ page }) => {
+test('SEC-01 현장 담당자는 활성 이름 선택지로 대리 입력하고 기준정보 우회는 거부된다', async ({ page }) => {
   const own = await setupScenario(database.db);
   const other = await setupScenario(database.db);
   const manager = await own.f.user({ role: 'SITE_MANAGER' });
@@ -22,7 +22,12 @@ test('SEC-01 현장 담당자는 제한된 선택지로 대리 입력하고 기�
   await expect(page.getByRole('heading', { name: '대리 입력', exact: true })).toBeVisible();
   const driver = page.getByLabel('실제 기사', { exact: true });
   await expect(driver.locator(`option[value="${own.driver.id}"]`)).toHaveCount(1);
-  await expect(driver.locator(`option[value="${other.driver.id}"]`)).toHaveCount(0);
+  await expect(driver.locator(`option[value="${other.driver.id}"]`)).toHaveCount(1);
+  await expect(
+    page.getByLabel('현장', { exact: true }).locator(`option[value="${other.project.id}"]`),
+  ).toHaveCount(0);
+  const lookups = await page.request.get('/api/lookups');
+  expect(JSON.stringify(await lookups.json())).not.toMatch(/"(phone|biz_no|bank_account|contact_name)":/);
   await driver.selectOption(own.driver.id);
   await page.getByLabel('현장', { exact: true }).selectOption(own.project.id);
   await expect(page.getByLabel('차량', { exact: true })).toHaveValue(own.vehicle.id);

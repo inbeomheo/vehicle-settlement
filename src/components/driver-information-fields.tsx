@@ -32,10 +32,12 @@ export function DriverInformationFields({
   value,
   onChange,
   manager = false,
+  joining = false,
 }: {
   value: DriverInformationValues;
   onChange: (value: DriverInformationValues) => void;
   manager?: boolean;
+  joining?: boolean;
 }) {
   const className = manager ? inputClass : control;
   function field(
@@ -80,7 +82,13 @@ export function DriverInformationFields({
             pattern: '[0-9]{3}-[0-9]{2}-[0-9]{5}',
           })}
         </div>
-        <p className="mt-3 text-sm text-slate-600">이미 등록된 사업자번호는 기존 상호를 사용합니다.</p>
+        <p className="mt-3 text-sm text-slate-600">
+          {joining
+            ? '같은 사업자로 이미 등록된 차량이 있으면 관리자에게 기사 추가(개별 초대)를 요청해 주세요.'
+            : manager
+              ? '기존 사업자로 연결하면 해당 사업자 정보를 사용합니다.'
+              : '등록된 다른 사업자로 변경하려면 관리자에게 문의해 주세요.'}
+        </p>
       </Section>
       <Section title="차량 정보" step={3}>
         <div className="grid gap-4 sm:grid-cols-2">

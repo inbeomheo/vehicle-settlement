@@ -1,4 +1,5 @@
 'use client';
+import { IMPORT_MAX_BYTES, IMPORT_MAX_MB, importFileSizeMessage } from '@/shared/upload-limits';
 import { useBusy } from '@/components/ui/use-busy';
 
 import { useEffect, useState } from 'react';
@@ -81,6 +82,7 @@ export default function ImportPage() {
   async function upload(file?: File) {
     if (!file) return;
     await run(async () => {
+      if (file.size > IMPORT_MAX_BYTES) throw new Error(importFileSizeMessage());
       const form = new FormData();
       form.set('file', file);
       const result = await api<ImportView>('/api/import/upload', { method: 'POST', body: form });
@@ -119,7 +121,7 @@ export default function ImportPage() {
       )}
       {busy && <p role="status">처리 중입니다…</p>}
       <label className="block rounded border bg-white p-4 font-semibold">
-        xlsx / csv 파일 (10MB·2,000행·100열 이하)
+        xlsx / csv 파일 ({IMPORT_MAX_MB}MB·2,000행·100열 이하)
         <input
           aria-label="가져올 파일"
           type="file"
@@ -329,9 +331,37 @@ export default function ImportPage() {
                 </button>
               </div>
               <p className="text-sm text-slate-600">
-                전체 {job.preview_total}행 중 {job.preview.length}행 표시 · 처음 100행과 오류·직접 제외한 행을
-                보여 드립니다. 집계와 임시저장은 전체 행 기준입니다. 오류 행은 모두 내려받을 수 있습니다.
+                전체 {job.preview_total}행 · 경고 {job.preview_warning_total}행 · 현재 {job.preview.length}행
+                표시. 오류·경고·직접 제외한 행은 항상 표시하며, 나머지 {job.preview_regular_total}행은 100행씩
+                보여 드립니다. 집계와 임시저장은 전체 행 기준입니다.
               </p>
+              <div className="flex flex-wrap items-center gap-3" aria-label="미리보기 페이지">
+                <button
+                  className={button}
+                  disabled={busy || job.preview_page <= 1}
+                  onClick={() =>
+                    void run(async () => {
+                      setJob(await api<ImportView>(`/api/import/${job.id}?page=${job.preview_page - 1}`));
+                    })
+                  }
+                >
+                  이전 100행
+                </button>
+                <span>
+                  {job.preview_page} / {job.preview_pages}페이지
+                </span>
+                <button
+                  className={button}
+                  disabled={busy || job.preview_page >= job.preview_pages}
+                  onClick={() =>
+                    void run(async () => {
+                      setJob(await api<ImportView>(`/api/import/${job.id}?page=${job.preview_page + 1}`));
+                    })
+                  }
+                >
+                  다음 100행
+                </button>
+              </div>
               <div className="max-h-[32rem] overflow-auto">
                 <table className="w-full min-w-[580px] text-left text-sm">
                   <thead>

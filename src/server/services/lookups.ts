@@ -17,16 +17,8 @@ export async function getLookups(ctx: Context, useDate?: string) {
         sql`,`,
       )})`
     : sql`IN (NULL)`;
-  // Assigned drivers and drivers in this site's existing work support both
-  // registered drivers and historical/proxy entries without a login account.
-  const driverScope = self
-    ? eq(drivers.id, ctx.user.driver_id!)
-    : site
-      ? sql`(${drivers.id} IN (SELECT u.driver_id FROM users u JOIN project_assignments pa ON pa.user_id=u.id
-          WHERE u.role='DRIVER' AND u.status='ACTIVE' AND pa.project_id ${projectScope}
-          AND pa.revoked_at IS NULL AND pa.valid_from<=${today}::date AND (pa.valid_to IS NULL OR pa.valid_to>=${today}::date))
-          OR ${drivers.id} IN (SELECT driver_id FROM vehicle_uses WHERE project_id ${projectScope}))`
-      : undefined;
+  // Internal active name lists also support new drivers without an account or work history.
+  const driverScope = self ? eq(drivers.id, ctx.user.driver_id!) : undefined;
   const driverRows = await ctx.db
     .select({ id: drivers.id, name: drivers.name, default_vehicle_id: drivers.default_vehicle_id })
     .from(drivers)
@@ -80,10 +72,10 @@ export async function getLookups(ctx: Context, useDate?: string) {
     .where(
       and(
         eq(vehicles.active, true),
-        self || site
+        self
           ? or(
               vehicleIds.length ? inArray(vehicles.id, vehicleIds) : sql`false`,
-              sql`${vehicles.id} IN (SELECT vehicle_id FROM vehicle_uses WHERE ${self ? sql`driver_id=${ctx.user.driver_id}::uuid AND project_id ${projectScope}` : sql`project_id ${projectScope}`})`,
+              sql`${vehicles.id} IN (SELECT vehicle_id FROM vehicle_uses WHERE driver_id=${ctx.user.driver_id}::uuid AND project_id ${projectScope})`,
             )
           : undefined,
       ),
@@ -98,7 +90,8 @@ export async function getLookups(ctx: Context, useDate?: string) {
           ? and(ne(counterparties.kind, 'CUSTOMER'), relatedParties)
           : site
             ? or(
-                relatedParties,
+                eq(counterparties.kind, 'DRIVER_BUSINESS'),
+                and(ne(counterparties.kind, 'CUSTOMER'), relatedParties),
                 sql`${counterparties.id} IN (SELECT payee_counterparty_id FROM vehicle_uses WHERE project_id ${projectScope}
         UNION SELECT customer_counterparty_id FROM vehicle_uses WHERE project_id ${projectScope}
         UNION SELECT counterparty_id FROM rate_agreements WHERE active AND project_id ${projectScope})`,

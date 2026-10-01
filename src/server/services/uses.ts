@@ -1,3 +1,4 @@
+import { getLookups } from './lookups';
 import { quickApprovable } from '../../shared/quick-approval';
 import { getLedger } from './ledger';
 import { validateReviewer } from './use-reviewers';
@@ -327,6 +328,17 @@ async function resolveHeader(ctx: Context, input: CreateUseInput, previous?: Use
       (!customer.active && previous?.customer_counterparty_id !== customer.id))
   )
     invalid('고객을 확인하세요.');
+  if (ctx.user.role === 'SITE_MANAGER') {
+    const options = await getLookups(ctx, input.use_date);
+    const allowedParties = new Set(options.counterparties.map((party) => party.id));
+    if (
+      (payeeId !== previous?.payee_counterparty_id && !allowedParties.has(payeeId)) ||
+      (input.customer_counterparty_id &&
+        input.customer_counterparty_id !== previous?.customer_counterparty_id &&
+        !allowedParties.has(input.customer_counterparty_id))
+    )
+      notFound();
+  }
   const reviewer = input.reviewer_user_id
     ? await validateReviewer(ctx, project.id, input.reviewer_user_id)
     : null;

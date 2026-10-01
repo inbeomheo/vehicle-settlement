@@ -63,7 +63,7 @@ it('구버전 계약 적용 단가 해시는 1회 재계산 후 파일을 재등
     .where(eq(vehicleUses.id, first.preview[0].use_id!));
   const [job] = await database().db.select().from(importJobs).where(eq(importJobs.id, first.id));
   const payload = job.rows as { preview: { source_row_hash: string; source_ids?: unknown }[] };
-  payload.preview[0].source_row_hash = oldHash;
+  payload.preview[0].source_row_hash = oldHash!;
   delete payload.preview[0].source_ids;
   await database().db.update(importJobs).set({ rows: payload }).where(eq(importJobs.id, first.id));
   await database().db.update(rateAgreements).set({ active: false }).where(eq(rateAgreements.id, s.rate.id));

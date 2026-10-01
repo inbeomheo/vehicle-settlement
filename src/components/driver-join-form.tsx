@@ -58,7 +58,7 @@ export function DriverJoinForm({
   }
   return (
     <form onSubmit={submit} className="space-y-5">
-      <DriverInformationFields value={value} onChange={setValue} />
+      <DriverInformationFields joining value={value} onChange={setValue} />
       <Section title="로그인 정보">
         <div className="space-y-4">
           <Field label="아이디">
