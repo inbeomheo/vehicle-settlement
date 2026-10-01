@@ -84,7 +84,11 @@ export function Users() {
   };
   return (
     <>
-      <Heading title="사용자 관리" description="초대·역할·현장 배정 및 계정 상태를 관리합니다." />
+      <Heading title="사용자 관리" description="초대·역할·현장 배정 및 계정 상태를 관리합니다.">
+        <Link href="/m/drivers" className={secondaryClass}>
+          기사관리 · 가입 링크
+        </Link>
+      </Heading>
       <Notice
         error={cancelInvite ? undefined : error || users.error || invites.error || lookups.error}
         success={success}
@@ -140,14 +144,13 @@ export function Users() {
                   <input className={inputClass} name="phone" type="tel" maxLength={100} />
                 </Field>
                 {inviteRole === 'DRIVER' && (
-                  <Field title="기사 연결">
+                  <Field title="기사 연결 (선택)">
                     <select
                       className={inputClass}
                       name="driver_id"
-                      required
                       disabled={users.loading || lookups.loading}
                     >
-                      <option value="">선택하세요</option>
+                      <option value="">가입할 때 기사 정보 직접 입력</option>
                       {availableDrivers.map((driver) => (
                         <option key={driver.id} value={driver.id}>
                           {driver.name}
@@ -160,8 +163,8 @@ export function Users() {
               {inviteRole === 'DRIVER' && (
                 <div className="mt-3 text-sm text-slate-600">
                   <p>
-                    계정이 없는 기사만 선택할 수 있습니다.
-                    {!availableDrivers.length && ' 먼저 기사를 등록하세요.'}
+                    선택하지 않으면 가입할 때 사업자·차량 정보를 직접 입력합니다. 기존 연결은 계정 없는 기사만
+                    선택할 수 있습니다.
                   </p>
                   <Link
                     href="/m/master/drivers"

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Context } from '../context';
@@ -70,9 +71,12 @@ export async function saveMaster(ctx: Context, resource: MasterResource, raw: un
     if (id && !before) notFound();
     const parsed = (id ? masterSchemas[resource].partial() : masterSchemas[resource]).parse(raw);
     // Zod defaults also run inside optional fields; PATCH must only write explicitly supplied keys.
-    const input = id
+    const input: Record<string, unknown> = id
       ? Object.fromEntries(Object.entries(parsed).filter(([key]) => Object.hasOwn(raw as object, key)))
       : parsed;
+    if (resource === 'projects' && (!id || Object.hasOwn(input, 'code')) && !input.code) {
+      Object.assign(input, { code: before?.code ?? `P-${randomUUID()}` });
+    }
     const merged: Record<string, unknown> = { ...before, ...input };
     const references =
       resource === 'drivers'
@@ -221,3 +225,25 @@ export async function revokeAssignment(ctx: Context, id: string) {
   });
 }
 export const unknownBody = z.unknown();
+
+export async function deleteProject(ctx: Context, id: string) {
+  uuid.parse(id);
+  return adminTransaction(ctx, async (tx) => {
+    const [before] = await tx.db.select().from(projects).where(eq(projects.id, id)).for('update');
+    if (!before) notFound();
+    const references = await tx.db.execute(sql`SELECT 1 WHERE
+      EXISTS (SELECT 1 FROM vehicle_uses WHERE project_id=${id}::uuid) OR
+      EXISTS (SELECT 1 FROM rate_agreements WHERE project_id=${id}::uuid) OR
+      EXISTS (SELECT 1 FROM project_assignments WHERE project_id=${id}::uuid) OR
+      EXISTS (SELECT 1 FROM form_field_settings WHERE project_id=${id}::uuid) OR
+      EXISTS (SELECT 1 FROM invites WHERE project_ids ? ${id}) OR
+      EXISTS (SELECT 1 FROM driver_join_links WHERE project_ids ? ${id})`);
+    if (references.rows.length)
+      invalid(
+        '연결된 운행·계약·배정 또는 가입 링크가 있어 삭제할 수 없습니다. 수정에서 사용 중을 해제해 사용 중지하세요. 과거 기록은 보존됩니다.',
+      );
+    await tx.db.delete(projects).where(eq(projects.id, id));
+    await audit(tx, 'DELETE_PROJECT', 'projects', id, before, null);
+    return { id, deleted: true };
+  });
+}

@@ -1,5 +1,6 @@
 'use client';
 import { useBusy } from '@/components/ui/use-busy';
+import { ConfirmDialog } from '@/components/ui/modal';
 import { useState } from 'react';
 import Link from 'next/link';
 import { masterConfigs, type MasterField } from './master-config';
@@ -55,6 +56,7 @@ export function Master({ resource }: { resource: string }) {
   const lookups = useRemote<Record<string, Row[]>>('/api/lookups');
   const [editing, setEditing] = useState<Row | null>(null);
   const [form, setForm] = useState<Record<string, string | boolean>>({});
+  const [deleting, setDeleting] = useState<Row | null>(null);
   const [open, setOpen] = useState(false);
   const [period, setPeriod] = useState(false);
   const [error, setError] = useState('');
@@ -151,6 +153,18 @@ export function Master({ resource }: { resource: string }) {
         <button disabled={busy} className={secondaryClass} onClick={() => begin(row)}>
           수정
         </button>
+        {resource === 'projects' && (
+          <button
+            disabled={busy}
+            className={secondaryClass}
+            onClick={() => {
+              setError('');
+              setDeleting(row);
+            }}
+          >
+            삭제
+          </button>
+        )}
         {resource === 'rates' && (
           <button disabled={busy} className={secondaryClass} onClick={() => begin(row, true)}>
             새 적용기간 추가
@@ -184,7 +198,7 @@ export function Master({ resource }: { resource: string }) {
         </div>
       </Heading>
       <Notice
-        error={error || rows.error || lookups.error}
+        error={deleting ? undefined : error || rows.error || lookups.error}
         success={success}
         onRetry={
           rows.error || lookups.error
@@ -197,6 +211,38 @@ export function Master({ resource }: { resource: string }) {
       />
       {!admin && me.data && (
         <p className="mb-4 text-sm text-slate-600">등록·수정은 관리자 권한이 필요합니다.</p>
+      )}
+      {deleting && (
+        <ConfirmDialog
+          title="현장을 삭제할까요?"
+          confirmLabel="현장 삭제"
+          busy={busy}
+          error={error}
+          onClose={() => {
+            setDeleting(null);
+            setError('');
+          }}
+          onConfirm={async () => {
+            if (!acquire()) return;
+            setError('');
+            try {
+              await mutate(`/api/admin/projects/${deleting.id}`, 'DELETE', {});
+              setDeleting(null);
+              rows.refresh();
+              lookups.refresh();
+              setSuccess('현장을 삭제했습니다.');
+            } catch (reason) {
+              setError(reason instanceof Error ? reason.message : '삭제하지 못했습니다.');
+            } finally {
+              end();
+            }
+          }}
+        >
+          <p>
+            {String(deleting.name)} 현장을 삭제합니다. 운행·계약 등 연결 기록이 있으면 삭제할 수 없습니다.
+            그때는 수정에서 사용 중을 해제하세요.
+          </p>
+        </ConfirmDialog>
       )}
       {open && (
         <form onSubmit={save} className={`${panelClass} mb-5`}>

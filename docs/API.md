@@ -231,3 +231,16 @@ commit은 generic 응답 캐시를 사용하지 않는다. job 행 잠금 + 가�
 - `GET /api/push/subscriptions?endpoint=...`: 본인 해당 기기의 `{subscribed}`만 반환한다. 타인 구독 정보는 노출하지 않는다.
 - `DELETE /api/push/subscriptions`: `{endpoint}`. 본인 소유만 삭제하며 없으면 같은 성공 응답 `{subscribed:false}`. 등록·삭제는 원자적이며 반복 호출 결과가 동일하다. 별도 Idempotency-Key 응답 저장은 사용하지 않는다(끄기 후 다시 켜기 가능). 감사에는 구독 ID만 남기고 endpoint·구독 키는 제외한다.
 - 제출·보완 API 성공 커밋 후 비동기 발송. 제출·재제출은 `reviewer_user_id` 지정 담당자, 미지정 시 현재 현장 검수 권한자 전원. 지정자가 비활성/권한 밖이면 다른 사람에게 확대 발송하지 않는다. 보완은 해당 기사 계정 중 현재 현장 접근 가능한 활성 사용자에게 보낸다. 지연 발송 시 version·상태가 달라졌으면 생략한다. 사용자에게 표시하는 금액은 저장된 PAYABLE 요청액/계산액만 사용한다.
+
+## JOIN 기사 가입·정보·현장 관리
+
+- `POST /api/driver-join-links` (ADMIN, 멱등): `{project_ids:uuid[1..100],expires_in_days?:1..90}`. 기본 14일이며 중복 현장은 제거한다. 활성 현장만 허용한다. 최초 응답의 `join_url`을 여러 기사에게 전달한다. 토큰은 SHA-256으로만 저장하며 멱등 응답·감사에는 원문 링크를 저장하지 않는다. 재생 응답은 URL 대신 새 링크 생성 안내를 반환한다.
+- `GET /api/driver-join-links` (ADMIN): 링크 ID·version·현장 ID/이름·생성일·만료일·폐기일·`used_count`(가입 인원). 원문 링크는 다시 조회할 수 없다. `DELETE /api/driver-join-links/:id`는 `{version}`으로 폐기한다. 버전 불일치는 409이며 기존 가입 계정은 유지한다.
+- `POST /api/join/:token` (인증 불필요): `{client_request_id:uuid,login_id,password,profile:{name,phone,business_name,biz_no,plate_no,vehicle_type?,tonnage}}`. 비밀번호 8자 이상·UTF-8 72바이트 이하, 전화번호 숫자 9~11자리(0 시작, 공백·하이픈 정규화), 사업자번호 10자리 또는 `000-00-00000`, 톤수는 양수·소수 3자리 이하다. 차종 기본 카고. 가입 완료 시 세션 쿠키와 사용자 정보를 반환한다.
+- 가입은 관리자 기준정보 변경과 같은 advisory lock 아래 한 트랜잭션으로 사업자번호가 같은 DRIVER_BUSINESS 거래처 재사용/생성 → 차량번호 정규화 재사용/생성 → 기사 → 오늘부터 소속 → DRIVER 사용자 → 링크 현장 배정 → 가입 사용 기록·감사·세션을 저장한다. 기존 사업자의 상호가 우선한다. 사용 중지된 사업자·차량은 가입을 거부한다. 다른 활성 기사의 동일 전화/기본차량은 422로 안내한다. 같은 client_request_id·동일 요청 재전송은 기존 사용자로 성공(새 세션 발급), 변경된 요청은 422 IDEMPOTENCY_MISMATCH. 폐기·만료 링크와 비활성 계정은 재생도 불가하다. 비밀번호·원문 토큰은 가입 이력에 저장하지 않는다.
+- 기존 `POST /api/invites`는 DRIVER 역할의 `driver_id` 생략을 허용한다. `/invite/:token`에서 정보를 직접 입력하고 `POST /api/invites/:token/accept`에 위 가입 본문을 전달한다. 이 초대는 기존처럼 한 사람만 수락할 수 있다. 기사 연결이 있는 기존 초대와 다른 역할 초대의 `{login_id,password}` 수락은 그대로 유지한다.
+- `GET /api/drivers`, `GET /api/drivers/:userId`: 가입된 DRIVER 계정의 이름·전화·상호·사업자번호·기본차량·차종·톤수·현재 현장·가입일·계정 상태·사용자 version. ADMIN/SETTLEMENT_MANAGER는 전체 기사관리 조회, SITE_MANAGER는 현재 유효 배정 현장이 겹치는 기사와 그 교집합 현장만 읽는다. 정산 업무의 기존 현장 접근 범위는 변경하지 않는다. 다른 역할/범위는 403/404.
+- `PATCH /api/drivers/:userId` (ADMIN, 멱등): `{...profile,version}`. 계정 끄기/켜기는 기존 `/api/admin/users/:id`의 status/version, 비밀번호 재설정은 기존 `/api/admin/users/:id/password-reset`을 사용한다.
+- `GET /api/driver-profile` (DRIVER): 본인 정보만, 본인 전화번호 포함. `PATCH /api/driver-profile`은 동일 profile/version으로 본인만 수정하며 멱등 재생을 지원한다. 저장 응답은 `{id,version}`이고 화면은 GET으로 갱신한다. 일반 기사 응답의 타인 연락처 숨김 규칙은 그대로 유지한다.
+- 정보 수정은 사용자 version 검사·관리자 공통 잠금·중복 검사를 수행하고 사용자와 기사 이름/전화를 함께 갱신한다. 사업자 변경 시 기존 소속은 어제 종료하고 오늘 새 소속을 만든다. 오늘 이미 변경한 소속은 오늘 행을 갱신하며 감사로 이력을 남긴다. 미래 예약 소속이 있으면 관리자 확인을 안내한다. 여러 기사가 공유하는 거래처의 상호 변경은 거부하며 기준정보에서 관리자에게 수정하도록 안내한다. 차량번호 변경은 차량 재사용/생성과 기본차량 변경으로 처리한다. 사용 건·제출본·정산 스냅샷은 수정하지 않는다.
+- `POST /api/admin/projects`: code는 선택(null/빈 문자열/생략 가능)이며 서버가 `P-<UUID>`를 생성한다. 기존 고유 제약을 유지한다. PATCH의 빈 code는 기존 코드를 유지한다. `DELETE /api/admin/projects/:id` (ADMIN, 멱등)는 현장 잠금 후 운행·계약·배정·항목설정·개별초대·공용링크 연결을 검사한다. 연결이 있으면 422와 사용 중지 안내, 없으면 실제 삭제하고 감사를 남긴다. FK가 동시 참조 추가도 보호한다.

@@ -8,7 +8,7 @@ const dates = { valid_from: dateString, valid_to: dateString.nullable().default(
 export const masterSchemas = {
   projects: z
     .object({
-      code: name,
+      code: z.string().trim().max(200).nullable().optional(),
       name,
       active,
       evidence_policy: z.enum(['PHOTO_REQUIRED', 'PHOTO_OR_ALTERNATIVE', 'NONE']),

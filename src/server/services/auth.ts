@@ -21,6 +21,8 @@ import { hashPassword, hashToken, newToken, verifyPassword } from '../auth/passw
 import { createSession, publicUser } from '../auth/session';
 import { acceptInviteSchema, inviteSchema, loginSchema } from './schemas';
 import { atomic } from './uses';
+import { adminTransaction } from './admin';
+import { lockDriverIdentity } from './driver-identity';
 const dummyHash = '$2b$12$xfIAqj/l75DvApKa/BibPuP9PIutJEQowUAsFjkOrNldWxguz5ynK';
 export async function login(db: Db, requestId: string, raw: z.input<typeof loginSchema>, ip = 'unavailable') {
   const input = loginSchema.parse(raw);
@@ -102,6 +104,7 @@ export async function getInviteStatus(db: Db, token: string) {
     .select({
       name: invites.name,
       role: invites.role,
+      driver_id: invites.driver_id,
       used_at: invites.used_at,
       revoked_at: invites.revoked_at,
       expires_at: invites.expires_at,
@@ -110,13 +113,18 @@ export async function getInviteStatus(db: Db, token: string) {
     .where(eq(invites.token_hash, hashToken(token)));
   if (!invite || invite.used_at || invite.revoked_at || invite.expires_at <= new Date())
     return { status: 'INVALID' as const, name: null, role: null };
-  return { status: 'VALID' as const, name: invite.name, role: invite.role };
+  return {
+    status: 'VALID' as const,
+    name: invite.name,
+    role: invite.role,
+    ...(invite.role === 'DRIVER' && !invite.driver_id ? { needs_profile: true } : {}),
+  };
 }
 export async function createInvite(ctx: Context, raw: z.input<typeof inviteSchema>) {
   const input = inviteSchema.parse(raw);
-  return atomic(ctx, async (tx) => {
+  return adminTransaction(ctx, async (tx) => {
     assertAdmin(tx);
-    if (input.role === 'DRIVER' && !input.driver_id) invalid('기사 연결이 필요합니다.');
+
     if (input.driver_id) {
       const [driver] = await tx.db
         .select()
@@ -184,12 +192,15 @@ export async function acceptInvite(
 ) {
   const input = acceptInviteSchema.parse(raw);
   return db.transaction(async (tx) => {
+    await lockDriverIdentity(tx);
     const [invite] = await tx
       .select()
       .from(invites)
       .where(eq(invites.token_hash, hashToken(token)))
       .for('update');
     if (!invite || invite.used_at || invite.revoked_at || invite.expires_at <= new Date()) notFound();
+    if (invite.role === 'DRIVER' && !invite.driver_id)
+      invalid('기사 가입 화면에서 사업자·차량 정보를 입력하세요.');
     if (invite.driver_id) {
       const [driver] = await tx.select().from(drivers).where(eq(drivers.id, invite.driver_id)).for('update');
       if (!driver?.active) invalid('초대된 기사가 사용 중지되었습니다. 관리자에게 문의하세요.');

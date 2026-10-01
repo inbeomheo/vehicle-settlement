@@ -692,5 +692,37 @@ export const pushSubscriptions = pgTable(
   (table) => [
     index('push_subscriptions_user_idx').on(table.user_id),
     check('push_subscriptions_failure_count_check', sql`${table.failure_count} >= 0`),
+export const driverJoinLinks = pgTable('driver_join_links', {
+  id: id(),
+  token_hash: text('token_hash').notNull().unique(),
+  project_ids: jsonb('project_ids').$type<string[]>().notNull(),
+  expires_at: time('expires_at').notNull(),
+  revoked_at: time('revoked_at'),
+  created_by: uuid('created_by')
+    .notNull()
+    .references(() => users.id),
+  version: version(),
+  created_at: created(),
+  updated_at: updated(),
+});
+export const driverRegistrations = pgTable(
+  'driver_registrations',
+  {
+    id: id(),
+    client_request_id: uuid('client_request_id').notNull().unique(),
+    request_hash: text('request_hash').notNull(),
+    link_id: uuid('link_id').references(() => driverJoinLinks.id),
+    invite_id: uuid('invite_id').references(() => invites.id),
+    user_id: uuid('user_id')
+      .notNull()
+      .references(() => users.id),
+    created_at: created(),
+  },
+  (table) => [
+    check(
+      'driver_registration_source_check',
+      sql`(${table.link_id} IS NULL) <> (${table.invite_id} IS NULL)`,
+    ),
+    index('driver_registrations_link_idx').on(table.link_id),
   ],
 );

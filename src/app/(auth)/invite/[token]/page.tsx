@@ -1,3 +1,4 @@
+import { DriverJoinForm } from '@/components/driver-join-form';
 import Link from 'next/link';
 import { getDb } from '@/server/db/client';
 import { companySettings } from '@/server/db/schema';
@@ -60,7 +61,11 @@ export default async function InvitePage({ params }: { params: Promise<{ token: 
               <dt className="text-slate-500">역할</dt>
               <dd>{roleLabels[invite.role]}</dd>
             </dl>
-            <InviteForm token={token} />
+            {invite.needs_profile ? (
+              <DriverJoinForm token={token} individual name={invite.name} />
+            ) : (
+              <InviteForm token={token} />
+            )}
           </>
         )}
       </section>
