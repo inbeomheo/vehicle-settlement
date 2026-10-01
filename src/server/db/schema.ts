@@ -692,6 +692,9 @@ export const pushSubscriptions = pgTable(
   (table) => [
     index('push_subscriptions_user_idx').on(table.user_id),
     check('push_subscriptions_failure_count_check', sql`${table.failure_count} >= 0`),
+  ],
+);
+
 export const driverJoinLinks = pgTable('driver_join_links', {
   id: id(),
   token_hash: text('token_hash').notNull().unique(),
