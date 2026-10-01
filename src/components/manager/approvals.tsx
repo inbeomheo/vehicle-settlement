@@ -69,7 +69,7 @@ export function Approvals() {
             const value = new FormData(e.currentTarget).get('transport');
             change({ transport_search: String(value ?? '') });
           }}
-          className="grid gap-2"
+          className="flex min-w-0 gap-2"
         >
           <input
             key={query.transport_search ?? ''}
@@ -107,27 +107,13 @@ export function Approvals() {
           : data?.options.reviewers;
     const title = key === 'project' ? '프로젝트' : key === 'driver' ? '기사명' : '담당자';
     return (
-      <div className="grid gap-2">
+      <div className="grid min-w-0 gap-2">
         <ApprovalSelect
           title={title}
           value={query[field]}
-          options={options ?? []}
+          options={key === 'reviewer' ? [{ id: 'me', name: '나' }, ...(options ?? [])] : (options ?? [])}
           onChange={(value) => change({ [field]: value })}
         />
-        {key === 'reviewer' && (
-          <div className="flex flex-wrap gap-1">
-            <button type="button" className={secondaryClass} onClick={() => change({ reviewer_user_id: '' })}>
-              전체
-            </button>
-            <button
-              type="button"
-              className={secondaryClass}
-              onClick={() => change({ reviewer_user_id: 'me' })}
-            >
-              나
-            </button>
-          </div>
-        )}
       </div>
     );
   }
@@ -155,7 +141,7 @@ export function Approvals() {
       </label>
     );
   const action = (row: LedgerRow) => (
-    <div className="flex flex-wrap gap-2">
+    <div className="grid gap-2">
       {quickApprovable(row) && (
         <button className={signalClass} disabled={busy} onClick={() => void approve([row])}>
           승인
@@ -167,9 +153,15 @@ export function Approvals() {
     </div>
   );
   const amounts = (row: LedgerRow) => (
-    <div className="space-y-1">
-      <p>입력·검토 {money(row.review_total_amount)}</p>
-      <p className="font-bold">승인 {money(row.total_amount)}</p>
+    <div className="num space-y-1">
+      <p>
+        <span className="block text-xs text-slate-600">입력·검토</span>
+        {money(row.review_total_amount)}
+      </p>
+      <p className="font-bold">
+        <span className="block text-xs text-slate-600">승인</span>
+        {money(row.total_amount)}
+      </p>
     </div>
   );
   return (
@@ -187,13 +179,13 @@ export function Approvals() {
         counts={data?.counts}
         onChange={(value) => change({ review_status: value })}
       />
-      <details className={`${panelClass} mb-4 lg:hidden`}>
+      <details className={`${panelClass} mb-4`}>
         <summary className="min-h-11 cursor-pointer font-bold">
           필터 · {query.from} ~ {query.to}
         </summary>
-        <div className="grid gap-4">
+        <div className="mt-3 grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)_repeat(4,minmax(0,1fr))]">
           {filters.map(([key, title]) => (
-            <div key={key}>
+            <div key={key} className="min-w-0">
               <p className="mb-2 font-semibold">{title}</p>
               {filter(key)}
             </div>
@@ -235,26 +227,36 @@ export function Approvals() {
           </div>
         </div>
       )}
-      <div
-        className="hidden overflow-x-auto rounded-lg border border-slate-200 bg-white lg:block"
-        aria-label="운행 결재 표"
-      >
-        <table className="w-full min-w-[90rem] text-left text-sm">
+      <div className="hidden rounded-lg border border-slate-200 bg-white lg:block" aria-label="운행 결재 표">
+        <table className="w-full table-fixed text-left text-sm [&_td]:p-2 [&_td]:align-top [&_td]:wrap-anywhere [&_th]:p-2">
+          <colgroup>
+            <col className="w-14" />
+            <col className="w-28" />
+            <col />
+            <col className="w-[12%]" />
+            <col className="w-[8%]" />
+            <col className="w-[8%]" />
+            <col className="w-32" />
+            <col className="w-20" />
+            <col className="w-20" />
+          </colgroup>
           <thead className="bg-slate-50">
             <tr>
-              <th className="p-3">선택</th>
-              {filters.slice(0, 5).map(([key, title]) => (
-                <th key={key} className="w-48 p-3 align-top">
-                  <p className="mb-2">{title}</p>
-                  {filter(key)}
+              {[
+                '선택',
+                '운송일자',
+                '운송내역',
+                '프로젝트',
+                '기사명',
+                '담당자',
+                '금액 (공급가)',
+                '진행상태',
+                '결재',
+              ].map((title) => (
+                <th key={title} scope="col">
+                  {title}
                 </th>
               ))}
-              <th className="p-3">금액 (공급가)</th>
-              <th className="w-40 p-3 align-top">
-                <p className="mb-2">진행상태</p>
-                {filter('status')}
-              </th>
-              <th className="p-3">결재</th>
             </tr>
           </thead>
           <tbody>
@@ -263,21 +265,21 @@ export function Approvals() {
                 key={row.id}
                 className={`border-t border-slate-200 ${row.operation_status === 'CANCELED' ? 'opacity-50' : ''}`}
               >
-                <td className="p-3">{select(row)}</td>
-                <td className="p-3">
+                <td>{select(row)}</td>
+                <td>
                   {row.use_date}
                   <span className="block text-xs text-slate-500">{row.use_no}</span>
                 </td>
-                <td className="p-3 break-words">
+                <td className="break-words">
                   {row.route_summary}
                   <p>{row.cargo_desc}</p>
                 </td>
-                <td className="p-3">{row.project_name}</td>
-                <td className="p-3">{row.driver_name}</td>
-                <td className="p-3">{row.reviewer_name ?? '미지정'}</td>
-                <td className="p-3">{amounts(row)}</td>
-                <td className="p-3">{status(row)}</td>
-                <td className="p-3">{action(row)}</td>
+                <td>{row.project_name}</td>
+                <td>{row.driver_name}</td>
+                <td>{row.reviewer_name ?? '미지정'}</td>
+                <td>{amounts(row)}</td>
+                <td>{status(row)}</td>
+                <td>{action(row)}</td>
               </tr>
             ))}
           </tbody>

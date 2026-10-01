@@ -296,9 +296,20 @@ export function DriverDashboard() {
               onChange={(value) => change({ review_status: value })}
             />
             <details className="mb-4 rounded-lg border border-slate-200 bg-white p-4">
-              <summary className="min-h-11 cursor-pointer font-bold">
-                운송일자·프로젝트·운송내역·담당자 필터 ·{' '}
-                {query.from || query.to ? `${query.from || '처음'} ~ ${query.to || '최근'}` : '전체 기간'}
+              <summary className="min-h-11 cursor-pointer content-center text-base break-words font-bold">
+                <span className="text-sm font-medium text-slate-600">필터 · </span>
+                {query.from || query.to
+                  ? `${query.from ? koreanDate(query.from, false) : '처음'} ~ ${query.to ? koreanDate(query.to, false) : '최근'}`
+                  : '전체 기간'}
+                {' · '}
+                {query.project_id
+                  ? ((filtered.data?.options.projects ?? data.lookups.projects).find(
+                      (project) => project.id === query.project_id,
+                    )?.name ?? '선택한 현장')
+                  : '전체 현장'}
+                {query.reviewer_user_id &&
+                  ` · 담당자 ${filtered.data?.options.reviewers.find((reviewer) => reviewer.id === query.reviewer_user_id)?.name ?? '선택됨'}`}
+                {query.transport_search && ` · 검색: ${query.transport_search}`}
               </summary>
               <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4">
                 <ApprovalDates driver from={query.from} to={query.to} onChange={change} />

@@ -346,7 +346,8 @@ test('기사 화면 보조 텍스트는 실제 배경에서 명암비 4.5 이상
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
     const muted = page.locator('[class*="text-slate-4"], [class*="text-slate-5"], [class*="text-slate-6"]');
     for (const item of await muted.all()) {
-      if (await item.isVisible())
+      // 장식용 SVG는 텍스트가 아니다. 실제 보조 문구만 4.5:1 기준으로 검사한다.
+      if ((await item.isVisible()) && (await item.textContent())?.trim())
         expect(await textContrast(item), (await item.textContent()) ?? '').toBeGreaterThanOrEqual(4.5);
     }
   }

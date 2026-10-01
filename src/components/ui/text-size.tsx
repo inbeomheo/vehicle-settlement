@@ -68,7 +68,7 @@ export function TextSizeControl({
             aria-checked={on}
             aria-label={`글자 ${size.label}`}
             onClick={() => choose(size.key)}
-            className={`h-10 w-10 rounded-md font-bold ${
+            className={`h-11 w-11 rounded-md font-bold ${
               on
                 ? tone === 'dark'
                   ? 'bg-white text-ink'
@@ -77,7 +77,7 @@ export function TextSizeControl({
                   ? 'text-slate-300'
                   : 'text-slate-600'
             }`}
-            style={{ fontSize: `${13 + index * 3}px`, lineHeight: 1 }}
+            style={{ fontSize: `${(13 + index * 3) / 16}rem`, lineHeight: 1 }}
           >
             가
           </button>
