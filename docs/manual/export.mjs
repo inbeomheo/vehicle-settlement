@@ -1,11 +1,12 @@
-import { chromium } from '@playwright/test';
+import { chromium, BASE, protectContext } from './capture/lib.mjs';
 
 // Rebuild the downloadable guide from the same copy and existing images as /manual.
-const base = process.env.BASE ?? 'http://localhost:3173';
+
 const browser = await chromium.launch();
 try {
   const page = await browser.newPage({ viewport: { width: 1100, height: 900 } });
-  await page.goto(`${base}/manual`, { waitUntil: 'networkidle' });
+  await protectContext(page.context());
+  await page.goto(`${BASE}/manual`, { waitUntil: 'networkidle' });
   await page.evaluate(async () => {
     for (const image of document.images) image.loading = 'eager';
     await Promise.all([...document.images].map((image) => image.decode()));

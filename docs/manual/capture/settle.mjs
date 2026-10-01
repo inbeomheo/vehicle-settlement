@@ -7,7 +7,7 @@ try {
   await page.waitForURL(/\/m\/statements/);
   await page.getByRole('button', { name: '새 정산', exact: true }).waitFor();
   await shot(page, '30-statements', { wait: 1500 });
-  await page.goto(BASE + '/m/summary?view=projects');
+  await page.goto(BASE + '/m/summary?view=projects&from=2026-09-01&to=2026-09-30');
   await page.getByRole('button', { name: '한눈에 표' }).waitFor();
   await shot(page, '28-summary', { wait: 2000 });
   await page.getByRole('button', { name: '한눈에 표' }).click();
@@ -19,7 +19,8 @@ try {
   await party.waitFor();
   const han = await party.locator('option').filter({ hasText: '한길' }).first().getAttribute('value');
   await party.selectOption(han);
-  await page.getByRole('button', { name: '당월', exact: true }).click();
+  await page.getByLabel('기간 시작', { exact: true }).fill('2026-09-01');
+  await page.getByLabel('기간 종료', { exact: true }).fill('2026-09-30');
   await page.getByLabel('지급 예정일', { exact: true }).fill('2026-10-10');
   await page.getByRole('button', { name: '후보 조회' }).click();
   await page.getByRole('button', { name: '초안 만들기' }).waitFor();
@@ -27,7 +28,11 @@ try {
   const rows = page.locator('select[aria-label$="포함 여부"]');
   console.log('candidate rows', await rows.count());
   // 추가비(대기료 등) 한 줄을 보류로 돌린다.
-  const waitRow = page.locator('tr, article, li').filter({ hasText: /대기/ }).filter({ has: page.locator('select[aria-label$="포함 여부"]') }).first();
+  const waitRow = page
+    .locator('tr, article, li')
+    .filter({ hasText: /대기/ })
+    .filter({ has: page.locator('select[aria-label$="포함 여부"]') })
+    .first();
   let held = false;
   if (await waitRow.count()) {
     await waitRow.locator('select[aria-label$="포함 여부"]').selectOption('HELD');
@@ -45,22 +50,37 @@ try {
   await page.getByRole('button', { name: '확정', exact: true }).waitFor();
   await shot(page, '33-confirm-step');
   await page.getByRole('button', { name: '확정', exact: true }).click();
-  await page.getByText(/^PAY-\d{6}-\d+$/).first().waitFor({ timeout: 60000 });
+  await page
+    .getByText(/^PAY-\d{6}-\d+$/)
+    .first()
+    .waitFor({ timeout: 60000 });
   await page.evaluate(() => window.scrollTo(0, 0));
   await shot(page, '34-confirmed', { wait: 1500 });
   const pdfHref = await page.getByRole('link', { name: 'PDF 다운로드' }).getAttribute('href');
   const pdf = await page.request.get(new URL(pdfHref, BASE).toString());
   const pdfPath = IMG + '../statement.pdf';
-  const { writeFileSync } = await import('node:fs');
+  const { writeFileSync, copyFileSync } = await import('node:fs');
   writeFileSync(pdfPath, await pdf.body());
-  execFileSync('pdftoppm', ['-png', '-r', '80', '-f', '1', '-l', '1', '-singlefile', pdfPath, IMG + '35-pdf-1']);
-  console.log('pdf', pdf.status());
+  execFileSync('pdftoppm', [
+    '-png',
+    '-r',
+    '80',
+    '-f',
+    '1',
+    '-l',
+    '1',
+    '-singlefile',
+    pdfPath,
+    IMG + '35-pdf-1',
+  ]);
+  if (!pdf.ok()) throw new Error('지급명세 PDF 생성 실패');
+  copyFileSync(IMG + '35-pdf-1.png', new URL('../../../public/manual/35-pdf-1.png', import.meta.url));
   await page.getByLabel('지급일', { exact: true }).fill('2026-09-30');
   await page.getByLabel('참고번호', { exact: true }).fill('국민 0930-0002');
   await page.getByLabel('메모', { exact: true }).fill('9월 2차 지급');
-  await top(page, page.getByRole('button', { name: '지급 기록 저장' }), 420);
+  await top(page, page.getByRole('button', { name: /원 지급 완료로 기록/ }), 420);
   await shot(page, '36-payment-form');
-  await page.getByRole('button', { name: '지급 기록 저장' }).click();
+  await page.getByRole('button', { name: /원 지급 완료로 기록/ }).click();
   await page.getByText('지급 완료', { exact: true }).first().waitFor({ timeout: 60000 });
   await page.evaluate(() => window.scrollTo(0, 0));
   await shot(page, '37-paid', { wait: 1500 });

@@ -3,6 +3,7 @@ import { rm } from 'node:fs/promises';
 import { eq } from 'drizzle-orm';
 import { expect, it } from 'vitest';
 import { seedDemo } from '../../scripts/seed-demo';
+import { getDashboard } from '../../src/server/services/dashboard';
 import { defaultDatabaseUrl } from '../../src/server/db/client';
 import {
   chargeLines,
@@ -11,6 +12,7 @@ import {
   statements,
   trips,
   vehicleUses,
+  users,
 } from '../../src/server/db/schema';
 import { testDatabase } from '../helpers/database';
 
@@ -27,7 +29,7 @@ it('15: 서비스로 만든 9월 시연 데이터의 상태·수량·증빙·지
   try {
     const result = await seedDemo(database().db);
     expect(result).toMatchObject({ created: true, count: 16 });
-    expect(result.dashboard.review_pending).toBe(3);
+    expect(result.dashboard.review_pending).toBe(0);
     expect(result.dashboard.fix_pending).toBe(2);
     expect(result.dashboard.evidence_missing).toBe(2);
     expect(result.dashboard.unpaid_count).toBe(1);
@@ -40,6 +42,11 @@ it('15: 서비스로 만든 9월 시연 데이터의 상태·수량·증빙·지
     expect(new Set(uses.map((use) => use.review_status))).toEqual(
       new Set(['DRAFT', 'SUBMITTED', 'NEEDS_FIX', 'APPROVED']),
     );
+    const [site] = await database().db.select().from(users).where(eq(users.login_id, 'site'));
+    expect(
+      (await getDashboard({ db: database().db, user: site, request_id: crypto.randomUUID() })).review_pending,
+    ).toBe(3);
+    expect(uses.every((use) => use.reviewer_user_id === site.id && Number(use.load_tonnage) > 0)).toBe(true);
     const daily = uses.find((use) => use.client_request_id === 'demo-202609-use-01')!;
     expect(await database().db.select().from(trips).where(eq(trips.vehicle_use_id, daily.id))).toHaveLength(
       5,
@@ -62,6 +69,7 @@ it('15: 서비스로 만든 9월 시연 데이터의 상태·수량·증빙·지
     expect(lines.some((line) => line.direction === 'RECEIVABLE' && line.approved_amount === 350000)).toBe(
       true,
     );
+    expect(lines.some((line) => line.charge_type === 'BASE' && line.requested_amount === 330000)).toBe(true);
     const documents = await database().db.select().from(statements);
     expect(documents).toHaveLength(2);
     expect(documents.every((statement) => statement.status === 'CONFIRMED')).toBe(true);
