@@ -1,4 +1,4 @@
-import { getLookups } from './lookups';
+import { assertCounterpartySelection, assertDriverVehicleSelection } from '../selection-scope';
 import { quickApprovable } from '../../shared/quick-approval';
 import { getLedger } from './ledger';
 import { validateReviewer } from './use-reviewers';
@@ -28,6 +28,7 @@ import type { Context } from '../context';
 import { todaySeoul } from '../context';
 import {
   assertActive,
+  accessibleProjectIds,
   assertCanEditUse,
   assertCanReadUse,
   assertCanReview,
@@ -287,6 +288,8 @@ async function resolveHeader(ctx: Context, input: CreateUseInput, previous?: Use
     (!project.active && previous?.project_id !== project.id)
   )
     invalid('사용 중인 기준정보를 선택하세요.');
+  if (ctx.user.role === 'DRIVER' && previous?.vehicle_id !== vehicle.id)
+    await assertDriverVehicleSelection(ctx, vehicle.id, await accessibleProjectIds(ctx));
   if (input.work_type_id) {
     const [w] = await ctx.db.select().from(workTypes).where(eq(workTypes.id, input.work_type_id));
     if (!w || (!w.active && previous?.work_type_id !== w.id)) invalid('공종을 확인하세요.');
@@ -328,16 +331,18 @@ async function resolveHeader(ctx: Context, input: CreateUseInput, previous?: Use
       (!customer.active && previous?.customer_counterparty_id !== customer.id))
   )
     invalid('고객을 확인하세요.');
-  if (ctx.user.role === 'SITE_MANAGER') {
-    const options = await getLookups(ctx, input.use_date);
-    const allowedParties = new Set(options.counterparties.map((party) => party.id));
+  if (ctx.user.role === 'SITE_MANAGER' || ctx.user.role === 'DRIVER') {
+    if (payeeId !== previous?.payee_counterparty_id)
+      await assertCounterpartySelection(ctx, { ...input, counterparty_id: payeeId, direction: 'PAYABLE' });
     if (
-      (payeeId !== previous?.payee_counterparty_id && !allowedParties.has(payeeId)) ||
-      (input.customer_counterparty_id &&
-        input.customer_counterparty_id !== previous?.customer_counterparty_id &&
-        !allowedParties.has(input.customer_counterparty_id))
+      input.customer_counterparty_id &&
+      input.customer_counterparty_id !== previous?.customer_counterparty_id
     )
-      notFound();
+      await assertCounterpartySelection(ctx, {
+        ...input,
+        counterparty_id: input.customer_counterparty_id,
+        direction: 'RECEIVABLE',
+      });
   }
   const reviewer = input.reviewer_user_id
     ? await validateReviewer(ctx, project.id, input.reviewer_user_id)

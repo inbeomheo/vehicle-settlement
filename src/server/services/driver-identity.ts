@@ -114,7 +114,8 @@ export async function saveDriverIdentity(
       EXISTS (SELECT 1 FROM drivers WHERE default_vehicle_id=${vehicle.id}::uuid
         AND id IS DISTINCT FROM ${driverId ?? null}::uuid)
       OR EXISTS (SELECT 1 FROM vehicle_uses WHERE vehicle_id=${vehicle.id}::uuid
-        AND driver_id IS DISTINCT FROM ${driverId ?? null}::uuid)`);
+        AND driver_id IS DISTINCT FROM ${driverId ?? null}::uuid
+        AND (review_status='APPROVED' OR entered_as='PROXY'))`);
     sharedVehicle = others.rows.length > 0;
     if (sharedVehicle) {
       const [owner] = driverId ? await db.select().from(drivers).where(eq(drivers.id, driverId)) : [];

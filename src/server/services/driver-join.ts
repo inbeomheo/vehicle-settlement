@@ -20,6 +20,7 @@ import { AppError, invalid, notFound } from '../errors';
 import { adminTransaction } from './admin';
 import { driverInformationSchema, joinLinkSchema } from './driver-schemas';
 import { lockDriverIdentity, saveDriverIdentity } from './driver-identity';
+import { activeInvitationProjectIds } from './invitation-projects';
 
 export const registerDriverSchema = z
   .object({
@@ -116,9 +117,9 @@ export async function getJoinLinkStatus(db: Db, token: string) {
     ? await db
         .select({ name: projects.name, active: projects.active })
         .from(projects)
-        .where(inArray(projects.id, row.project_ids))
+        .where(and(inArray(projects.id, row.project_ids), eq(projects.active, true)))
     : [];
-  if (assigned.length !== row.project_ids.length || assigned.some((p) => !p.active)) return null;
+  if (!assigned.length) return null;
   const business = await joinBusinessSummary(db, row.counterparty_id);
   if (row.counterparty_id && !business) return null;
   return { project_names: assigned.map((p) => p.name), business };
@@ -169,7 +170,7 @@ export async function registerDriver(
       return { user: publicUser(user), token: session.token };
     }
     if ('used_at' in source && source.used_at) notFound();
-    await activeProjects(tx, source.project_ids);
+    const projectIds = await activeInvitationProjectIds(tx, source.project_ids);
     const [existing] = await tx
       .select({ id: users.id })
       .from(users)
@@ -203,9 +204,9 @@ export async function registerDriver(
         driver_id: driver.id,
       })
       .returning();
-    if (source.project_ids.length)
+    if (projectIds.length)
       await tx.insert(projectAssignments).values(
-        source.project_ids.map((project_id) => ({
+        projectIds.map((project_id) => ({
           project_id,
           user_id: user.id,
           valid_from: todaySeoul(),
@@ -227,7 +228,7 @@ export async function registerDriver(
       driver_id: driver.id,
       profile,
       counterparty_id: party?.id ?? null,
-      project_ids: source.project_ids,
+      project_ids: projectIds,
       link_id: individual ? null : source.id,
       invite_id: individual ? source.id : null,
     });
