@@ -311,6 +311,10 @@ export const vehicleUses = pgTable(
     customer_counterparty_id: uuid('customer_counterparty_id').references(() => counterparties.id),
     cargo_desc: text('cargo_desc'),
     notes: text('notes'),
+    /** 기사가 고른 검수 담당자. 고르지 않으면 현장 담당자 누구나 검수한다. */
+    reviewer_user_id: uuid('reviewer_user_id').references((): AnyPgColumn => users.id),
+    /** 이번 운행 적재용량(톤). 차량 톤수와 달리 운행마다 다르다. */
+    load_tonnage: numeric('load_tonnage', { precision: 10, scale: 3 }),
     snapshot: jsonb('snapshot').$type<Record<string, unknown>>().notNull(),
     operation_status: operationStatusEnum('operation_status').notNull().default('PLANNED'),
     review_status: reviewStatusEnum('review_status').notNull().default('DRAFT'),
@@ -330,6 +334,7 @@ export const vehicleUses = pgTable(
   (t) => [
     index('uses_project_date_idx').on(t.project_id, t.use_date),
     index('uses_driver_idx').on(t.driver_id),
+    index('uses_reviewer_idx').on(t.reviewer_user_id, t.review_status),
     check('use_dates_check', sql`${t.end_date} IS NULL OR ${t.end_date} >= ${t.use_date}`),
   ],
 );

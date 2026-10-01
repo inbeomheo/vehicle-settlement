@@ -71,6 +71,13 @@
       "when": 1790666000000,
       "tag": "0600_pw_password_resets",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1790667000000,
+      "tag": "0700_use_reviewer_load",
+      "breakpoints": true
     }
   ]
 }
