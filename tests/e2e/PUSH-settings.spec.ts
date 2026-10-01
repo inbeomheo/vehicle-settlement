@@ -175,3 +175,44 @@ test('iPhone 홈 화면 추가 안내, 서버 미설정 안내, 미지원 브라
   await page.reload();
   await expect(panel).toContainText('알림을 지원하지 않습니다');
 });
+
+test('SEC-03 비밀번호 재설정 후 로그인하면 켜진 브라우저 알림을 새 세션에 재등록한다', async ({
+  page,
+  context,
+}) => {
+  const s = await setupScenario(database.db);
+  await context.grantPermissions(['notifications']);
+  await mockPushProvider(page);
+  await login(page, s.driverUser.login_id, '/d');
+  const panel = page.getByRole('region', { name: '알림 설정' });
+  await panel.getByRole('button', { name: '알림 받기', exact: true }).click();
+  await expect(panel).toContainText('알림 받기 · 켜짐');
+  const before = (
+    await database.db.select().from(pushSubscriptions).where(eq(pushSubscriptions.user_id, s.driverUser.id))
+  )[0];
+  const { createPasswordReset, resetPassword } = await import('../../src/server/services/password');
+  const link = await createPasswordReset(s.adminCtx, s.driverUser.id);
+  await resetPassword(database.db, crypto.randomUUID(), new URL(link.reset_url).pathname.split('/').at(-1)!, {
+    password: 'replacement1234',
+    password_confirmation: 'replacement1234',
+  });
+  expect(
+    await database.db.select().from(pushSubscriptions).where(eq(pushSubscriptions.user_id, s.driverUser.id)),
+  ).toHaveLength(0);
+  expect(
+    (
+      await page.request.post('/api/auth/login', {
+        data: { login_id: s.driverUser.login_id, password: 'replacement1234' },
+      })
+    ).ok(),
+  ).toBe(true);
+  await page.reload();
+  await expect(panel).toContainText('알림 받기 · 켜짐');
+  const after = (
+    await database.db.select().from(pushSubscriptions).where(eq(pushSubscriptions.user_id, s.driverUser.id))
+  )[0];
+  expect(after.endpoint).toBe(before.endpoint);
+  expect(after.id).not.toBe(before.id);
+  expect(after.session_id).not.toBeNull();
+  expect(after.session_id).not.toBe(before.session_id);
+});

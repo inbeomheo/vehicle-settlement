@@ -6,6 +6,7 @@ import {
   projects,
   projectAssignments,
   sessions,
+  pushSubscriptions,
   users,
   drivers,
   auditLogs,
@@ -53,7 +54,7 @@ export async function login(db: Db, requestId: string, raw: z.input<typeof login
       .where(
         inArray(
           loginThrottles.id,
-          state.counters.map((counter) => counter.id),
+          state.counters.filter((counter) => counter.scope === 'ACCOUNT').map((counter) => counter.id),
         ),
       );
     return { success: { token: result.token, user: redactForDriver(ctx, publicUser(user)) } };
@@ -85,6 +86,7 @@ export async function logout(ctx: Context) {
         .update(sessions)
         .set({ revoked_at: new Date(), updated_at: new Date() })
         .where(eq(sessions.id, ctx.session_id));
+      await tx.db.delete(pushSubscriptions).where(eq(pushSubscriptions.session_id, ctx.session_id));
       await audit(tx, 'LOGOUT', 'session', ctx.session_id);
     }
     return { logged_out: true };

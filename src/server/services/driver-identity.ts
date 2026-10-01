@@ -10,7 +10,12 @@ import type { DriverInformation } from './driver-schemas';
 export async function lockDriverIdentity(db: Db) {
   await db.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended('w3:administration', 0))`);
 }
-export async function saveDriverIdentity(db: Db, input: DriverInformation, driverId?: string) {
+export async function saveDriverIdentity(
+  db: Db,
+  input: DriverInformation,
+  driverId?: string,
+  allowExistingBusiness = false,
+) {
   const today = todaySeoul();
   const duplicates = await db.execute(sql`SELECT id FROM drivers WHERE active
     AND id IS DISTINCT FROM ${driverId ?? null}::uuid
@@ -23,13 +28,25 @@ export async function saveDriverIdentity(db: Db, input: DriverInformation, drive
     .from(counterparties)
     .where(
       and(
-        eq(counterparties.kind, 'DRIVER_BUSINESS'),
+        allowExistingBusiness ? eq(counterparties.kind, 'DRIVER_BUSINESS') : undefined,
         sql`regexp_replace(${counterparties.biz_no}, '[^0-9]', '', 'g')=${input.biz_no.replaceAll('-', '')}`,
       ),
     )
     .orderBy(counterparties.created_at, counterparties.id)
     .limit(1)
     .for('update');
+  const ownsParty =
+    party &&
+    driverId &&
+    (
+      await db.execute(sql`SELECT 1 FROM driver_affiliations
+    WHERE driver_id=${driverId}::uuid AND counterparty_id=${party.id}::uuid
+    AND valid_from<=${today}::date AND (valid_to IS NULL OR valid_to>=${today}::date)`)
+    ).rows.length > 0;
+  if (party && !allowExistingBusiness && !ownsParty)
+    invalid(
+      '이미 등록된 사업자번호예요. 같은 사업자로 여러 대를 운행하시면 관리자에게 기사 추가(개별 초대)를 요청해 주세요.',
+    );
   if (party && !party.active) invalid('사용 중지된 사업자입니다. 관리자에게 문의하세요.');
   if (!party)
     [party] = await db

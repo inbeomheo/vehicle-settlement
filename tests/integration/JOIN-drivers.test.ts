@@ -56,7 +56,7 @@ async function scenario() {
   return { f, admin, ctx, project, link, token: tokenOf(link.join_url) };
 }
 
-it('공용 링크로 여러 명 가입: 트랜잭션·배정·기본차량·사업자 재사용·멱등 재전송', async () => {
+it('공용 링크로 여러 명 가입: 트랜잭션·배정·기본차량·사업자 중복 거부·멱등 재전송', async () => {
   const s = await scenario();
   const input = registration();
   const first = await registerDriver(database().db, randomUUID(), s.token, input);
@@ -72,14 +72,11 @@ it('공용 링크로 여러 명 가입: 트랜잭션·배정·기본차량·사�
     biz_no: input.profile.biz_no.replaceAll('-', ''),
     business_name: '입력한 다른 상호',
   });
-  const second = await registerDriver(database().db, randomUUID(), s.token, secondInput);
-  expect((await getDriverProfile(s.ctx, second.user.id)).business_name).toBe(input.profile.business_name);
-  const affiliations = await database()
-    .db.select()
-    .from(driverAffiliations)
-    .where(sql`${driverAffiliations.driver_id} in (${user.driver_id}::uuid, ${second.user.driver_id}::uuid)`);
-  expect(new Set(affiliations.map((a) => a.counterparty_id)).size).toBe(1);
-  expect(affiliations.every((a) => a.valid_from === todaySeoul())).toBe(true);
+  await expect(registerDriver(database().db, randomUUID(), s.token, secondInput)).rejects.toThrow(
+    '이미 등록된 사업자번호',
+  );
+  const second = await registerDriver(database().db, randomUUID(), s.token, registration());
+  expect(second.user.id).not.toBe(first.user.id);
   const replay = await registerDriver(database().db, randomUUID(), s.token, input);
   expect(replay.user.id).toBe(first.user.id);
   expect((await listJoinLinks(s.ctx)).find((row) => row.id === s.link.id)?.used_count).toBe(2);
@@ -105,9 +102,7 @@ it('기존 차량을 정규화해 재사용하고, 동시 가입의 전화·차�
     '전화번호 또는 차량번호',
   );
   const samePlate = registration({ plate_no: input.profile.plate_no });
-  await expect(registerDriver(database().db, randomUUID(), s.token, samePlate)).rejects.toThrow(
-    '전화번호 또는 차량번호',
-  );
+  await expect(registerDriver(database().db, randomUUID(), s.token, samePlate)).rejects.toThrow('차량번호');
   const racing = registration();
   const otherLink = await createJoinLink(s.ctx, { project_ids: [s.project.id] });
   const results = await Promise.allSettled([
@@ -390,7 +385,16 @@ it('사업자·전화·톤수·비밀번호 입력 검증과 공유 사업자 �
   ).rejects.toThrow();
   const input = registration();
   const first = await registerDriver(database().db, randomUUID(), s.token, input);
-  await registerDriver(database().db, randomUUID(), s.token, registration({ biz_no: input.profile.biz_no }));
+  const extra = await s.f.driver({ phone: '01000008888' });
+  const [affiliation] = await database()
+    .db.select()
+    .from(driverAffiliations)
+    .where(eq(driverAffiliations.driver_id, first.user.driver_id!));
+  await saveMaster(s.ctx, 'affiliations', {
+    driver_id: extra.id,
+    counterparty_id: affiliation.counterparty_id,
+    valid_from: todaySeoul(),
+  });
   await expect(
     updateDriverProfile(s.ctx, first.user.id, {
       ...input.profile,

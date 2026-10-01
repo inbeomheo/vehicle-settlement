@@ -681,6 +681,7 @@ export const pushSubscriptions = pgTable(
     user_id: uuid('user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
+    session_id: uuid('session_id').references(() => sessions.id, { onDelete: 'cascade' }),
     endpoint: text('endpoint').notNull().unique(),
     keys: jsonb('keys').$type<{ p256dh: string; auth: string }>().notNull(),
     user_agent: text('user_agent'),
@@ -691,6 +692,7 @@ export const pushSubscriptions = pgTable(
   },
   (table) => [
     index('push_subscriptions_user_idx').on(table.user_id),
+    index('push_subscriptions_session_idx').on(table.session_id),
     check('push_subscriptions_failure_count_check', sql`${table.failure_count} >= 0`),
   ],
 );

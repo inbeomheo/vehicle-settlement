@@ -1,6 +1,6 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, gt, isNull } from 'drizzle-orm';
 import { z } from 'zod';
-import { pushSubscriptions } from '../db/schema';
+import { pushSubscriptions, sessions, users } from '../db/schema';
 import type { Context } from '../context';
 import { assertActive } from '../authz';
 import { audit } from '../audit';
@@ -47,10 +47,28 @@ export async function savePushSubscription(ctx: Context, raw: unknown, userAgent
   await assertActive(ctx);
   if (!pushConfig()) return { enabled: false, subscribed: false };
   return ctx.db.transaction(async (db) => {
+    // Match password replacement's user -> session -> subscription lock order.
+    const [user] = await db.select().from(users).where(eq(users.id, ctx.user.id)).for('update');
+    const [session] = ctx.session_id
+      ? await db
+          .select()
+          .from(sessions)
+          .where(
+            and(
+              eq(sessions.id, ctx.session_id),
+              eq(sessions.user_id, ctx.user.id),
+              isNull(sessions.revoked_at),
+              gt(sessions.expires_at, new Date()),
+            ),
+          )
+          .for('update')
+      : [];
+    if (user?.status !== 'ACTIVE' || !session) throw new AppError('UNAUTHENTICATED', '다시 로그인해 주세요.');
     const [saved] = await db
       .insert(pushSubscriptions)
       .values({
         user_id: ctx.user.id,
+        session_id: session.id,
         endpoint: input.endpoint,
         keys: input.keys,
         user_agent: userAgent?.slice(0, 512),
@@ -58,6 +76,7 @@ export async function savePushSubscription(ctx: Context, raw: unknown, userAgent
       .onConflictDoUpdate({
         target: pushSubscriptions.endpoint,
         set: {
+          session_id: session.id,
           keys: input.keys,
           user_agent: userAgent?.slice(0, 512),
           updated_at: new Date(),

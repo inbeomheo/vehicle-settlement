@@ -48,6 +48,15 @@ export async function sendUsePush(db: Db, id: string, event: PushEvent, version:
       return;
     const recipients = await pushRecipients(db, use, event);
     if (!recipients.length) return;
+    // Lazy cleanup on delivery also handles devices that never request HTTP after expiry.
+    await db
+      .delete(pushSubscriptions)
+      .where(
+        and(
+          inArray(pushSubscriptions.user_id, recipients),
+          sql`${pushSubscriptions.session_id} IS NOT NULL AND NOT EXISTS (SELECT 1 FROM sessions s WHERE s.id=${pushSubscriptions.session_id} AND s.user_id=${pushSubscriptions.user_id} AND s.revoked_at IS NULL AND s.expires_at>now())`,
+        ),
+      );
     const subscriptions = await db
       .select()
       .from(pushSubscriptions)
@@ -113,6 +122,8 @@ export async function sendUsePush(db: Db, id: string, event: PushEvent, version:
             return;
           const condition = and(
             eq(pushSubscriptions.id, subscription.id),
+            // Legacy unbound subscriptions remain eligible only for active recipients.
+            sql`(${pushSubscriptions.session_id} IS NULL OR EXISTS (SELECT 1 FROM sessions s WHERE s.id=${pushSubscriptions.session_id} AND s.user_id=${pushSubscriptions.user_id} AND s.revoked_at IS NULL AND s.expires_at>now()))`,
             sql`date_trunc('milliseconds', ${pushSubscriptions.updated_at}) = ${subscription.updated_at.toISOString()}::timestamptz`,
           );
           const [current] = await db

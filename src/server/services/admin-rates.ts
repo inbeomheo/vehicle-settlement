@@ -3,15 +3,15 @@ import { z } from 'zod';
 import Decimal from 'decimal.js';
 import { rateAgreements, chargeLines, counterparties, projects } from '../db/schema';
 import type { Context } from '../context';
-import { accessibleProjectIds } from '../authz';
+import { accessibleProjectIds, assertCanSettle } from '../authz';
 import { audit } from '../audit';
 import { AppError, invalid, notFound } from '../errors';
-import { adminTransaction, managerOnly } from './admin';
+import { adminTransaction } from './admin';
 import { rateSchema, validateDates } from './admin-schemas';
 import { uuid } from './schemas';
 
 export async function listRates(ctx: Context) {
-  await managerOnly(ctx);
+  await assertCanSettle(ctx);
   const ids = await accessibleProjectIds(ctx);
   return ctx.db
     .select()

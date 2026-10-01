@@ -5,6 +5,8 @@ import { loginThrottles } from '../db/schema';
 import { hashToken } from './password';
 
 export const LOGIN_WINDOW_MS = 10 * 60 * 1000;
+// Shared offices need room for independent typing mistakes; account protection stays at five.
+export const LOGIN_IP_FAILURE_LIMIT = 100;
 export const LOGIN_LOCK_MS = 15 * 60 * 1000;
 export const loginThrottleKey = (scope: 'ACCOUNT' | 'IP', value: string) => hashToken(`${scope}:${value}`);
 // Only an explicitly configured, proxy-overwritten single-IP header is trusted.
@@ -46,7 +48,7 @@ export async function recordLoginFailure(db: Db, state: Awaited<ReturnType<typeo
   for (const counter of state.counters) {
     const expired = state.now.getTime() - counter.window_started_at.getTime() >= LOGIN_WINDOW_MS;
     const failures = expired ? 1 : counter.failures + 1;
-    const threshold = counter.scope === 'ACCOUNT' ? 5 : 20;
+    const threshold = counter.scope === 'ACCOUNT' ? 5 : LOGIN_IP_FAILURE_LIMIT;
     const lockedUntil = failures >= threshold ? new Date(state.now.getTime() + LOGIN_LOCK_MS) : null;
     locked ||= lockedUntil !== null;
     await db

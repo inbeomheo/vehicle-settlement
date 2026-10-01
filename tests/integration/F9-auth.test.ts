@@ -6,7 +6,11 @@ import { testDatabase } from '../helpers/database';
 import { factories } from '../helpers/factories';
 import { callRoute } from '../helpers/routes';
 import { POST as loginRoute } from '../../src/app/api/auth/login/route';
-import { clientLoginIp, loginThrottleKey } from '../../src/server/auth/login-throttle';
+import {
+  clientLoginIp,
+  loginThrottleKey,
+  LOGIN_IP_FAILURE_LIMIT,
+} from '../../src/server/auth/login-throttle';
 import { acceptInviteSchema, loginSchema } from '../../src/server/services/schemas';
 import { hashPassword, verifyPassword } from '../../src/server/auth/password';
 import { login } from '../../src/server/services/auth';
@@ -51,10 +55,13 @@ describe('F9 인증', () => {
       (await pool.query('SELECT count(*)::int n FROM sessions WHERE user_id=$1', [user.id])).rows[0].n,
     ).toBe(0);
   });
-  it('IP 실패는 다른 계정에도 공유하고 성공하면 두 카운터 초기화', async () => {
+  it('IP 실패는 다른 계정에도 공유하고 성공하면 계정 카운터만 초기화', async () => {
     const { db } = database();
     const user = await factories(db).user();
     const ip = '192.0.2.10';
+    await db.execute(
+      sql`INSERT INTO login_throttles (scope,key,failures) VALUES ('IP',${loginThrottleKey('IP', ip)},${LOGIN_IP_FAILURE_LIMIT - 20})`,
+    );
     for (let i = 0; i < 20; i++) {
       await expect(
         login(db, randomUUID(), { login_id: randomUUID(), password: 'wrong' }, ip),
@@ -67,8 +74,13 @@ describe('F9 인증', () => {
       login(db, randomUUID(), { login_id: user.login_id, password: 'wrong' }, '192.0.2.11'),
     ).rejects.toMatchObject({ status: 401 });
     await login(db, randomUUID(), { login_id: user.login_id, password: 'password1234' }, '192.0.2.11');
-    const result = await db.execute(sql`SELECT count(*)::int n FROM login_throttles WHERE failures=0`);
-    expect(result.rows[0].n).toBeGreaterThanOrEqual(2);
+    const result = await db.execute(
+      sql`SELECT scope,failures FROM login_throttles WHERE key IN (${loginThrottleKey('ACCOUNT', user.login_id)}, ${loginThrottleKey('IP', '192.0.2.11')}) ORDER BY scope`,
+    );
+    expect(result.rows).toEqual([
+      { scope: 'ACCOUNT', failures: 0 },
+      { scope: 'IP', failures: 1 },
+    ]);
   });
 });
 

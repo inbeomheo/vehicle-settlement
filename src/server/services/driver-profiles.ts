@@ -79,7 +79,7 @@ export async function updateDriverProfile(ctx: Context, id: string, raw: unknown
       throw new AppError('VERSION_CONFLICT', '기사 정보가 변경되었습니다. 새로고침 후 다시 수정하세요.', {
         current: before,
       });
-    await saveDriverIdentity(tx.db, input, user.driver_id);
+    await saveDriverIdentity(tx.db, input, user.driver_id, tx.user.role === 'ADMIN');
     await tx.db
       .update(users)
       .set({ name: input.name, phone: input.phone, version: version + 1, updated_at: new Date() })

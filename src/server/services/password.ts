@@ -5,7 +5,7 @@ import { hashPassword, hashToken, newToken, verifyPassword } from '../auth/passw
 import { lockThrottleCounters, loginThrottleKey, recordLoginFailure } from '../auth/login-throttle';
 import type { Context } from '../context';
 import type { Db } from '../db/client';
-import { loginThrottles, passwordResets, sessions, users } from '../db/schema';
+import { loginThrottles, passwordResets, pushSubscriptions, sessions, users } from '../db/schema';
 import { AppError, invalid, notFound } from '../errors';
 import { adminTransaction } from './admin';
 import { acceptInviteSchema, loginSchema, uuid } from './schemas';
@@ -134,6 +134,7 @@ export async function resetPassword(
       .update(sessions)
       .set({ revoked_at: now, updated_at: now })
       .where(and(eq(sessions.user_id, user.id), isNull(sessions.revoked_at)));
+    await tx.delete(pushSubscriptions).where(eq(pushSubscriptions.user_id, user.id));
     await clearCounters(tx, state);
     await audit(
       { db: tx, user, request_id: requestId },
@@ -185,6 +186,14 @@ export async function changePassword(ctx: Context, raw: z.input<typeof changePas
       .update(sessions)
       .set({ revoked_at: now, updated_at: now })
       .where(and(eq(sessions.user_id, user.id), ne(sessions.id, session.id), isNull(sessions.revoked_at)));
+    await tx.db
+      .delete(pushSubscriptions)
+      .where(
+        and(
+          eq(pushSubscriptions.user_id, user.id),
+          sql`${pushSubscriptions.session_id} IS DISTINCT FROM ${session.id}::uuid`,
+        ),
+      );
     await revokePending(tx.db, user.id, now);
     await clearCounters(tx.db, state);
     await audit(tx, 'CHANGE_PASSWORD', 'user', user.id);
