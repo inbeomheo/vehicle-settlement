@@ -1,5 +1,5 @@
 'use client';
-import { quickApprovable, approveUse } from './quick-approval';
+import { quickApprovable, quickApprovalIssues, approveUse } from './quick-approval';
 import { formatQuantity } from '@/shared/quantity';
 import { useEffect, useState } from 'react';
 import type { LedgerResult, LedgerRow } from '@/server/services/ledger';
@@ -20,6 +20,7 @@ import {
   useRemote,
   signalClass,
 } from './common';
+import { ReviewOtherAmounts } from './review-other-amounts';
 import { Plate } from '@/components/ui/plate';
 type Option = { id: string; name?: string; plate_no?: string; active?: boolean };
 type Options = { projects: Option[]; drivers: Option[]; vehicles: Option[]; counterparties: Option[] };
@@ -485,10 +486,7 @@ function ReviewCard({
   const [day, month] = [row.use_date.slice(8, 10), Number(row.use_date.slice(5, 7))];
   const quick = quickApprovable(row) && !approved;
   const issues = [
-    row.evidence_missing && '증빙 없음',
-    row.has_requested_extra && '요청 추가비 확인 필요',
-    row.has_base_amount_difference && '계약 단가와 다른 금액',
-    row.review_total_amount === null && '단가 미확정',
+    ...quickApprovalIssues(row),
     row.entered_as === 'PROXY' && `대리 입력(${row.creator_name})`,
   ].filter(Boolean) as string[];
   async function approve() {
@@ -557,7 +555,8 @@ function ReviewCard({
         </div>
         <div className="flex flex-wrap items-center justify-between gap-2 sm:flex-col sm:flex-nowrap sm:items-end">
           <div className="sm:text-right">
-            <p className="num text-lg font-bold whitespace-nowrap">{money(row.review_total_amount)}</p>
+            <p className="num text-lg font-bold whitespace-nowrap">지급 {money(row.review_total_amount)}</p>
+            <ReviewOtherAmounts row={row} />
             {(row.review_extra_amount ?? 0) > 0 && (
               <p className="num text-xs text-slate-600">
                 기본 {money(row.review_base_amount)} + 추가비 {money(row.review_extra_amount)}
@@ -577,7 +576,7 @@ function ReviewCard({
             </div>
           ) : (
             <a className={buttonClass} href={`/m/uses/${row.id}`}>
-              확인하기
+              열기
             </a>
           )}
         </div>

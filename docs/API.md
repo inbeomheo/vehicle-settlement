@@ -73,7 +73,9 @@
 
 - `POST /api/uses/:id/submit`: `{ version }`. DRAFT/NEEDS_FIX에서 제출, 증빙 검사, 새 revision 생성.
 - `POST /api/uses/:id/approve`: `{ version, comment?, lines?: [{ id, line_review_status: "APPROVED"|"HELD"|"REJECTED", approved_amount?, reason? }] }`. 생략한 PENDING 라인은 서버 계산/요청액으로 승인하며, 먼저 라인 검수한 결과는 유지한다. PENDING 가격을 승인하려면 담당자가 승인 공급가를 지정해야 한다.
-- 목록의 바로 승인·선택 승인은 표시한 `version`과 `quick_approval: { review_base_amount, review_extra_amount, review_total_amount }`(정수 공급가)을 그대로 전달한다. 승인 직전 최신 버전으로 바꾸지 않는다. 서버는 부모·비용 잠금 후 목록과 동일한 바로 승인 조건 및 금액을 재검사한다. 버전·표시 금액·승인 조건이 바뀌면 `409 VERSION_CONFLICT`, “내용이 바뀌었습니다. 다시 확인한 뒤 승인하세요.”로 거부한다. `quick_approval`와 `lines`를 동시에 보낼 수 없다. 선택 승인은 개별 실패를 건너뛰고 승인·건너뛴 건수를 알린다.
+- 목록의 바로 승인·선택 승인은 표시한 `version`과 `quick_approval: { review_base_amount, review_extra_amount, review_total_amount, review_receivable_amount }`(정수 공급가)을 그대로 전달한다. 승인 직전 최신 버전으로 바꾸지 않는다. 서버는 부모·비용 잠금 후 목록과 동일한 바로 승인 조건 및 금액을 재검사한다. 버전·표시 금액·승인 조건이 바뀌면 `409 VERSION_CONFLICT`, “내용이 바뀌었습니다. 다시 확인한 뒤 승인하세요.”로 거부한다. `quick_approval`와 `lines`를 동시에 보낼 수 없다. 선택 승인은 개별 실패를 건너뛰고 승인·건너뛴 건수를 알린다.
+- 바로 승인 조건은 서버·검수함·운행 결재·선택 승인에서 공용 `quickApprovable`을 사용한다. 미승인 고객청구에 금액 미정·계약 없음·계약 계산액과 요청액 차이가 있으면 `receivable_needs_review=true`와 “고객 청구 금액 확인 필요”를 표시하고 상세의 “열기”로 안내한다. 계약대로인 청구는 공급가 `review_receivable_amount`를 함께 표시·전송·재검사한다. 청구액 생략은 null로 취급하므로 청구가 있는 건을 구버전 화면에서 바로 승인할 수 없다.
+- 어느 방향이든 HELD 줄이 있으면 `has_held_lines=true`와 “보류 항목 있음”으로 바로 승인을 막는다. 지급 `review_base_amount/review_extra_amount/review_total_amount`와 `review_receivable_amount`는 PENDING/APPROVED만 합산하고, 보류는 `held_payable_amount/held_receivable_amount` 및 `has_held_payable/has_held_receivable`로 구분한다. 보류 금액 null은 미정이며 명시적 0원과 다르다. 상세 전체 승인은 기존처럼 보류·반려를 제외한다.
 - 승인액 override는 **최종 공급가액**이다. override가 없으면 VAT_INCLUDED 금액을 공급가와 세액으로 분리한다. 추가비의 요청액을 그대로 확정할 의무는 없다.
 - `PATCH /api/charge-lines/:id/review`: `{ version, line_review_status, approved_amount?, reason? }`. SUBMITTED 상태만 허용하며 `{ ...line, use_version }`을 반환한다. 사용 건 전체 승인은 별도 approve 호출로 현재 revision에 연결한다.
 - `POST /api/uses/:id/request-fix`: `{ version, comment?, fix_items: [{ target, message }] }`.

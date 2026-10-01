@@ -856,7 +856,8 @@ export async function approveUse(ctx: Context, id: string, raw: z.input<typeof a
         !quickApprovable(row) ||
         row.review_base_amount !== input.quick_approval.review_base_amount ||
         row.review_extra_amount !== input.quick_approval.review_extra_amount ||
-        row.review_total_amount !== input.quick_approval.review_total_amount
+        row.review_total_amount !== input.quick_approval.review_total_amount ||
+        row.review_receivable_amount !== input.quick_approval.review_receivable_amount
       )
         changed();
     }
