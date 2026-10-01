@@ -536,6 +536,13 @@ export default function ManualPage() {
             장을 한 파일로 받습니다.
           </p>
           <Shot src="29-summary-table" alt="현장·기사별 집계 — 한눈에 표" />
+          <p className="text-[1.0625rem] leading-relaxed">
+            현장별·기사별 카드의 금액 아래 <B>자세히 보기</B>를 누르면 날짜·구간·수량·단가·기사명과 합계가 한
+            번에 펼쳐지고, 기사 이름으로 골라 보거나 정렬할 수 있습니다. <B>지급처</B>와 현장을 고른 뒤{' '}
+            <B>거래명세표 엑셀</B>을 누르면 현재 기간·필터에 맞춰 현장마다 한 시트로 받으며, 검수 전 금액은
+            승인 합계와 별도로 표시합니다.
+          </p>
+          <Shot src="29b-summary-detail" alt="현장 상세 운행 목록과 거래명세표 엑셀" />
 
           <h3 className="pt-4 text-xl font-bold md:text-2xl">2. 이번 달 건 묶기</h3>
           <p className="text-[1.0625rem] leading-relaxed">

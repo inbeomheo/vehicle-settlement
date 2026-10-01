@@ -31,3 +31,7 @@ it.each([
   expect(result.status).not.toBe(0);
   expect(result.stderr).toContain('설명서 도구는 http://localhost:3183');
 });
+
+it('F4 설명서 부분 촬영은 전용 로컬 3196을 허용한다', () => {
+  expect(loadCapture('http://localhost:3196').stdout.trim()).toBe('http://localhost:3196');
+});

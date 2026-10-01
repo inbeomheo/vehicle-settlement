@@ -103,3 +103,19 @@ PORT=3183 npx playwright test tests/e2e/FIX-REQ-manual.spec.ts tests/e2e/MANUAL-
 ### 현장 배정 부분 촬영 (F3-ASSIGN)
 
 `BASE=http://localhost:3191 node docs/manual/capture/assignments.mjs`는 54391의 전용 로컬 시연 DB를 연결한 3191 서버에서 기사관리 배정과 현장 생성 두 장면만 갱신한다. 공용 캡처 도구는 추가로 이 로컬 주소만 허용하며 외부 요청 차단은 유지한다. `45-drivers`, `48-project-create`의 원본과 공개 PNG를 함께 갱신한다.
+
+
+### 집계 상세·거래명세표 부분 촬영 (F4-DETAIL)
+
+이 워크트리는 `.env.local`의 `PG_PORT=54396`, 웹 `PORT=3196`만 사용한다. 모든 아래 명령은 명시한 전용 로컬 DB와 연결하며 운영 설정은 읽지 않는다.
+
+```sh
+DOTENV_CONFIG_PATH=.env.local PG_PORT=54396 DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54396/vehicle_app npm run db:migrate
+DOTENV_CONFIG_PATH=.env.local PG_PORT=54396 DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54396/vehicle_app npm run seed
+DOTENV_CONFIG_PATH=.env.local PG_PORT=54396 DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54396/vehicle_app npm run seed:demo
+DOTENV_CONFIG_PATH=.env.local PG_PORT=54396 DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54396/vehicle_app PORT=3196 npm run dev -- --port 3196
+BASE=http://localhost:3196 node docs/manual/capture/summary-detail.mjs
+BASE=http://localhost:3196 node docs/manual/export.mjs
+```
+
+부분 촬영은 시연 데이터만 사용해 `29b-summary-detail`(상세와 합계), `45-drivers`(기사관리 관리 열)의 원본·공개 PNG를 갱신한다. 공용 도구의 로컬 허용 목록에 3196을 추가했고 외부 요청 차단은 유지한다.
