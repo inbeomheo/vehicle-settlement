@@ -20,6 +20,9 @@ export const ledgerQuerySchema = z
       .optional(),
     project_id: uuid.optional(),
     driver_id: uuid.optional(),
+    reviewer_user_id: uuid.optional(),
+    transport_search: z.string().trim().max(100).optional(),
+    exclude_canceled: z.enum(['true']).optional(),
     vehicle_id: uuid.optional(),
     counterparty_id: uuid.optional(),
     use_id: uuid.optional(),
@@ -42,6 +45,8 @@ export type LedgerRow = {
   use_date: string;
   project_id: string;
   driver_id: string;
+  reviewer_user_id: string | null;
+  reviewer_name: string | null;
   vehicle_id: string;
   project_name: string;
   driver_name: string;
@@ -110,7 +115,7 @@ export async function ledgerBase(ctx: Context) {
   return sql`SELECT vehicle_uses.*, vehicle_uses.snapshot->>'project_name' AS project_name,
     vehicle_uses.snapshot->>'driver_name' AS driver_name, vehicle_uses.snapshot->>'plate_no' AS plate_no,
     vehicle_uses.snapshot->>'vehicle_type' AS vehicle_type, vehicle_uses.snapshot->>'tonnage' AS tonnage,
-    vehicle_uses.snapshot->>'payee_name' AS payee_name, w.name AS work_type_name, u.name AS creator_name,
+    vehicle_uses.snapshot->>'payee_name' AS payee_name, w.name AS work_type_name, u.name AS creator_name, reviewer.name AS reviewer_name,
     (SELECT COALESCE(jsonb_object_agg(actor.id::text,actor.name),'{}'::jsonb) FROM users actor
       WHERE actor.id=vehicle_uses.created_by_user_id OR EXISTS (SELECT 1 FROM use_revisions r
         WHERE r.vehicle_use_id=vehicle_uses.id AND (r.submitted_by=actor.id OR r.decided_by=actor.id))) AS actor_names,
@@ -122,6 +127,7 @@ export async function ledgerBase(ctx: Context) {
     FROM vehicle_uses
     JOIN projects p ON p.id=vehicle_uses.project_id
     JOIN users u ON u.id=vehicle_uses.created_by_user_id
+    LEFT JOIN users reviewer ON reviewer.id=vehicle_uses.reviewer_user_id
     LEFT JOIN work_types w ON w.id=vehicle_uses.work_type_id
     LEFT JOIN LATERAL (SELECT jsonb_agg(jsonb_build_object('origin',origin,'destination',destination,'status',status,'quantity',quantity::text,'quantity_unit',quantity_unit) ORDER BY seq) AS trip_details, string_agg(origin,' / ' ORDER BY seq) AS origin, string_agg(destination,' / ' ORDER BY seq) AS destination,
       count(*) FILTER (WHERE status='COMPLETED')::text || '회 운행' || COALESCE(' · ' || string_agg(CASE WHEN quantity IS NOT NULL THEN quantity::text || COALESCE(quantity_unit,'') END, ' / ' ORDER BY seq),'') AS performance
@@ -154,6 +160,7 @@ export async function getLedger(ctx: Context, raw: unknown, exportAll = false): 
   for (const key of [
     'project_id',
     'driver_id',
+    'reviewer_user_id',
     'vehicle_id',
     'review_status',
     'settlement_status',
@@ -161,6 +168,11 @@ export async function getLedger(ctx: Context, raw: unknown, exportAll = false): 
   ] as const) {
     if (q[key]) clauses.push(sql`${sql.identifier(key)}=${q[key]}`);
   }
+  if (q.exclude_canceled) clauses.push(sql`operation_status<>'CANCELED'`);
+  if (q.transport_search)
+    clauses.push(
+      sql`(cargo_desc ILIKE ${'%' + q.transport_search.replace(/[\\%_]/g, '\\$&') + '%'} OR EXISTS (SELECT 1 FROM trips WHERE vehicle_use_id=enriched.id AND concat_ws(' ',origin,destination,cargo_desc) ILIKE ${'%' + q.transport_search.replace(/[\\%_]/g, '\\$&') + '%'}))`,
+    );
   if (q.use_id) clauses.push(sql`id=${q.use_id}::uuid`);
   if (q.counterparty_id) clauses.push(sql`payee_counterparty_id=${q.counterparty_id}::uuid`);
   if (q.from) clauses.push(sql`use_date>=${q.from}::date`);

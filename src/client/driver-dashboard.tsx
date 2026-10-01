@@ -3,12 +3,15 @@ import { useEffect, useState } from 'react';
 import { api, ApiError } from './api';
 import { errorMessage } from './error-message';
 import { useActionLock } from './use-action-lock';
-import { todaySeoul, reviewLabels, type UseList } from './types';
+import { todaySeoul, type UseList } from './types';
 import { useBootstrap, PwaRegistration } from './offline/runtime';
 import { isUnsent, listDrafts, OFFLINE_EVENT, type Draft } from './offline/store';
 import { copyToDevice } from './copy-draft';
 import { syncQueue } from './offline/engine';
 import { button, primary, Section, StatusBadge } from '@/components/use-form/fields';
+import { ApprovalDates, ApprovalSelect, ApprovalTabs, useApprovalQuery } from '@/components/approval-filters';
+import { Pager, useRemote } from '@/components/manager/common';
+import { approvalLabels } from '@/shared/approvals';
 import { Plate } from '@/components/ui/plate';
 
 const weekdays = ['일', '월', '화', '수', '목', '금', '토'];
@@ -21,6 +24,11 @@ function koreanDate(date: string, withWeekday = true) {
 }
 export function DriverDashboard() {
   const { data, error, authRequired, retry } = useBootstrap('driver');
+  const { query, search, change } = useApprovalQuery();
+  const filtered = useRemote<
+    UseList & { counts: Record<string, number>; options: { projects: { id: string; name: string }[] } }
+  >(data ? `/api/approvals?${search}` : null);
+  const refreshFiltered = filtered.refresh;
   const [list, setList] = useState<UseList>();
   const [todayCount, setTodayCount] = useState<number>();
   const [fixes, setFixes] = useState<UseList['rows']>([]);
@@ -33,6 +41,7 @@ export function DriverDashboard() {
     if (!data) return;
     setList(data.recent);
     const refresh = () => {
+      refreshFiltered();
       setMessage('');
       setListAuthRequired(false);
       void listDrafts(data.user.id)
@@ -58,11 +67,13 @@ export function DriverDashboard() {
     refresh();
     window.addEventListener(OFFLINE_EVENT, refresh);
     window.addEventListener('online', refresh);
+    window.addEventListener('offline', refresh);
     return () => {
       window.removeEventListener(OFFLINE_EVENT, refresh);
       window.removeEventListener('online', refresh);
+      window.removeEventListener('offline', refresh);
     };
-  }, [data, refreshAttempt]);
+  }, [data, refreshAttempt, refreshFiltered]);
   async function copy(id: string) {
     if (!data) return;
     if (!startAction()) return;
@@ -90,6 +101,8 @@ export function DriverDashboard() {
       </p>
     );
   if (!data || !list) return <p role="status">내 운행을 불러오고 있습니다…</p>;
+  const offline = typeof navigator !== 'undefined' && !navigator.onLine;
+  const visibleList = offline ? list : filtered.data;
   const pending = drafts.filter(isUnsent);
   const projects = [
     ...new Map(data.recent.rows.map((r) => [r.project_id, String(r.snapshot.project_name)])).entries(),
@@ -264,15 +277,57 @@ export function DriverDashboard() {
           <h2 id="my-uses" className="text-xl font-bold">
             내 운행
           </h2>
-          <span className="text-sm text-slate-600">{list.total}건</span>
+          <span className="text-sm text-slate-600">{visibleList?.total ?? 0}건</span>
         </div>
-        {list.rows.length === 0 ? (
+        {offline ? (
+          <p className="mb-4 text-slate-600">
+            인터넷 연결이 없어 최근 저장된 운행을 보여 드립니다. 날짜·프로젝트 검색은 연결 후 사용할 수
+            있습니다.
+          </p>
+        ) : (
+          <>
+            <ApprovalTabs
+              driver
+              status={query.review_status}
+              counts={filtered.data?.counts}
+              onChange={(value) => change({ review_status: value })}
+            />
+            <details className="mb-4 rounded-lg border border-slate-200 bg-white p-4">
+              <summary className="min-h-11 cursor-pointer font-bold">
+                운송일자·프로젝트 필터 · {query.from}
+              </summary>
+              <div className="grid gap-4">
+                <ApprovalDates driver from={query.from} to={query.to} onChange={change} />
+                <label className="grid gap-2">
+                  프로젝트
+                  <ApprovalSelect
+                    driver
+                    title="프로젝트"
+                    value={query.project_id}
+                    options={filtered.data?.options.projects ?? data.lookups.projects}
+                    onChange={(value) => change({ project_id: value })}
+                  />
+                </label>
+              </div>
+            </details>
+          </>
+        )}
+        {!offline && filtered.error && (
+          <p role="alert" className="my-3 text-red-700">
+            {filtered.error}{' '}
+            <button className={button} onClick={filtered.refresh}>
+              다시 시도
+            </button>
+          </p>
+        )}
+        {!offline && filtered.loading && <p role="status">내 운행을 불러오는 중…</p>}
+        {visibleList?.rows.length === 0 ? (
           <p className="rounded-lg bg-white py-10 text-center text-slate-600">
-            아직 등록한 운행이 없습니다. 위의 운행 등록을 눌러 시작하세요.
+            해당하는 운행이 없습니다. 날짜나 프로젝트를 바꿔 보세요.
           </p>
         ) : (
           <ul className="grid grid-cols-[minmax(0,1fr)] gap-2.5">
-            {list.rows.map((row) => {
+            {visibleList?.rows.map((row) => {
               const canceled = row.operation_status === 'CANCELED';
               const fix = row.review_status === 'NEEDS_FIX';
               return (
@@ -295,7 +350,7 @@ export function DriverDashboard() {
                     <span aria-hidden="true" className="slip-perforation w-2 shrink-0" />
                     <span className="min-w-0 flex-1 py-3 pr-3 pl-2">
                       {/* 현장 이름은 한 줄을 온전히 쓰고, 상태는 번호판 옆에 둔다(긴 상태 문구가 이름을 가리지 않게). */}
-                      <span className="block truncate text-[1.0625rem] font-bold">
+                      <span className="block break-words text-[1.0625rem] font-bold">
                         {String(row.snapshot.project_name)}
                         {row.entered_as === 'PROXY' && (
                           <span className="ml-1.5 text-sm font-medium text-slate-700">대리 입력</span>
@@ -304,12 +359,12 @@ export function DriverDashboard() {
                       <span className="mt-1.5 flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
                         <Plate value={String(row.snapshot.plate_no)} size="sm" />
                         <StatusBadge warning={fix}>
-                          {canceled ? '취소' : reviewLabels[row.review_status]}
+                          {canceled ? '취소' : approvalLabels[row.review_status]}
                         </StatusBadge>
                       </span>
                       {!canceled && (
-                        <span className="mt-2 flex items-end justify-between gap-2 text-sm">
-                          <span className="min-w-0 truncate text-slate-600">
+                        <span className="mt-2 flex flex-wrap items-end justify-between gap-2 text-sm">
+                          <span className="min-w-0 break-words text-slate-600">
                             {row.route_summary ?? row.cargo_desc ?? ''}
                           </span>
                           <span className="num shrink-0 text-lg font-bold">
@@ -326,25 +381,13 @@ export function DriverDashboard() {
             })}
           </ul>
         )}
-        {list.rows.length < list.total && (
-          <button
-            type="button"
-            className={`${button} mt-3 w-full`}
-            disabled={busy}
-            onClick={async () => {
-              if (!startAction()) return;
-              try {
-                const next = await api<UseList>(`/api/uses?pageSize=20&sort=use_date&page=${list.page + 1}`);
-                setList({ ...next, rows: [...list.rows, ...next.rows] });
-              } catch (e) {
-                setMessage(errorMessage(e, '목록을 불러오지 못했습니다.'));
-              } finally {
-                finishAction();
-              }
-            }}
-          >
-            더 보기
-          </button>
+        {!offline && visibleList && visibleList.total > visibleList.pageSize && (
+          <Pager
+            page={visibleList.page}
+            pageSize={visibleList.pageSize}
+            total={visibleList.total}
+            onChange={(page) => change({ page: String(page) })}
+          />
         )}
       </section>
       <p className="flex flex-wrap justify-center gap-x-4 pt-2 text-center">

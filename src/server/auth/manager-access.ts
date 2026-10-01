@@ -4,6 +4,7 @@ type Role = Context['user']['role'];
 export const managerMenu = [
   { href: '/m', title: '대시보드' },
   { href: '/m/review', title: '검수함' },
+  { href: '/m/approvals', title: '운행 결재' },
   { href: '/m/ledger', title: '차량 사용대장' },
   { href: '/m/summary', title: '현장·기사별 집계' },
   { href: '/m/uses/new', title: '대리 입력' },

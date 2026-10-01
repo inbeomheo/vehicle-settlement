@@ -266,7 +266,7 @@ test('취소 운행에는 취소 뱃지를 표시하고 지급 금액을 숨긴�
   await page.request.post('/api/auth/login', {
     data: { login_id: s.driverUser.login_id, password: 'password1234' },
   });
-  await page.goto('/d');
+  await page.goto(`/d?from=${s.input.use_date}&to=${s.input.use_date}`);
   const card = page.locator(`a[href="/d/uses/${use.id}"]`);
   await expect(card.getByText('취소', { exact: true })).toBeVisible();
   await expect(card).not.toContainText('기본 금액');
