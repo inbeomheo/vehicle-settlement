@@ -66,5 +66,6 @@ export type ImportView = {
   sheets: SheetData[];
   selection: z.infer<typeof previewSchema> | null;
   preview: ImportRow[];
+  preview_total: number;
   summary: ImportSummary | null;
 };

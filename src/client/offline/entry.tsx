@@ -1,3 +1,4 @@
+import { PwaRegistration } from './runtime';
 import { createRoot } from 'react-dom/client';
 import { useEffect, useState } from 'react';
 import { FormWorkspace } from '@/components/use-form/use-form';
@@ -53,6 +54,7 @@ function OfflineApp() {
   const id = path.match(/^\/(?:d|m)\/uses\/([^/]+)/)?.[1];
   return (
     <>
+      {path !== '/d' && <PwaRegistration />}
       <header className="flex items-center justify-between gap-3 border-b bg-white p-4">
         <a
           className="inline-flex min-h-11 min-w-11 items-center font-bold"

@@ -29,6 +29,8 @@ const version = createHash('sha256')
   .update(await readFile('public/w2-offline-app.js'))
   .update(result.css)
   .update(await readFile('public/offline-login.html'))
+  .update(await readFile('public/offline.html'))
+  .update(process.env.VERCEL_DEPLOYMENT_ID ?? process.env.VERCEL_GIT_COMMIT_SHA ?? '')
   .update(await readFile('public/sw.js'))
   .digest('hex')
   .slice(0, 12);

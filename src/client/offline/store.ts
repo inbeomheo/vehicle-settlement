@@ -118,11 +118,11 @@ export function isUnsent(draft: Draft) {
   return shouldPersistDraft(draft) && draft.phase !== 'saved' && !draft.inputError;
 }
 
-export async function flushDrafts() {
+export async function flushDrafts(reason?: 'update') {
   const pending: Promise<void>[] = [];
   window.dispatchEvent(
     new CustomEvent('vehicle-flush-drafts', {
-      detail: { waitUntil: (promise: Promise<void>) => pending.push(promise) },
+      detail: { reason, waitUntil: (promise: Promise<void>) => pending.push(promise) },
     }),
   );
   await Promise.all(pending);

@@ -328,6 +328,10 @@ export default function ImportPage() {
                   {committed ? '가져오기 완료' : '유효 행 임시저장'}
                 </button>
               </div>
+              <p className="text-sm text-slate-600">
+                전체 {job.preview_total}행 중 {job.preview.length}행 표시 · 처음 100행과 오류·직접 제외한 행을
+                보여 드립니다. 집계와 임시저장은 전체 행 기준입니다. 오류 행은 모두 내려받을 수 있습니다.
+              </p>
               <div className="max-h-[32rem] overflow-auto">
                 <table className="w-full min-w-[580px] text-left text-sm">
                   <thead>

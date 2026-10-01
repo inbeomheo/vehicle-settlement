@@ -1,5 +1,9 @@
 import { randomBytes } from 'node:crypto';
-import { sql } from 'drizzle-orm';
+import { getTableName, is, sql } from 'drizzle-orm';
+import { PgTable } from 'drizzle-orm/pg-core';
+import * as schema from '../src/server/db/schema';
+import { databaseSchema } from '../src/server/db/config';
+import { safeError } from '../src/server/safe-error';
 import { createDatabase, defaultDatabaseUrl } from '../src/server/db/client';
 import { passwordResets, users } from '../src/server/db/schema';
 import { hashPassword, hashToken, newToken } from '../src/server/auth/password';
@@ -13,28 +17,42 @@ import { hashPassword, hashToken, newToken } from '../src/server/auth/password';
  */
 async function main() {
   if (process.env.CONFIRM_FRESH_START !== '지우기') {
-    console.error('모든 데이터를 지웁니다. 확인하려면 CONFIRM_FRESH_START=지우기 를 붙여 실행하세요.');
+    console.error('앱 업무 데이터를 지웁니다. 확인하려면 CONFIRM_FRESH_START=지우기 를 붙여 실행하세요.');
     process.exit(1);
   }
   const loginId = process.argv[2] ?? 'admin';
   const name = process.argv[3] ?? '관리자';
-  const { db, pool } = createDatabase(defaultDatabaseUrl());
+  if (!process.env.DATABASE_URL && !process.env.PG_PORT)
+    throw new Error('대상 DATABASE_URL 또는 PG_PORT를 명시하세요.');
+  const target = new URL(defaultDatabaseUrl());
+  const targetSchema = databaseSchema();
+  console.log(
+    `초기화 대상: ${target.hostname}:${target.port || '5432'} / DB=${decodeURIComponent(target.pathname.slice(1))} / DB_SCHEMA=${targetSchema}`,
+  );
+  const { db, pool } = createDatabase(target.toString());
   try {
     const token = newToken();
     await db.transaction(async (tx) => {
-      const tables = await tx.execute<{ name: string }>(sql`
-        SELECT quote_ident(table_schema) || '.' || quote_ident(table_name) AS name
-        FROM information_schema.tables
-        WHERE table_schema = current_schema() AND table_type = 'BASE TABLE'
-          AND table_name <> '__drizzle_migrations'`);
+      const result = await tx.execute<{ database: string; schema: string }>(sql`
+        SELECT current_database() AS database, current_schema() AS schema`);
+      if (
+        result.rows[0]?.database !== decodeURIComponent(target.pathname.slice(1)) ||
+        result.rows[0]?.schema !== targetSchema
+      )
+        throw new Error('대상 DB 또는 DB_SCHEMA가 일치하지 않습니다. 초기화를 중단합니다.');
+      const tables = Object.values(schema)
+        .filter((value) => is(value, PgTable))
+        .map((table) => getTableName(table));
+      const quote = (name: string) => `"${name.replaceAll('"', '""')}"`;
+      // RESTRICT is deliberate: an external FK must abort the entire transaction.
+      // ONLY also prevents inheritance/partition descendants outside this list from being emptied.
       await tx.execute(
-        sql.raw(`TRUNCATE ${tables.rows.map((row) => row.name).join(', ')} RESTART IDENTITY CASCADE`),
+        sql.raw(
+          `TRUNCATE ${tables.map((name) => `ONLY ${quote(targetSchema)}.${quote(name)}`).join(', ')} RESTART IDENTITY RESTRICT`,
+        ),
       );
-      const sequences = await tx.execute<{ name: string }>(sql`
-        SELECT quote_ident(sequence_schema) || '.' || quote_ident(sequence_name) AS name
-        FROM information_schema.sequences
-        WHERE sequence_schema = current_schema() AND sequence_name NOT LIKE '%drizzle%'`);
-      for (const row of sequences.rows) await tx.execute(sql.raw(`ALTER SEQUENCE ${row.name} RESTART`));
+      for (const name of ['use_no_seq', 'statement_no_seq'])
+        await tx.execute(sql.raw(`ALTER SEQUENCE ${quote(targetSchema)}.${quote(name)} RESTART`));
       const [admin] = await tx
         .insert(users)
         .values({
@@ -61,6 +79,6 @@ async function main() {
   }
 }
 main().catch((error) => {
-  console.error(error);
+  console.error('초기화 실패', safeError(error));
   process.exit(1);
 });

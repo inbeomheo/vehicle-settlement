@@ -183,6 +183,8 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
   const [localFailed, setLocalFailed] = useState(false);
   const { busy, active: actionActive, start: startAction, finish: finishAction } = useActionLock();
   const [evidenceBusy, setEvidenceBusy] = useState(false);
+  const evidenceActive = useRef(false);
+  evidenceActive.current = evidenceBusy;
   const [online, setOnline] = useState(true);
   const [discardConfirm, setDiscardConfirm] = useState(false);
   const [editApproved, setEditApproved] = useState(false);
@@ -363,7 +365,13 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
       return persistence.current;
     };
     const flushRequested = (event: Event) => {
-      (event as CustomEvent<{ waitUntil: (promise: Promise<void>) => void }>).detail.waitUntil(flush());
+      const detail = (event as CustomEvent<{ reason?: string; waitUntil: (promise: Promise<void>) => void }>)
+        .detail;
+      detail.waitUntil(
+        detail.reason === 'update' && (actionActive.current || evidenceActive.current)
+          ? Promise.reject(new Error('저장·첨부 처리가 끝난 뒤 새로고침해 주세요.'))
+          : flush(),
+      );
     };
     const update = () => {
       const value = current.current;

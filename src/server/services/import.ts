@@ -45,17 +45,32 @@ async function jobFor(ctx: Context, id: string, lock = false) {
 }
 function view(job: Job, name?: string) {
   const payload = job.rows as Payload;
-  return {
+  const result = {
     id: job.id,
     file_name: job.file_name,
     status: job.status,
     created_at: job.created_at.toISOString(),
     created_by_name: name,
-    sheets: payload.sheets,
+    sheets: payload.sheets.map((sheet) => ({
+      name: sheet.name,
+      rows: sheet.rows.slice(0, 20),
+      header_row: sheet.header_row,
+      mapping: sheet.mapping,
+    })),
     selection: job.mapping as z.infer<typeof previewSchema> | null,
-    preview: payload.preview,
+    preview: payload.preview.filter(
+      (row, index) =>
+        index < 100 ||
+        row.status === 'ERROR' ||
+        (job.mapping as z.infer<typeof previewSchema> | null)?.excluded_rows?.includes(row.row),
+    ),
+    preview_total: payload.preview.length,
     summary: job.summary as ImportSummary | null,
   };
+  // Check the actual JSON envelope in UTF-8, leaving margin below Vercel's 4.5MB.
+  if (Buffer.byteLength(JSON.stringify({ data: result }), 'utf8') > 4 * 1024 * 1024)
+    invalid('행이 너무 많습니다. 나눠서 올려 주세요');
+  return result;
 }
 export function suggestMapping(headers: string[]): ImportMapping {
   const result: ImportMapping = {};
@@ -510,7 +525,15 @@ export async function saveImportPreset(ctx: Context, raw: unknown) {
   });
 }
 export async function importErrors(ctx: Context, id: string) {
-  const job = await getImport(ctx, id);
+  const saved = await jobFor(ctx, id);
+  const payload = saved.rows as Payload;
+  const job = {
+    selection: saved.mapping as z.infer<typeof previewSchema> | null,
+    sheets: payload.sheets,
+    preview: payload.preview,
+  };
+  const uses = await ctx.db.select().from(vehicleUses).where(eq(vehicleUses.import_job_id, id));
+  for (const use of uses) await assertProjectAccess(ctx, use.project_id);
   if (!job.selection) invalid('먼저 미리보기를 실행하세요.');
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet('오류 행');
