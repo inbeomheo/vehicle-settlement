@@ -1,6 +1,7 @@
 import { uploadLimit, uploadLimitMessage } from '../upload-limits';
 import { passwordWithinByteLimit } from '../auth/password';
 import { z } from 'zod';
+import Decimal from 'decimal.js';
 import {
   billingUnitEnum,
   directionEnum,
@@ -50,7 +51,16 @@ export const chargeInput = z
     if (v.charge_type !== 'BASE' && (v.requested_amount == null || !v.reason?.trim()))
       ctx.addIssue({ code: 'custom', message: '추가비는 요청액과 사유를 입력하세요.' });
   });
+export const loadTonnage = z
+  .string()
+  .regex(/^\d{1,7}(\.\d{1,3})?$/, '적재용량은 소수 셋째 자리까지 입력하세요.')
+  .refine(
+    (value) => /^\d{1,7}(\.\d{1,3})?$/.test(value) && new Decimal(value).gt(0),
+    '적재용량은 0보다 커야 합니다.',
+  );
 const fields = {
+  reviewer_user_id: uuid.nullable().optional(),
+  load_tonnage: loadTonnage.nullable().optional(),
   use_date: dateString,
   end_date: dateString.nullable().optional(),
   project_id: uuid,

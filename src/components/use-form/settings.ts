@@ -55,7 +55,10 @@ export function useFormSettings(userId: string, projectId: string | undefined, m
     return () => window.removeEventListener('online', refresh);
   }, []);
   return {
-    modes: resolved?.key === key ? resolved.data.modes : defaultFieldModes(mode),
+    modes:
+      resolved?.key === key
+        ? { ...defaultFieldModes(mode), ...resolved.data.modes }
+        : defaultFieldModes(mode),
     ready: !projectId || (resolved?.key === key && failure?.key !== key),
     notice: !projectId
       ? '현장을 선택하세요.'

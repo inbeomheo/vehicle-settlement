@@ -153,13 +153,17 @@ test('390·360·1440px 5회차 접기·직전 복사·재정렬·필드 크기�
   const measurements = [];
   for (const width of [390, 360, 1440]) {
     await page.setViewportSize({ width, height: 844 });
-    const compact = await page.evaluate(() => document.documentElement.scrollHeight);
+    const compact = await page
+      .locator('section[data-fix-target="trips"]')
+      .evaluate((element) => element.getBoundingClientRect().height);
     while (await page.getByRole('button', { name: /회차 펼치기$/ }).count())
       await page
         .getByRole('button', { name: /회차 펼치기$/ })
         .first()
         .click();
-    const expanded = await page.evaluate(() => document.documentElement.scrollHeight);
+    const expanded = await page
+      .locator('section[data-fix-target="trips"]')
+      .evaluate((element) => element.getBoundingClientRect().height);
     expect(compact).toBeLessThan(expanded * (width >= 1000 ? 0.85 : 0.75));
     for (let seq = 1; seq <= 4; seq++)
       await page.getByRole('button', { name: `${seq}회차 입력 완료`, exact: true }).click();

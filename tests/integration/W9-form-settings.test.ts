@@ -38,13 +38,13 @@ const field = (
   version = 0,
 ) => ({ field_key, driver_mode, manager_mode, version });
 
-it('코드 기본값은 최소 기사 폼, 담당자는 모두 선택이며 요청자 없는 기사 제출 성공', async () => {
+it('코드 기본값은 담당자·적재용량 필수, 기존 담당자 항목은 선택이며 요청자 없는 기사 제출 성공', async () => {
   const s = await setupScenario(database().db);
   const settings = await getEffectiveFormSettings(s.driverCtx, s.project.id);
   expect(settings.modes).toEqual(defaultFieldModes('driver'));
   expect(
-    Object.values((await getEffectiveFormSettings(s.adminCtx, s.project.id)).modes).every(
-      (mode) => mode === 'OPTIONAL',
+    Object.entries((await getEffectiveFormSettings(s.adminCtx, s.project.id)).modes).every(
+      ([key, mode]) => mode === (['reviewer', 'load_tonnage'].includes(key) ? 'REQUIRED' : 'OPTIONAL'),
     ),
   ).toBe(true);
   const use = await createUse(s.driverCtx, s.input);

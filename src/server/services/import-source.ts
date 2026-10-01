@@ -8,7 +8,7 @@ import type { ImportMapping } from './import-fields';
 
 export type ImportSourceIds = Required<
   Pick<CreateUseInput, 'project_id' | 'driver_id' | 'vehicle_id' | 'payee_counterparty_id'>
->;
+> & { reviewer_user_id?: string };
 export const importIdentityLock = 'import:source-row';
 const units: Record<string, (typeof billingUnitEnum.enumValues)[number]> = {
   회당: 'PER_TRIP',
@@ -74,6 +74,8 @@ export function parseImportSource(
   if (!get('destination')) errors.push('도착지: 필수 항목입니다.');
   if (get('extra') && !get('reason')) errors.push('추가비 사유: 필수 항목입니다.');
   const parsed = createUseSchema.safeParse({
+    reviewer_user_id: ids.reviewer_user_id,
+    load_tonnage: get('load_tonnage') || undefined,
     use_date: useDate,
     project_id: ids.project_id,
     driver_id: ids.driver_id,
@@ -100,6 +102,8 @@ export function parseImportSource(
   if (!parsed.success) {
     const labels: Record<string, string> = {
       use_date: '사용일',
+      reviewer_user_id: '담당자',
+      load_tonnage: '적재용량',
       project_id: '현장',
       driver_id: '기사',
       vehicle_id: '차량번호',
@@ -126,6 +130,7 @@ export function parseImportSource(
     invalid('기준정보와 입력값을 확인하세요.');
   const input: CreateUseInput = parsed.data;
   const sourceIds: ImportSourceIds = {
+    ...(parsed.data.reviewer_user_id ? { reviewer_user_id: parsed.data.reviewer_user_id } : {}),
     project_id: parsed.data.project_id,
     driver_id: parsed.data.driver_id,
     vehicle_id: parsed.data.vehicle_id,
@@ -137,6 +142,7 @@ export function parseImportSource(
     sourceIds,
     identity: {
       ...sourceIds,
+      ...(parsed.data.load_tonnage ? { load_tonnage: new Decimal(parsed.data.load_tonnage).toString() } : {}),
       use_date: useDate,
       origin: get('origin'),
       destination: get('destination'),

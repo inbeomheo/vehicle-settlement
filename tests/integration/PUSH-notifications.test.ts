@@ -151,7 +151,8 @@ it('지정 담당자만, 미지정은 유효 검수 권한자 전원, 보완은 
   const future = await s.f.user({ role: 'SITE_MANAGER' });
   await s.f.assignment(future.id, s.project.id, { valid_from: '2099-01-01' });
   const disabled = await s.f.user({ status: 'DISABLED' });
-  const ids = await pushRecipients(database().db, use, 'SUBMITTED');
+  // 시험 기본 입력은 담당자를 지정하므로, 미지정 경우를 따로 만든다.
+  const ids = await pushRecipients(database().db, { ...use, reviewer_user_id: null }, 'SUBMITTED');
   expect(ids).toEqual(expect.arrayContaining([s.admin.id, site.id, global.id]));
   for (const id of [s.driverUser.id, expired.id, future.id, disabled.id]) expect(ids).not.toContain(id);
   const selected = { ...use, reviewer_user_id: site.id };

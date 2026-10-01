@@ -56,6 +56,8 @@ export async function exportLedger(ctx: Context, query: unknown) {
     '지급상태',
     '작성자',
     '입력구분',
+    '담당자',
+    '적재용량(톤)',
   ];
   sheet.addRow(headers);
   for (const row of data.rows)
@@ -87,6 +89,8 @@ export async function exportLedger(ctx: Context, query: unknown) {
       names[row.payment_status],
       row.creator_name,
       row.entered_as === 'PROXY' ? '대리 입력' : '기사 직접',
+      row.reviewer_name,
+      row.load_tonnage ? formatQuantity(row.load_tonnage) : null,
     ]);
   const total = sheet.addRow([`전체 검색 결과 합계(${data.total}건 · 취소 제외)`]);
   const validRows = data.rows.filter((row) => row.operation_status !== 'CANCELED');

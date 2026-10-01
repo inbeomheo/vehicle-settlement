@@ -30,7 +30,12 @@ export type SummaryAmounts = {
   pending_unknown_count: number;
 };
 export type SummaryCell = SummaryAmounts & { project_id: string; driver_id: string };
-export type SummaryProject = SummaryAmounts & { id: string; name: string };
+export type SummaryProject = SummaryAmounts & {
+  id: string;
+  name: string;
+  reviewers: string[];
+  loads: string[];
+};
 export type SummaryDriver = SummaryProject & { affiliations: string[] };
 export type SummaryResult = {
   from: string;
@@ -66,6 +71,8 @@ type UseRow = {
   project_id: string;
   driver_id: string;
   project_name: string;
+  reviewer_name: string | null;
+  load_tonnage: string | null;
   driver_name: string;
   total_amount: string | null;
   approved_tax: string;
@@ -83,7 +90,7 @@ export async function getSummary(ctx: Context, raw: unknown): Promise<SummaryRes
   const base = await ledgerBase(ctx);
   const result = await ctx.db.execute(sql`
     WITH scoped AS (${base})
-    SELECT s.project_id, s.driver_id, s.project_name, s.driver_name, s.total_amount,
+    SELECT s.project_id, s.driver_id, s.project_name, s.driver_name, s.total_amount, s.reviewer_name, s.load_tonnage::text,
       c.approved_tax, c.approved_count, c.pending_lines,
       COALESCE((SELECT jsonb_agg(DISTINCT cp.name ORDER BY cp.name)
         FROM driver_affiliations a JOIN counterparties cp ON cp.id=a.counterparty_id
@@ -128,13 +135,21 @@ export async function getSummary(ctx: Context, raw: unknown): Promise<SummaryRes
       ...emptyAmounts(),
       id: row.project_id,
       name: row.project_name,
+      reviewers: [],
+      loads: [],
     };
     const driver = drivers.get(row.driver_id) ?? {
       ...emptyAmounts(),
       id: row.driver_id,
       name: row.driver_name,
+      reviewers: [],
+      loads: [],
       affiliations: [],
     };
+    for (const group of [project, driver]) {
+      group.reviewers = [...new Set([...group.reviewers, row.reviewer_name ?? '미지정'])];
+      group.loads = [...new Set([...group.loads, ...(row.load_tonnage ? [row.load_tonnage] : [])])];
+    }
     driver.affiliations = [...new Set([...driver.affiliations, ...row.affiliations])].sort((a, b) =>
       a.localeCompare(b, 'ko'),
     );

@@ -4,6 +4,8 @@ import { Plate } from '@/components/ui/plate';
 import { primary, button } from './fields';
 
 export type SubmitSummary = {
+  reviewer: string;
+  load: string;
   date: string;
   project: string;
   plate: string;
@@ -82,6 +84,8 @@ export function ConfirmSubmitSheet({
       <dl className="mt-4 rounded-xl bg-slate-50 px-4">
         <Row label="날짜">{dateLabel(summary.date)}</Row>
         <Row label="현장">{summary.project || '현장 없음'}</Row>
+        <Row label="담당자">{summary.reviewer}</Row>
+        <Row label="적재용량">{summary.load ? `${summary.load}톤` : '미입력'}</Row>
         <Row label="차량">
           <Plate value={summary.plate} size="md" />
         </Row>

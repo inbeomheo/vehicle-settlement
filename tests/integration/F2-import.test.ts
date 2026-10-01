@@ -4,7 +4,7 @@ import { testDatabase } from '../helpers/database';
 import { setupScenario } from '../helpers/factories';
 import { importJobs, rateAgreements, vehicleUses } from '../../src/server/db/schema';
 import { uploadImport, previewImport, commitImport } from '../../src/server/services/import';
-import { approveUse, getUse, submitUse } from '../../src/server/services/uses';
+import { approveUse, getUse, submitUse, updateUse } from '../../src/server/services/uses';
 import { createStatement, confirmStatement, getStatement } from '../../src/server/services/statements';
 import { recordPayment } from '../../src/server/services/payments';
 import { recalculateImportHashes } from '../../src/server/services/import-rehash';
@@ -92,6 +92,11 @@ it.each(['CRLF', '행 이동', '열 매핑 변경'] as const)(
     const lineIds: string[] = [];
     for (const id of useIds) {
       let use = await getUse(s.adminCtx, id);
+      use = await updateUse(s.adminCtx, id, {
+        version: use.version,
+        reviewer_user_id: s.admin.id,
+        load_tonnage: '1',
+      });
       use = await submitUse(s.adminCtx, id, { version: use.version });
       use = await approveUse(s.adminCtx, id, { version: use.version });
       lineIds.push(...use.charge_lines.map((line) => line.id));

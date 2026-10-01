@@ -164,12 +164,12 @@ test('설정 필수·회차·증빙 오류를 모두 요약하고 화면의 첫 
   await fillRoute(page);
   await page.getByRole('button', { name: '1회차 입력 완료', exact: true }).click();
   await submitDriverForm(page);
-  await expectInputError(page.getByLabel('요청자'), '요청자 항목을 입력하세요.');
-  await expect(page.locator('#form-errors')).toContainText('1회차 경유 항목을 입력하세요.');
-  await expect(page.locator('#form-errors')).toContainText('사진·인수증·계근표·확인서 중 1개 이상');
-  await page.getByLabel('요청자').fill('현장 담당자');
-  await submitDriverForm(page);
   await expectInputError(page.getByLabel('1회차 경유 (쉼표 구분)'), '1회차 경유 항목을 입력하세요.');
+  await expect(page.locator('#form-errors')).toContainText('요청자 항목을 입력하세요.');
+  await expect(page.locator('#form-errors')).toContainText('사진·인수증·계근표·확인서 중 1개 이상');
+  await page.getByLabel('1회차 경유 (쉼표 구분)').fill('자재 창고');
+  await submitDriverForm(page);
+  await expectInputError(page.getByLabel('요청자'), '요청자 항목을 입력하세요.');
 });
 
 test('제출 직전 서버 설정이 바뀌어도 숨김 입력을 열고 필수 오류로 이동한다', async ({ page }) => {
