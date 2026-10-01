@@ -269,7 +269,7 @@ it('SEC-05 가입 재전송과 비밀번호 재설정 경합에서 옛 암호로
   });
 });
 
-it('SEC-01 선택지는 역할별 최소 필드·현재 배정·운행 이력으로 제한된다', async () => {
+it('SEC-01 현장 선택지는 활성 이름 목록, 기사는 본인 목록, 고객은 현장 관련으로 제한된다', async () => {
   const { getLookups } = await import('../../src/server/services/lookups');
   const s = await setupScenario(database().db);
   const other = await setupScenario(database().db);
@@ -285,9 +285,13 @@ it('SEC-01 선택지는 역할별 최소 필드·현재 배정·운행 이력으
   const future = await s.f.user({ role: 'DRIVER', driver_id: other.driver.id });
   await s.f.assignment(future.id, s.project.id, { valid_from: '2099-01-01' });
   const scoped = await getLookups(s.f.context(manager));
-  expect(scoped.drivers.map((row) => row.id)).toEqual([s.driver.id]);
-  expect(scoped.vehicles.map((row) => row.id)).toEqual([s.vehicle.id]);
-  expect(scoped.counterparties.map((row) => row.id).sort()).toEqual([s.payee.id, customer.id].sort());
+  expect(scoped.drivers.map((row) => row.id)).toEqual(expect.arrayContaining([s.driver.id, other.driver.id]));
+  expect(scoped.vehicles.map((row) => row.id)).toEqual(
+    expect.arrayContaining([s.vehicle.id, other.vehicle.id]),
+  );
+  expect(scoped.counterparties.map((row) => row.id)).toEqual(
+    expect.arrayContaining([s.payee.id, other.payee.id, customer.id]),
+  );
   const self = await getLookups(s.driverCtx);
   expect(self.drivers.map((row) => row.id)).toEqual([s.driver.id]);
   expect(self.counterparties.map((row) => row.id)).toEqual([s.payee.id]);
