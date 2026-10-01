@@ -100,7 +100,8 @@ export function rowValues(row: StatementExportModel['rows'][number]): (string | 
     row.trip_count,
     exportChargeUnit(row.charge_type, row.billing_unit),
     row.quantity === null ? null : formatQuantity(row.quantity),
-    displayUnitPrice(row, row.supply_amount),
+    displayUnitPrice(row, row.supply_amount) ??
+      (row.charge_type === 'BASE' || row.unit_price != null ? '—' : null),
     row.supply_amount,
     row.tax_amount,
     [row.carried_forward ? '전월분' : '', row.charge_type === 'ADJUSTMENT' ? '조정' : '', row.notes]

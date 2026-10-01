@@ -1473,8 +1473,10 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
                 done={stepDone.trips}
                 trips={form.trips}
                 onChange={(trips) => change({ trips })}
-                recent={recent.filter((use) => use.driver_id === form.driver_id)}
-                recentRoutes={recentRoutes}
+                recent={recent.filter(
+                  (use) => use.driver_id === form.driver_id && use.project_id === form.project_id,
+                )}
+                recentRoutes={recentRoutes.filter((route) => route.project_id === form.project_id)}
                 onRecentRoute={(trips, route) =>
                   change({
                     trips,

@@ -18,7 +18,7 @@ import {
   vehicleUses,
 } from '../db/schema';
 import { nextStatementNo } from '../db/numbers';
-import { sumMoney, won } from '../domain/money';
+import { sumMoney, won, type TaxMode, type Rounding } from '../domain/money';
 import { AppError, invalid, notFound } from '../errors';
 import {
   assertEvidenceSatisfied,
@@ -55,6 +55,9 @@ export type ItemSnapshot = {
   billing_unit: string;
   quantity: string | null;
   unit_price: number | null;
+  computed_amount?: number | null;
+  tax_mode?: TaxMode;
+  rounding?: Rounding;
   supply_amount: number | null;
   tax_amount: number | null;
   notes: string;
@@ -122,6 +125,9 @@ export async function makeItemSnapshot(
     billing_unit: line.billing_unit,
     quantity: line.quantity,
     unit_price: line.unit_price,
+    computed_amount: line.computed_amount,
+    tax_mode: line.tax_mode,
+    rounding: line.rounding,
     supply_amount: line.approved_amount,
     tax_amount: line.tax_amount,
     notes: [use.notes, line.reason].filter(Boolean).join(' / '),

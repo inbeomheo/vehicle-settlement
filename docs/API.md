@@ -73,6 +73,7 @@
 
 - `POST /api/uses/:id/submit`: `{ version }`. DRAFT/NEEDS_FIX에서 제출, 증빙 검사, 새 revision 생성.
 - `POST /api/uses/:id/approve`: `{ version, comment?, lines?: [{ id, line_review_status: "APPROVED"|"HELD"|"REJECTED", approved_amount?, reason? }] }`. 생략한 PENDING 라인은 서버 계산/요청액으로 승인하며, 먼저 라인 검수한 결과는 유지한다. PENDING 가격을 승인하려면 담당자가 승인 공급가를 지정해야 한다.
+- 목록의 바로 승인·선택 승인은 표시한 `version`과 `quick_approval: { review_base_amount, review_extra_amount, review_total_amount }`(정수 공급가)을 그대로 전달한다. 승인 직전 최신 버전으로 바꾸지 않는다. 서버는 부모·비용 잠금 후 목록과 동일한 바로 승인 조건 및 금액을 재검사한다. 버전·표시 금액·승인 조건이 바뀌면 `409 VERSION_CONFLICT`, “내용이 바뀌었습니다. 다시 확인한 뒤 승인하세요.”로 거부한다. `quick_approval`와 `lines`를 동시에 보낼 수 없다. 선택 승인은 개별 실패를 건너뛰고 승인·건너뛴 건수를 알린다.
 - 승인액 override는 **최종 공급가액**이다. override가 없으면 VAT_INCLUDED 금액을 공급가와 세액으로 분리한다. 추가비의 요청액을 그대로 확정할 의무는 없다.
 - `PATCH /api/charge-lines/:id/review`: `{ version, line_review_status, approved_amount?, reason? }`. SUBMITTED 상태만 허용하며 `{ ...line, use_version }`을 반환한다. 사용 건 전체 승인은 별도 approve 호출로 현재 revision에 연결한다.
 - `POST /api/uses/:id/request-fix`: `{ version, comment?, fix_items: [{ target, message }] }`.
@@ -212,7 +213,7 @@ commit은 generic 응답 캐시를 사용하지 않는다. job 행 잠금 + 가�
 - 승인 기본값·검수 전 예상액은 기본운임에서 **요청액 → 계약 계산액** 순이다. 추가비는 기존 계산액 → 요청액 순, 기본운임 포함은 0이다. 승인 `approved_amount`는 최종 공급가로 우선하며 세금 계산·감사·버전·승인 무효화·멱등·명세 잠금 규칙은 그대로다.
 - 대장 `review_base_amount`, `review_extra_amount`, `review_total_amount`는 적용 금액을 공급가로 환산한다. `has_base_amount_difference`는 지급 BASE의 PENDING 줄에서 계약 계산액과 요청액이 모두 있고 다를 때 true다. 검수함은 이를 “계약 단가와 다른 금액”으로 표시하고 바로 승인/일괄 선택에서 제외한다. 계약 없이 요청액만 있으면 다른 문제가 없는 한 바로 승인할 수 있다.
 - 기사 목록 `payable_base_amount`는 승인 전 요청액 → 계산액, 승인 후 승인 공급가를 표시한다(기존 목록의 승인 전 줄 세금모드 기준 표시 유지). 기사 정산·현장/기사 집계의 pending_supply는 같은 선택 규칙으로 공급가 환산한다. 정산 후보의 `estimated_supply`는 승인 공급가 또는 검수 전 예상 공급가이며 `snapshot.supply_amount`를 대체하지 않는다. 승인 전 후보는 포함 불가다. 대시보드는 기존 승인 후 미정산액·확정 미지급액을 사용한다.
-- `GET /api/uses/recent-routes?driver_id=<본인 기사 UUID>`의 각 경로에 `last_amount: number | null`(공급가)을 추가한다. 같은 출발·도착의 가장 최근 제출본 시각, 생성시각, ID 순으로 선택한 제출 스냅샷의 PAYABLE BASE 제안 금액 합이다. 제출 뒤 아직 보내지 않은 수정값과 다른 기사로 귀속된 제출본은 참고하지 않는다. 최신 건의 금액이 미정이면 과거 금액으로 건너뛰지 않는다. 미제출·취소·삭제·반려 비용은 참고 금액에서 제외하고 현재 현장 권한을 검사한다. 기존 `driver_id`/`user_id` 조회 범위는 유지한다. 폼은 선택한 기사 ID를 명시하고, 1회차 최근 경로 선택 시 계약이 없고 빈 요청액에만 채운다. 직접 입력은 덮어쓰지 않는다.
+- `GET /api/uses/recent-routes?driver_id=<본인 기사 UUID>`의 각 경로에 `last_amount: number | null`(공급가)을 추가한다. 같은 현장·출발·도착의 가장 최근 제출본 시각, 생성시각, ID 순으로 선택한 제출 스냅샷의 PAYABLE BASE 제안 금액 합이다. 제출 뒤 아직 보내지 않은 수정값과 다른 기사로 귀속된 제출본은 참고하지 않는다. 최신 건의 금액이 미정이면 과거 금액으로 건너뛰지 않는다. 미제출·취소·삭제·반려 비용은 참고 금액에서 제외하고 현재 현장 권한을 검사한다. 기존 `driver_id`/`user_id` 조회 범위는 유지한다. 폼은 선택한 기사 ID를 명시하고 선택 현장의 경로만 제안하며, 1회차 최근 경로 선택 시 계약이 없고 빈 요청액에만 채운다. 직접 입력은 덮어쓰지 않는다.
 - 가져오기 단가 열은 기존대로 **단가 × 청구수량**이다. 파일 단가 합계는 기존처럼 계산액에 저장한다(별도 요청액은 null). 기존 단가/계산액/중복 식별자와 사용일·과금단위 변경 시 재조회 동작을 유지한다. `agreement_snapshot.contract_computed_amount`, `contract_min_charge`에 계약 비교 근거를 보관해 다른 금액을 검수 이슈로 표시한다. 같은 계약에서 수량 수정 시 비교 계약액도 갱신한다. 단가 빈칸/계약단가 적용 옵션/0원 처리의 기존 규칙은 유지한다.
 - 폼의 숫자 표시는 천 단위 쉼표이고 API에는 정수만 전송한다. IndexedDB 초안·원본 생성 요청 재생·생성 행 ID 복원에도 BASE 요청액을 보존한다. 최근 금액 표시용 로컬 필드는 API에서 제외한다.
 
@@ -253,6 +254,13 @@ commit은 generic 응답 캐시를 사용하지 않는다. job 행 잠금 + 가�
 - `GET /api/uses/reviewers?project_id=<uuid>&driver_id=<uuid>`: 현장 접근 범위 검사, 기사는 본인 driver_id만 허용. `{reviewers:[{id,name,role}],default_reviewer_id,recent_loads}`. 담당자 연락처/계정 정보는 반환하지 않는다. 취소 제외 최근 30건에서 활성 후보인 마지막 선택과 최근 적재용량 최대 5개를 제공한다. 클라이언트는 사용자·현장·기사별로 오프라인 캐시를 분리한다.
 - 사용대장 조회·내보내기: `reviewer_user_id`, `reviewer_name`(부분 일치), `load_tonnage`(정확한 숫자 일치), `reviewer_scope=mine|all|auto` 추가. mine은 본인 담당+미지정, auto는 해당 범위가 없으면 전체다. 기본 대장은 all, 검수함은 auto다. 응답 행에 담당자 이름·ID·적재용량, 응답에 적용된 reviewer_scope를 포함한다. 지정 담당자가 달라도 기존 현장 검수 권한이 있으면 승인 가능하다.
 - 대시보드 `review_pending` 및 이를 사용하는 메뉴 배지는 접근 가능한 SUBMITTED/취소 제외 중 본인 담당+미지정만 센다.
+- 과거 운행의 담당자 이름은 `snapshot.reviewer_name`을 우선하고 없는 과거 자료만 현재 사용자 이름을 사용한다. 사용대장·운행 결재·집계·내보내기에 동일하게 적용하며 담당자 선택 목록은 현재 이름, 필터는 사용자 ID를 유지한다.
 - 현장·기사 집계의 각 group에 `reviewers`(당시 담당자 이름 목록), `loads`(적재용량 목록)를 추가한다. 여러 운행의 적재용량을 합산하거나 차량 제원 톤수로 대체하지 않는다.
 - 엑셀 가져오기 `reviewer`, `load_tonnage`는 선택 열이다. 담당자 이름 또는 UUID를 현재 현장 검수 가능 후보와 정확히 매칭하며 동명이인은 UUID가 필요하다. 값이 있는 새 열만 원본 중복 식별자에 포함하여 기존 파일 해시를 유지한다. 사용대장 Excel 뒤에 담당자·적재용량 열을 추가한다.
 - `GET /api/uses/:id/report.pdf`: 기존 사용 상세와 동일한 본인·현장 권한, no-store PDF. 프로젝트·작성일·담당자·차량/기사/차종/적재용량·운행일·회차별 경로/운반내용·지급 공급가·현재 승인자/승인시각을 출력한다. 고객 청구 금액은 출력하지 않는다. 기본 A4 한 장이며 많은 회차·긴 내용은 누락 없이 다음 장으로 이어진다. 승인 금액은 승인된 지급 비용만 합산하며 승인 전은 검수 전 금액으로 구분한다.
+
+## FIX-MONEY 실제 적용 단가 표시
+
+- 명세 화면·PDF·엑셀은 같은 `displayUnitPrice`를 사용한다. 승인 공급가가 저장된 계약 계산 공급가와 같으면 기존 계약 단가를 표시한다. 다르면 decimal.js로 공급가 ÷ 수량을 계산하고, 정수 원으로 나누어떨어질 때만 실제 적용 단가를 표시한다. 나누어떨어지지 않거나 양수 수량이 없으면 `—`로 표시한다. 공급가·세액·정산 합계는 변경하지 않는다.
+- 새 명세 항목의 고정 snapshot에 `computed_amount`, `tax_mode`, `rounding`을 함께 보존한다. 부가세 포함·최소요금·반올림 계약도 이후 기준정보를 조회하지 않고 판정한다. 해당 근거가 없는 기존 snapshot은 고정된 수량·단가의 계산액으로 비교한다.
+- 기사 정산에서 검수 전 금액의 존재는 `pending_count > unpriced_count`로 판단한다. 명시적 0원은 `0원`, 미정 항목만 있는 건은 `금액 미정`으로 표시한다.

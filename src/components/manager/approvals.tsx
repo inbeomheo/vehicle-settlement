@@ -46,13 +46,13 @@ export function Approvals() {
     const errors: string[] = [];
     for (const row of targets) {
       try {
-        await approveUse(row.id);
+        await approveUse(row);
         count++;
       } catch (reason) {
         errors.push(`${row.use_no}: ${reason instanceof Error ? reason.message : '승인하지 못했습니다.'}`);
       }
     }
-    setMessage(`${count}건 승인했습니다.`);
+    setMessage(`${count}건 승인했습니다.${errors.length ? ` ${errors.length}건 건너뛰었습니다.` : ''}`);
     setFailures(errors.join(' / '));
     setSelection({ search, ids: [] });
     setBusy(false);

@@ -40,9 +40,11 @@ export async function getRecentRoutes(ctx: Context, raw: unknown) {
           SELECT r.snapshot FROM scoped vu JOIN LATERAL (
             SELECT snapshot, submitted_at FROM use_revisions
             WHERE vehicle_use_id=vu.id AND snapshot->>'driver_id'=vu.driver_id::text
+              AND snapshot->>'project_id'=vu.project_id::text
             ORDER BY revision_no DESC LIMIT 1
           ) r ON true
-          WHERE EXISTS (SELECT 1 FROM jsonb_array_elements(r.snapshot->'trips') t
+          WHERE vu.project_id=routes.project_id
+            AND EXISTS (SELECT 1 FROM jsonb_array_elements(r.snapshot->'trips') t
             WHERE t->>'origin'=routes.origin AND t->>'destination'=routes.destination AND t->>'status'<>'CANCELED')
           ORDER BY r.submitted_at DESC,vu.created_at DESC,vu.id DESC LIMIT 1
         ) previous ON true

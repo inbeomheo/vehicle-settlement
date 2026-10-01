@@ -494,7 +494,7 @@ function ReviewCard({
   async function approve() {
     setBusy(true);
     try {
-      await approveUse(row.id);
+      await approveUse(row);
       onResult('approved');
     } catch (reason) {
       onResult({ error: reason instanceof Error ? reason.message : '승인하지 못했습니다.' });
@@ -595,6 +595,7 @@ export function ReviewInbox({ initialTab = 'SUBMITTED' }: { initialTab?: string 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [results, setResults] = useState<Record<string, CardResult>>({});
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkMessage, setBulkMessage] = useState('');
   const filter = tab === 'MISSING' ? 'evidence_missing=true' : `review_status=${tab}`;
   const { data, error, loading, refresh } = useRemote<LedgerResult>(
     `/api/ledger?${filter}&reviewer_scope=${reviewerScope}&page=${page}&pageSize=20&sort=use_date&order=asc`,
@@ -611,11 +612,16 @@ export function ReviewInbox({ initialTab = 'SUBMITTED' }: { initialTab?: string 
     });
   async function approveSelected() {
     setBulkBusy(true);
+    setBulkMessage('');
+    let approved = 0;
+    let skipped = 0;
     for (const row of chosen) {
       try {
-        await approveUse(row.id);
+        await approveUse(row);
+        approved++;
         setResults((current) => ({ ...current, [row.id]: 'approved' }));
       } catch (reason) {
+        skipped++;
         setResults((current) => ({
           ...current,
           [row.id]: { error: reason instanceof Error ? reason.message : '승인하지 못했습니다.' },
@@ -623,6 +629,7 @@ export function ReviewInbox({ initialTab = 'SUBMITTED' }: { initialTab?: string 
       }
     }
     setSelected(new Set());
+    setBulkMessage(`${approved}건 승인했습니다.${skipped ? ` ${skipped}건 건너뛰었습니다.` : ''}`);
     setBulkBusy(false);
   }
   return (
@@ -697,6 +704,11 @@ export function ReviewInbox({ initialTab = 'SUBMITTED' }: { initialTab?: string 
         )}
       </div>
       <Notice error={error} onRetry={error ? refresh : undefined} />
+      {bulkMessage && (
+        <p role="status" className="mb-3 text-sm font-semibold">
+          {bulkMessage}
+        </p>
+      )}
       <div className="grid gap-2.5">
         {!loading &&
           data?.rows.map((row) => (

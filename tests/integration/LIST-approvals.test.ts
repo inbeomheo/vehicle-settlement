@@ -9,7 +9,7 @@ import { callRoute } from '../helpers/routes';
 import { getApprovals } from '../../src/server/services/approvals';
 import { exportApprovals } from '../../src/server/services/approvals-export';
 import { createUse, submitUse, approveUse, requestFix, cancelUse } from '../../src/server/services/uses';
-import { projectAssignments, rateAgreements, vehicleUses } from '../../src/server/db/schema';
+import { projectAssignments, rateAgreements } from '../../src/server/db/schema';
 import { GET } from '../../src/app/api/approvals/route';
 import { GET as exportGET } from '../../src/app/api/approvals/export.xlsx/route';
 import { quickApprovable } from '../../src/components/manager/quick-approval';
@@ -62,17 +62,14 @@ it('날짜·경로·회차 운반내용·프로젝트·기사·담당자와 나 
   const s = await scenario();
   const otherReviewer = await s.f.user({ name: '다른 담당자' });
   for (const [index, day] of ['2026-09-15', '2026-09-16', '2026-09-16'].entries()) {
-    const use = await createUse(s.adminCtx, {
+    await createUse(s.adminCtx, {
       ...s.input,
+      reviewer_user_id: index === 0 ? otherReviewer.id : s.manager.id,
       use_date: day,
       quantity: '1',
       trips: [{ seq: 1, origin: '탕정', destination: '용인', cargo_desc: '배관 100%' }],
       cargo_desc: '자재 운반',
     });
-    await database()
-      .db.update(vehicleUses)
-      .set({ reviewer_user_id: index === 0 ? otherReviewer.id : s.manager.id })
-      .where(eq(vehicleUses.id, use.id));
   }
   const query = {
     ...s.query,
