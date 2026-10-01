@@ -28,7 +28,7 @@ async function login(page: Page, loginId: string, path: string) {
 }
 async function enterRoute(page: Page) {
   await page.getByLabel('1회차 출발', { exact: true }).fill('둔포');
-  await page.getByLabel('1회차 도착', { exact: true }).fill('P5그린동');
+  await page.getByLabel('1회차 도착', { exact: true }).fill('P5 현장');
 }
 async function send(page: Page, amount: string) {
   await fillFlowFields(page);
@@ -78,14 +78,14 @@ test('360px·20px: 기사 금액 → 보내기 확인 → 담당자 바로 승�
   await page.goto(`/d/new?project=${s.project.id}`);
   await page
     .getByRole('group', { name: '1회차 최근 경로', exact: true })
-    .getByRole('button', { name: '둔포 → P5그린동', exact: true })
+    .getByRole('button', { name: '둔포 → P5 현장', exact: true })
     .click();
   await expect(amount).toHaveValue('140,000');
   await expect(page.getByText('지난번 이 구간 금액', { exact: true })).toBeVisible();
   await amount.fill('150000');
   await page
     .getByRole('group', { name: '1회차 최근 경로', exact: true })
-    .getByRole('button', { name: '둔포 → P5그린동', exact: true })
+    .getByRole('button', { name: '둔포 → P5 현장', exact: true })
     .click();
   await expect(amount).toHaveValue('150,000');
   await noOverflow(page);

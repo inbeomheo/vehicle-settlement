@@ -1,5 +1,5 @@
 'use client';
-import { Field, inputClass, Notice, secondaryClass, useRemote } from './common';
+import { Field, inputClass, Notice, useRemote } from './common';
 import { formatBusinessNumber } from '../driver-information-fields';
 
 export type JoinBusinessSelection = {
@@ -45,7 +45,7 @@ export function JoinBusinessFields({
             type="button"
             role="tab"
             aria-selected={value.mode === mode}
-            className={`${secondaryClass} ${value.mode === mode ? 'border-blue-700 bg-blue-50 text-blue-900' : ''}`}
+            className={`inline-flex min-h-11 items-center justify-center rounded-lg border px-4 py-2 text-sm ${value.mode === mode ? 'border-ink bg-ink font-bold text-white hover:bg-slate-700' : 'border-slate-300 bg-white font-medium text-ink hover:bg-slate-50'}`}
             onClick={() => onChange({ ...value, mode })}
           >
             {mode === 'existing' ? '기존 사업자 선택' : '새 사업자 등록'}

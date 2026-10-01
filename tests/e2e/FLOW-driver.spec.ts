@@ -10,7 +10,7 @@ test.afterAll(() => database.pool.end());
 for (const size of ['normal', 'xlarge'])
   test(`FLOW 360px ${size}: 입력 순서·제출·내 담당 검수·보고서`, async ({ page }, info) => {
     const s = await setupScenario(database.db);
-    const manager = await s.f.user({ role: 'SITE_MANAGER', name: `윤찬식-${size}` });
+    const manager = await s.f.user({ role: 'SITE_MANAGER', name: `한담당-${size}` });
     await s.f.assignment(manager.id, s.project.id);
     await page.addInitScript((value) => localStorage.setItem('vehicle-text-size', value), size);
     await page.request.post('/api/auth/login', {
@@ -21,7 +21,7 @@ for (const size of ['normal', 'xlarge'])
     await page.getByLabel('사용일', { exact: true }).fill('2026-10-01');
     await page.getByRole('radio', { name: `${manager.name} (현장 담당자)`, exact: true }).check();
     await page.getByLabel('적재용량 (톤)').fill('2.5');
-    await page.getByLabel('1회차 출발', { exact: true }).fill('성건2공장');
+    await page.getByLabel('1회차 출발', { exact: true }).fill('본사 2공장');
     await page.getByLabel('1회차 도착', { exact: true }).fill('탕정 배관공사');
     await page.getByRole('button', { name: '금액이 다르면 직접 입력', exact: true }).click();
     await page.getByLabel('이번 운행 금액(원)', { exact: true }).fill('300000');

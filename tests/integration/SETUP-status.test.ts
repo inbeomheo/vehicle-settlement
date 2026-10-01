@@ -24,7 +24,7 @@ it('빈 상태에서 시작 준비 항목이 모두 0이고, 등록하면 채워
   });
 
   const s = await setupScenario(db);
-  await db.insert(companySettings).values({ name: '성건기업' });
+  await db.insert(companySettings).values({ name: '시연 기업' });
   const filled = await getSetupStatus(s.adminCtx);
   for (const key of [
     'company',

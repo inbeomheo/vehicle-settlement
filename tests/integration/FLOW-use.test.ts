@@ -20,7 +20,7 @@ const fixture = () => setupScenario(database().db);
 describe('FLOW 담당자·적재용량', () => {
   it('활성 담당자의 현재 현장 검수 권한만 제공하며 역할·배정·계정 회수를 거부한다', async () => {
     const s = await fixture();
-    const manager = await s.f.user({ role: 'SITE_MANAGER', name: '윤찬식' });
+    const manager = await s.f.user({ role: 'SITE_MANAGER', name: '박준호' });
     const assignment = await s.f.assignment(manager.id, s.project.id);
     const other = await s.f.user({ role: 'SITE_MANAGER' });
     const all = await s.f.user({ role: 'SETTLEMENT_MANAGER', all_projects: true });
@@ -38,7 +38,7 @@ describe('FLOW 담당자·적재용량', () => {
       reviewer_user_id: manager.id,
       load_tonnage: '2.5',
     });
-    expect(use.snapshot).toMatchObject({ reviewer_name: '윤찬식', load_tonnage: '2.5' });
+    expect(use.snapshot).toMatchObject({ reviewer_name: '박준호', load_tonnage: '2.5' });
     expect((await getUseReviewers(s.driverCtx, { project_id: s.project.id })).default_reviewer_id).toBe(
       manager.id,
     );

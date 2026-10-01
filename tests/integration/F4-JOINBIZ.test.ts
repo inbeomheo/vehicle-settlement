@@ -39,7 +39,7 @@ async function scenario() {
   const f = factories(database().db);
   const admin = await f.user();
   const project = await f.project();
-  const party = await f.counterparty({ name: '태은화물', biz_no: '104-12-34501' });
+  const party = await f.counterparty({ name: '성호 운수', biz_no: '104-12-34501' });
   return { f, ctx: f.context(admin), admin, project, party };
 }
 it('새 현장 DB 기본값과 API 기본값은 증빙 선택이고 기존 정책은 유지한다', async () => {
@@ -66,7 +66,7 @@ it('지정 링크로 여러 기사 가입·1년 전 소속·단가 조회·사�
   const link = await createJoinLink(s.ctx, { project_ids: [s.project.id], counterparty_id: s.party.id });
   const token = tokenOf(link.join_url);
   expect(await getJoinLinkStatus(database().db, token)).toMatchObject({
-    business: { name: '태은화물', masked_biz_no: '104-**-***01' },
+    business: { name: '성호 운수', masked_biz_no: '104-**-***01' },
   });
   const firstInput = registration();
   const registered = await Promise.all(
@@ -120,7 +120,7 @@ it('지정 링크로 여러 기사 가입·1년 전 소속·단가 조회·사�
   );
   expect((await listJoinLinks(s.ctx)).find((l) => l.id === link.id)).toMatchObject({
     counterparty_id: s.party.id,
-    business_name: '태은화물',
+    business_name: '성호 운수',
     used_count: 2,
   });
   const audits = (

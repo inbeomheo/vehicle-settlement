@@ -19,20 +19,20 @@ test('새 현장 기본 증빙 선택 → 지정 사업자 링크 → 360px 가�
   await page.getByRole('button', { name: '기사 가입 링크 만들기', exact: true }).click();
   await page.getByRole('checkbox', { name: '가입 사업자 현장', exact: true }).check();
   await page.getByRole('tab', { name: '새 사업자 등록', exact: true }).click();
-  await page.getByLabel('소속 사업자 상호').fill('태은화물');
+  await page.getByLabel('소속 사업자 상호').fill('성호 운수');
   await page.getByLabel('소속 사업자번호').fill('104-12-34501');
   await page.getByRole('button', { name: '링크 생성', exact: true }).click();
   const link = page.getByLabel('새 기사 가입 링크', { exact: true });
   await expect(link).toBeVisible();
-  await expect(page.getByLabel('기사 가입 링크 관리')).toContainText('소속: 태은화물');
+  await expect(page.getByLabel('기사 가입 링크 관리')).toContainText('소속: 성호 운수');
   const context = await browser.newContext({ viewport: { width: 360, height: 900 } });
   try {
     const driver = await context.newPage();
     await driver.goto(await link.inputValue());
-    await expect(driver.getByText('소속: 태은화물(104-**-***01)', { exact: true })).toBeVisible();
+    await expect(driver.getByText('소속: 성호 운수(104-**-***01)', { exact: true })).toBeVisible();
     await expect(driver.getByLabel('사업자번호', { exact: true })).toHaveCount(0);
     await expect(driver.getByLabel('상호명', { exact: true })).toHaveCount(0);
-    await driver.getByLabel('이름', { exact: true }).fill('이상규 테스트');
+    await driver.getByLabel('이름', { exact: true }).fill('김성호 테스트');
     await driver.getByLabel('전화번호', { exact: true }).fill('01088779991');
     await driver.getByLabel('차량번호', { exact: true }).fill('서울88아9991');
     await driver.getByLabel('차량 최대 적재 (톤)', { exact: true }).fill('8');
@@ -45,7 +45,7 @@ test('새 현장 기본 증빙 선택 → 지정 사업자 링크 → 360px 가�
     await driver.getByRole('radio', { name: '가입 사업자 현장', exact: true }).check();
     await driver.getByRole('radio', { name: '관리자 (관리자)', exact: true }).check();
     await driver.getByLabel('적재용량 (톤)').fill('8');
-    await driver.getByLabel('1회차 출발', { exact: true }).fill('성건 공장');
+    await driver.getByLabel('1회차 출발', { exact: true }).fill('본사 공장');
     await driver.getByLabel('1회차 도착', { exact: true }).fill('탕정 현장');
     await driver.getByLabel('이번 운행 금액(원)', { exact: true }).fill('300000');
     await expect(driver.getByText('사진·증빙 (선택)', { exact: true })).toBeVisible();

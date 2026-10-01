@@ -11,7 +11,7 @@ test.afterAll(async () => database.pool.end());
 test.setTimeout(120000);
 async function setup() {
   const s = await setupScenario(database.db);
-  const manager = await s.f.user({ role: 'SITE_MANAGER', name: '이은총' });
+  const manager = await s.f.user({ role: 'SITE_MANAGER', name: '한담당' });
   await s.f.assignment(manager.id, s.project.id);
   const uses = [];
   for (let i = 0; i < 3; i++) {
