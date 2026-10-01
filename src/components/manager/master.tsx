@@ -58,6 +58,7 @@ export function Master({ resource }: { resource: string }) {
   const [form, setForm] = useState<Record<string, string | boolean>>({});
   const [deleting, setDeleting] = useState<Row | null>(null);
   const [open, setOpen] = useState(false);
+  const [assignAllDrivers, setAssignAllDrivers] = useState(true);
   const [period, setPeriod] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -71,6 +72,7 @@ export function Master({ resource }: { resource: string }) {
     setError('');
     setSuccess('');
     setOpen(true);
+    setAssignAllDrivers(true);
     setForm(
       Object.fromEntries(
         config.fields.map((field) => [
@@ -107,7 +109,8 @@ export function Master({ resource }: { resource: string }) {
                 : value;
       }
       if (resource === 'rates' && editing) input.version = editing.version;
-      await mutate(
+      if (resource === 'projects' && !editing) input.assign_all_drivers = assignAllDrivers;
+      const result = await mutate<{ assigned_driver_count?: number }>(
         `/api/admin/${resource}${editing ? '/' + editing.id : ''}${period ? '/periods' : ''}`,
         editing && !period ? 'PATCH' : 'POST',
         input,
@@ -116,7 +119,11 @@ export function Master({ resource }: { resource: string }) {
       rows.refresh();
       lookups.refresh();
       setSuccess(
-        period ? '새 적용기간을 추가했습니다. 기존 적용기간은 필요한 경우 자동 종료됩니다.' : '저장했습니다.',
+        resource === 'projects' && !editing && assignAllDrivers
+          ? `현장을 만들고 기사 ${result.assigned_driver_count}명에게 배정했어요.`
+          : period
+            ? '새 적용기간을 추가했습니다. 기존 적용기간은 필요한 경우 자동 종료됩니다.'
+            : '저장했습니다.',
       );
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '저장하지 못했습니다.');
@@ -301,6 +308,17 @@ export function Master({ resource }: { resource: string }) {
                 </Field>
               ))}
           </div>
+          {resource === 'projects' && !editing && (
+            <label className="mt-4 flex min-h-11 items-start gap-3">
+              <input
+                type="checkbox"
+                className="mt-1 h-5 w-5 shrink-0"
+                checked={assignAllDrivers}
+                onChange={(event) => setAssignAllDrivers(event.target.checked)}
+              />
+              <span>지금 등록된 기사 모두에게 이 현장 배정</span>
+            </label>
+          )}
           <div className="mt-5 flex gap-2">
             <button className={buttonClass} disabled={busy}>
               {busy ? '저장 중…' : '저장'}

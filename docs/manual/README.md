@@ -8,7 +8,7 @@
 
 ## 안전 및 로컬 준비
 
-캡처·감사·PDF 내보내기는 **`http://localhost:3183`만 허용**한다. `BASE`를 생략해도 같은 주소다. 운영 주소·외부 주소·다른 포트가 들어오면 브라우저 실행 전에 종료하며, 브라우저의 외부 요청도 차단한다. 운영 사이트와 운영 DB에는 접속하지 않는다.
+캡처·감사·PDF 내보내기의 기본 주소는 **`http://localhost:3183`**이며 F3-ASSIGN 부분 촬영용 **`http://localhost:3191`**도 허용한다. `BASE`를 생략하면 기본 주소를 쓴다. 운영 주소·외부 주소·허용하지 않은 포트가 들어오면 브라우저 실행 전에 종료하며, 브라우저의 외부 요청도 차단한다. 운영 사이트와 운영 DB에는 접속하지 않는다.
 
 이 워크트리 `.env.local`의 `PG_PORT=54383`를 확인한다. CLI는 `.env.local`을 자동으로 읽지 않으므로 아래 환경 변수를 지정한다. DB 명령의 `DATABASE_URL`이 별도로 설정되어 있다면 반드시 전용 로컬 DB인지 먼저 확인한다.
 
@@ -99,3 +99,7 @@ PORT=3183 npx playwright test tests/e2e/FIX-REQ-manual.spec.ts tests/e2e/MANUAL-
 ## 확인된 범위 밖 문제
 
 전체 관련 E2E 중 `AGG-summary.spec.ts`의 1440px/390px 두 건은 집계에서 사용대장으로 이동한 뒤 기사 필터가 비어 실패한다. `/api/ledger/options`가 현장 담당자에게 허용되지 않는 `listMaster`를 호출하는 기존 경로다. 해당 업무 권한 코드는 F2-LOOKUP 범위여서 이번 작업에서는 변경하지 않았다. F2-UI는 선택 표시·결재 표·사이드바·기사 필터와 설명서 캡처를 수정했다. 집계 화면 자체의 수치·표·엑셀 검증은 통과했다.
+
+### 현장 배정 부분 촬영 (F3-ASSIGN)
+
+`BASE=http://localhost:3191 node docs/manual/capture/assignments.mjs`는 54391의 전용 로컬 시연 DB를 연결한 3191 서버에서 기사관리 배정과 현장 생성 두 장면만 갱신한다. 공용 캡처 도구는 추가로 이 로컬 주소만 허용하며 외부 요청 차단은 유지한다. `45-drivers`, `48-project-create`의 원본과 공개 PNG를 함께 갱신한다.

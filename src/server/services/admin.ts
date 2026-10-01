@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
-import type { Context } from '../context';
+import { todaySeoul, type Context } from '../context';
 import { assertActive, assertAdmin, accessibleProjectIds } from '../authz';
 import { audit } from '../audit';
 import { AppError, invalid, notFound } from '../errors';
@@ -71,7 +71,15 @@ export async function saveMaster(ctx: Context, resource: MasterResource, raw: un
       ? (await tx.db.execute(sql`SELECT * FROM ${table} WHERE id=${id}::uuid FOR UPDATE`)).rows[0]
       : undefined;
     if (id && !before) notFound();
-    const parsed = (id ? masterSchemas[resource].partial() : masterSchemas[resource]).parse(raw);
+    const schema =
+      !id && resource === 'projects'
+        ? masterSchemas.projects.extend({ assign_all_drivers: z.boolean().default(false) })
+        : id
+          ? masterSchemas[resource].partial()
+          : masterSchemas[resource];
+    const parsed = schema.parse(raw);
+    const assignAllDrivers = 'assign_all_drivers' in parsed && parsed.assign_all_drivers;
+    if ('assign_all_drivers' in parsed) delete (parsed as Record<string, unknown>).assign_all_drivers;
     // Zod defaults also run inside optional fields; PATCH must only write explicitly supplied keys.
     const input: Record<string, unknown> = id
       ? Object.fromEntries(Object.entries(parsed).filter(([key]) => Object.hasOwn(raw as object, key)))
@@ -135,6 +143,21 @@ export async function saveMaster(ctx: Context, resource: MasterResource, raw: un
       )
     ).rows;
     await audit(tx, id ? 'UPDATE' : 'CREATE', tableNames[resource], String(after.id), before, after);
+    if (resource === 'projects' && !id) {
+      let assignedDriverCount = 0;
+      if (assignAllDrivers) {
+        if (!after.active) invalid('기사에게 배정하려면 현장을 사용 중으로 등록하세요.');
+        const activeDrivers = await tx.db
+          .select({ id: users.id })
+          .from(users)
+          .where(and(eq(users.role, 'DRIVER'), eq(users.status, 'ACTIVE')));
+        for (const user of activeDrivers) {
+          await addAssignment(tx, { user_id: user.id, project_id: after.id, valid_from: todaySeoul() });
+          assignedDriverCount += 1;
+        }
+      }
+      return { ...after, assigned_driver_count: assignedDriverCount };
+    }
     return after;
   });
 }

@@ -175,7 +175,23 @@ export function Users() {
                 </div>
               )}
               <fieldset className="mt-4">
-                <legend className="mb-2 text-sm font-semibold">현장 배정</legend>
+                <legend className="mb-2 text-sm font-semibold">
+                  현장 배정{inviteRole === 'DRIVER' ? ' (필수)' : ''}
+                </legend>
+                {inviteRole === 'DRIVER' && (
+                  <p className="mb-2 text-sm text-slate-600">
+                    현장을 하나 이상 선택하세요. 여러 현장을 오가면 모두 선택해 주세요.
+                  </p>
+                )}
+                <button
+                  type="button"
+                  className={`${secondaryClass} mb-3`}
+                  disabled={!lookups.data?.projects.length}
+                  onClick={() => setProjects(lookups.data?.projects.map((p) => p.id) ?? [])}
+                >
+                  모든 현장 선택
+                </button>
+                {lookups.data && !lookups.data.projects.length && <p>기준정보에서 현장을 먼저 등록하세요.</p>}
                 <div className="flex flex-wrap gap-4">
                   {lookups.data?.projects.map((project) => (
                     <label key={project.id} className="flex min-h-11 items-center gap-2 text-sm">
@@ -196,7 +212,10 @@ export function Users() {
                   ))}
                 </div>
               </fieldset>
-              <button className={`${buttonClass} mt-4`} disabled={busy}>
+              <button
+                className={`${buttonClass} mt-4`}
+                disabled={busy || (inviteRole === 'DRIVER' && !projects.length)}
+              >
                 초대 링크 생성
               </button>
             </form>

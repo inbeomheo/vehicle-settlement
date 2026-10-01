@@ -24,7 +24,7 @@
 - `POST /api/auth/logout`: `{}` → `{ logged_out: true }`, 쿠키 제거·DB 세션 폐기.
 - `GET /api/me`: 현재 사용자. password_hash는 반환하지 않는다.
 - `GET /api/invites`: 관리자만, 토큰 해시를 제외한 초대 목록.
-- `POST /api/invites`: `{ role, name, phone?, driver_id?, project_ids?: UUID[] }` → 초대 + `invite_url`. 기사 역할에는 driver_id 필수.
+- `POST /api/invites`: `{ role, name, phone?, driver_id?, project_ids?: UUID[] }` → 초대 + `invite_url`. 기사 역할에는 project_ids 최소 1개가 필수이며 driver_id는 생략할 수 있다.
 - `POST /api/invites/:token/accept`: `{ login_id, password }` → 새 사용자 + 세션 쿠키. 비밀번호 최소 8자·UTF-8 최대 72바이트, 토큰 1회용/7일. URL의 동적 디렉터리 이름은 Next 라우트 충돌을 피하려고 `[id]`로 통일했지만 외부 URL 의미는 token이다.
 - `DELETE /api/invites/:id`: 초대 회수.
 
@@ -284,3 +284,10 @@ commit은 generic 응답 캐시를 사용하지 않는다. job 행 잠금 + 가�
 - 가입 재전송은 사용자 행 FOR UPDATE 아래 상태·비밀번호를 검사하고 같은 트랜잭션에서 세션을 발급한다. 비밀번호 재설정/변경의 사용자 → 세션 순서와 직렬화되며 재전송 경로는 throttle 잠금을 추가로 잡지 않는다.
 - `0740_sec_push_session.sql`: `push_subscriptions.session_id` nullable FK → sessions, ON DELETE CASCADE와 인덱스 추가. 등록/갱신은 사용자 → 현재 유효 세션 잠금 아래 세션 ID를 기록한다. 재설정·관리자 사용 중지는 해당 사용자 구독 전부 삭제, 본인 암호 변경은 현재 세션 구독만 보존, 로그아웃은 해당 세션 구독 삭제다. 만료·폐기는 인증 또는 발송 시 구독을 정리하고 유효 세션만 발송한다.
 - 기존 session_id=null 구독은 활성 사용자와 현재 현장 권한을 다시 검사해 허용한다. 재설정/사용 중지에서는 모두 삭제하고 본인 암호 변경에서도 삭제한다. 로그인 후 알림 설정이 마운트되면 기존 브라우저 구독을 POST로 다시 등록해 현재 세션에 연결한다.
+
+## F3-ASSIGN 현장 배정 안내
+
+- DRIVER 개별 초대는 기사 연결 유무와 관계없이 `project_ids` 최소 1개가 필수다. 공용 가입 링크도 기존처럼 최소 1개를 요구한다. 관리자 화면에서 현재 활성 현장을 모두 선택할 수 있다.
+- `POST /api/admin/projects`는 `assign_all_drivers?: boolean`을 받는다. 화면 기본값은 true, 옵션을 생략한 기존 API 호출은 false다. true이면 현장 생성과 활성 DRIVER 사용자 전원의 오늘부터 종료일 없는 배정·`ASSIGN_PROJECT` 감사를 같은 트랜잭션에 저장한다. 비활성 현장에 자동 배정은 422다. 생성 응답에 `assigned_driver_count`를 반환한다. PATCH에서는 이 옵션을 받지 않는다.
+- 기사관리 배정 체크박스는 ADMIN만 사용할 수 있으며 기존 `/api/admin/assignments` POST와 `/:id` DELETE를 사용한다. 기존 기간 중복·권한·감사·멱등 규칙을 유지한다. 배정에는 별도 version 필드가 없으며 기사 정보 수정의 사용자 version 계약은 유지한다.
+- 기사관리의 `projects`는 현재 유효 배정 중 활성 현장만 표시한다. `GET /api/setup-status`의 `unassigned_drivers`는 이 현장이 없는 활성 DRIVER 사용자 수다. 0명일 때는 대시보드 안내를 숨긴다. 기사 홈과 운행 폼은 기존 lookups의 활성·유효 배정 현장이 없을 때 안내하며 보내기를 막는다.

@@ -52,7 +52,7 @@ export async function listDriverProfiles(ctx: Context, id?: string) {
     c.name AS business_name, c.biz_no, v.plate_no, v.vehicle_type, v.tonnage,
     coalesce((SELECT jsonb_agg(jsonb_build_object('id', da.id, 'business_name', cp.name, 'valid_from', da.valid_from, 'valid_to', da.valid_to) ORDER BY da.valid_from DESC, da.id)
       FROM driver_affiliations da JOIN counterparties cp ON cp.id=da.counterparty_id WHERE da.driver_id=d.id), '[]') AS affiliations,
-    coalesce((SELECT jsonb_agg(jsonb_build_object('id', p.id, 'name', p.name) ORDER BY p.name) FROM projects p WHERE p.id IN
+    coalesce((SELECT jsonb_agg(jsonb_build_object('id', p.id, 'name', p.name) ORDER BY p.name) FROM projects p WHERE p.active AND p.id IN
       (SELECT pa.project_id FROM project_assignments pa WHERE pa.user_id=u.id AND pa.revoked_at IS NULL AND pa.valid_from<=${today}::date AND (pa.valid_to IS NULL OR pa.valid_to>=${today}::date) AND ${scope})), '[]') AS projects
     FROM users u JOIN drivers d ON d.id=u.driver_id LEFT JOIN vehicles v ON v.id=d.default_vehicle_id
     LEFT JOIN LATERAL (SELECT counterparty_id FROM driver_affiliations WHERE driver_id=d.id AND valid_from<=${today}::date AND (valid_to IS NULL OR valid_to>=${today}::date) ORDER BY valid_from DESC, id LIMIT 1) a ON true

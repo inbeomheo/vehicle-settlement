@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import Link from 'next/link';
+import { DriverAssignments } from './driver-assignments';
 import type { DriverProfile } from '@/server/services/driver-profiles';
 import { Modal, ConfirmDialog } from '@/components/ui/modal';
 import { DriverProfileEditor } from '@/components/driver-profile-editor';
@@ -24,6 +24,7 @@ export function Drivers() {
   const rows = useRemote<DriverProfile[]>('/api/drivers');
   const [search, setSearch] = useState('');
   const [affiliationTarget, setAffiliationTarget] = useState<DriverProfile | null>(null);
+  const [assignmentTarget, setAssignmentTarget] = useState<DriverProfile | null>(null);
   const [editing, setEditing] = useState<DriverProfile | null>(null);
   const [statusTarget, setStatusTarget] = useState<DriverProfile | null>(null);
   const [resetTarget, setResetTarget] = useState<DriverProfile | null>(null);
@@ -51,10 +52,14 @@ export function Drivers() {
     row.biz_no ?? '—',
     row.plate_no ?? '—',
     `${row.vehicle_type ?? '—'} · ${row.tonnage ?? '—'}톤`,
-    row.projects.map((p) => p.name).join(', ') || '배정 없음',
+    row.projects.map((p) => p.name).join(', ') || (
+      <span className="rounded border border-orange-200 bg-orange-50 px-2 py-1 font-semibold text-orange-800">
+        현장 배정 필요
+      </span>
+    ),
     dateTime(row.created_at).slice(0, 10),
   ];
-  const titles = ['전화번호', '상호', '사업자번호', '차량번호', '차종·톤수', '담당 현장', '가입일'];
+  const titles = ['전화번호', '상호', '사업자번호', '차량번호', '차종·톤수', '배정 현장', '가입일'];
   function actions(row: DriverProfile) {
     return (
       canEditAffiliation && (
@@ -68,6 +73,9 @@ export function Drivers() {
           </button>
           {admin && (
             <>
+              <button className={secondaryClass} onClick={() => setAssignmentTarget(row)}>
+                현장 배정
+              </button>
               <button className={secondaryClass} onClick={() => setEditing(row)}>
                 정보 수정
               </button>
@@ -116,7 +124,7 @@ export function Drivers() {
         title="기사관리"
         description={
           admin
-            ? '가입한 기사님의 정보·계정과 공용 가입 링크를 관리합니다.'
+            ? '기사님의 현장 배정·정보·계정과 공용 가입 링크를 관리합니다.'
             : canEditAffiliation
               ? '기사 정보를 보고 소속 시작일을 수정할 수 있습니다. 그 밖의 정보 변경은 관리자에게 요청하세요.'
               : '기사 정보를 볼 수 있습니다. 정보 변경은 관리자에게 요청하세요.'
@@ -219,6 +227,14 @@ export function Drivers() {
           </div>
         </>
       )}
+      {assignmentTarget && (
+        <Modal title={`${assignmentTarget.name} 현장 배정`} onClose={() => setAssignmentTarget(null)}>
+          <DriverAssignments userId={assignmentTarget.id} onChanged={rows.refresh} />
+          <button type="button" className={secondaryClass} onClick={() => setAssignmentTarget(null)}>
+            닫기
+          </button>
+        </Modal>
+      )}
       {affiliationTarget && (
         <Modal
           title={`${affiliationTarget.name} 소속 시작일 수정`}
@@ -237,11 +253,7 @@ export function Drivers() {
       )}
       {editing && (
         <Modal title={`${editing.name} 기사 정보 수정`} onClose={() => setEditing(null)}>
-          <p className="mb-4">
-            <Link className={secondaryClass} href="/m/users">
-              담당 현장 배정 관리
-            </Link>
-          </p>
+          <DriverAssignments userId={editing.id} onChanged={rows.refresh} />
           <DriverProfileEditor
             profile={editing}
             manager

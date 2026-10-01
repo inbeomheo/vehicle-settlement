@@ -101,6 +101,7 @@ test('현장 이름만 등록·수정·삭제하고 연결 현장은 사용 중�
   await page.goto('/m/master/projects');
   await page.getByRole('button', { name: '새로 등록', exact: true }).click();
   await page.getByLabel('현장(프로젝트) 이름 (예: 탕정)', { exact: true }).fill('JOIN 새 현장');
+  await page.getByLabel('지금 등록된 기사 모두에게 이 현장 배정').uncheck();
   await expect(page.getByLabel('현장 코드 (선택, 비우면 자동)', { exact: true })).toBeEmpty();
   await page.getByRole('button', { name: '저장', exact: true }).click();
   await page.getByLabel('목록 검색').fill('JOIN 새 현장');
@@ -130,7 +131,10 @@ test('현장 이름만 등록·수정·삭제하고 연결 현장은 사용 중�
 });
 test('기사 연결 없는 개별 초대는 정보 입력 화면, 꺼진 공용 링크는 가입 불가', async ({ page, browser }) => {
   await login(page);
-  const invite = await page.request.post('/api/invites', { data: { name: '개별 가입', role: 'DRIVER' } });
+  const project = (await (await page.request.get('/api/lookups')).json()).data.projects[0];
+  const invite = await page.request.post('/api/invites', {
+    data: { name: '개별 가입', role: 'DRIVER', project_ids: [project.id] },
+  });
   expect(invite.ok()).toBe(true);
   const context = await browser.newContext({ viewport: { width: 360, height: 900 } });
   try {
