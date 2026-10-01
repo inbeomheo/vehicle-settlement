@@ -56,7 +56,7 @@ import {
   type FormValues,
 } from './model';
 
-function navigateAfterSubmit(value: Draft) {
+function navigateAfterSubmit(value: Draft, destination: { current: string | null }) {
   if (
     value.mode === 'driver' &&
     value.phase === 'saved' &&
@@ -64,8 +64,14 @@ function navigateAfterSubmit(value: Draft) {
     value.serverId &&
     value.server &&
     ['SUBMITTED', 'APPROVED'].includes(value.server.review_status)
-  )
-    location.assign(`/d/uses/${value.serverId}?submitted=1`);
+  ) {
+    const url = `/d/uses/${value.serverId}?submitted=1`;
+    // Queue completion events and the send handler may finish in the same render.
+    // Claim the destination synchronously so they cannot abort each other's navigation.
+    if (destination.current === url) return;
+    destination.current = url;
+    location.assign(url);
+  }
 }
 
 function scrollTo(target: string) {
@@ -169,6 +175,7 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
   const [recent, setRecent] = useState<UseDetail[]>([]);
   const [resumable, setResumable] = useState<Draft[]>([]);
   const [submitted, setSubmitted] = useState(false);
+  const submitDestination = useRef<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const submitButton = useRef<HTMLButtonElement>(null);
   const [estimates, setEstimates] = useState<Record<string, number | null>>({});
@@ -388,7 +395,7 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
             );
             if (next.phase === 'saved' && mode === 'manager' && next.serverId)
               location.assign(`/m/uses/${next.serverId}`);
-            navigateAfterSubmit(next);
+            navigateAfterSubmit(next, submitDestination);
           }
         })
         .catch((error) => setError(errorMessage(error, '휴대폰 저장 내용을 확인하지 못했습니다.')));
@@ -554,7 +561,7 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
             : result,
         );
         if (result.phase === 'saved' && mode === 'manager') location.assign(`/m/uses/${result.serverId}`);
-        navigateAfterSubmit(result);
+        navigateAfterSubmit(result, submitDestination);
       }
     } catch (e) {
       setError(errorMessage(e, '저장하지 못했습니다.'));
