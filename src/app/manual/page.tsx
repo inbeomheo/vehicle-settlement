@@ -604,7 +604,12 @@ export default function ManualPage() {
             기사가 운행마다 금액을 넣게 하면 됩니다.
           </p>
           <Shot src="42-master" alt="기준정보" />
-          <Shot src="48-project-create" alt="현장 이름만 등록" />
+          <p>
+            현장을 만들 때 <B>지금 등록된 기사 모두에게 이 현장 배정</B>이 기본으로 켜져 있어, 등록된 기사님이
+            바로 현장을 고를 수 있습니다. 배정을 바꾸려면 <B>기사관리 → 현장 배정</B>에서 현장을 체크하거나
+            해제하세요.
+          </p>
+          <Shot src="48-project-create" alt="현장 만들기와 기사 자동 배정" />
           <h3 className="pt-4 text-xl font-bold">2. 기사 가입 링크·사용자 초대</h3>
           <p>
             <B>기사관리 → 기사 가입 링크 만들기</B>에서 담당 현장과 유효기간(기본 14일)을 고릅니다. 링크
