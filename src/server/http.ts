@@ -1,3 +1,4 @@
+import { safeError, safeRoute } from './safe-error';
 import { uploadLimit } from './upload-limits';
 import { readBoundedBody } from './request-body';
 import { createHash, randomUUID } from 'node:crypto';
@@ -39,7 +40,7 @@ function rootError(error: unknown): { code?: string } {
   }
   return {};
 }
-export function errorResponse(error: unknown, requestId: string): Response {
+export function errorResponse(error: unknown, requestId: string, route?: string): Response {
   const headers = { 'x-request-id': requestId, 'cache-control': 'no-store' };
   if (error instanceof AppError)
     return Response.json(
@@ -88,7 +89,7 @@ export function errorResponse(error: unknown, requestId: string): Response {
       },
       { status: 422, headers },
     );
-  console.error('요청 처리 실패', { request_id: requestId, error });
+  console.error('요청 처리 실패', { request_id: requestId, route, ...safeError(error) });
   return Response.json(
     { error: { code: 'INTERNAL_ERROR', message: '요청을 처리하지 못했습니다. 잠시 후 다시 시도하세요.' } },
     { status: 500, headers },
@@ -217,7 +218,7 @@ export function withRoute<T = undefined, A extends boolean = true>(
       response.headers.set('cache-control', 'no-store');
       return response;
     } catch (error) {
-      return errorResponse(error, requestId);
+      return errorResponse(error, requestId, safeRoute(request));
     }
   };
 }

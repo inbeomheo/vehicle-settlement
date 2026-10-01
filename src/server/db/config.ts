@@ -23,6 +23,8 @@ export function poolConfig(url: string): PoolConfig {
   return {
     connectionString: parsed.toString(),
     max,
+    connectionTimeoutMillis: 10_000,
+    idleTimeoutMillis: 30_000,
     options: `-c search_path=${databaseSchema()}`,
     ...(noVerify ? { ssl: { rejectUnauthorized: false } } : {}),
   };

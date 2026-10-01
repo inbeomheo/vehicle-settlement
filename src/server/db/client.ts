@@ -1,3 +1,4 @@
+import { safeError } from '../safe-error';
 import 'dotenv/config';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { Pool } from 'pg';
@@ -12,6 +13,7 @@ export const defaultDatabaseUrl = () =>
   `postgresql://postgres:postgres@127.0.0.1:${process.env.PG_PORT ?? '54329'}/vehicle_app`;
 export function createDatabase(url: string) {
   const pool = new Pool(poolConfig(url));
+  pool.on('error', (error) => console.error('유휴 DB 연결 종료', safeError(error)));
   return { db: drizzle(pool, { schema }), pool };
 }
 const globalDb = globalThis as unknown as { vehicleDb?: ReturnType<typeof createDatabase> };
