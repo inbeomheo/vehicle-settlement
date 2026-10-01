@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import type { Context } from '../context';
+import { todaySeoul, type Context } from '../context';
 import { assertActive, assertAdmin } from '../authz';
 
 /**
@@ -10,6 +10,10 @@ export async function getSetupStatus(ctx: Context) {
   await assertActive(ctx);
   assertAdmin(ctx);
   const result = await ctx.db.execute<Record<string, number>>(sql`SELECT
+    (SELECT count(*)::int FROM users u WHERE u.role='DRIVER' AND u.status='ACTIVE'
+      AND NOT EXISTS (SELECT 1 FROM project_assignments pa JOIN projects p ON p.id=pa.project_id
+        WHERE pa.user_id=u.id AND p.active AND pa.revoked_at IS NULL
+          AND pa.valid_from<=${todaySeoul()}::date AND (pa.valid_to IS NULL OR pa.valid_to>=${todaySeoul()}::date))) AS unassigned_drivers,
     (SELECT count(*)::int FROM company_settings) AS company,
     (SELECT count(*)::int FROM projects WHERE active) AS projects,
     (SELECT count(*)::int FROM vehicles WHERE active) AS vehicles,

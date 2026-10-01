@@ -71,11 +71,26 @@ it('3. 사용·만료·취소된 초대는 이름·역할을 숨기고 즉시 �
 it('10. 계정 있는 기사 초대를 서버에서 거부하고 동시에 수락해도 기사 계정은 한 개만 만든다', async () => {
   const s = await setupScenario(database().db);
   await expect(
-    createInvite(s.adminCtx, { role: 'DRIVER', name: '중복 기사', driver_id: s.driver.id }),
+    createInvite(s.adminCtx, {
+      role: 'DRIVER',
+      name: '중복 기사',
+      driver_id: s.driver.id,
+      project_ids: [s.project.id],
+    }),
   ).rejects.toThrow('이미 계정이 연결된 기사');
   const driver = await s.f.driver({ name: '새 기사' });
-  const first = await createInvite(s.adminCtx, { role: 'DRIVER', name: driver.name, driver_id: driver.id });
-  const second = await createInvite(s.adminCtx, { role: 'DRIVER', name: driver.name, driver_id: driver.id });
+  const first = await createInvite(s.adminCtx, {
+    role: 'DRIVER',
+    name: driver.name,
+    driver_id: driver.id,
+    project_ids: [s.project.id],
+  });
+  const second = await createInvite(s.adminCtx, {
+    role: 'DRIVER',
+    name: driver.name,
+    driver_id: driver.id,
+    project_ids: [s.project.id],
+  });
   const results = await Promise.allSettled(
     [first, second].map((invite) =>
       acceptInvite(database().db, randomUUID(), invitationToken(invite), {

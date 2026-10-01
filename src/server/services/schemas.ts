@@ -167,7 +167,11 @@ export const inviteSchema = z
     driver_id: uuid.optional(),
     project_ids: z.array(uuid).max(100).default([]),
   })
-  .strict();
+  .strict()
+  .refine((input) => input.role !== 'DRIVER' || input.project_ids.length > 0, {
+    path: ['project_ids'],
+    message: '기사에게 배정할 현장을 하나 이상 선택하세요.',
+  });
 export const loginSchema = z
   .object({
     login_id: z.string().min(1).max(200),

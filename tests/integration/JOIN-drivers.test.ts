@@ -220,7 +220,12 @@ it('기사 연결 없는 개별 초대도 정보 입력 후 한 번만 가입하
     registerDriver(database().db, randomUUID(), token, registration(), true),
   ).rejects.toMatchObject({ code: 'NOT_FOUND' });
   const oldDriver = await s.f.driver();
-  const old = await createInvite(s.ctx, { role: 'DRIVER', name: '기존', driver_id: oldDriver.id });
+  const old = await createInvite(s.ctx, {
+    role: 'DRIVER',
+    name: '기존',
+    driver_id: oldDriver.id,
+    project_ids: [s.project.id],
+  });
   expect(
     (
       await acceptInvite(database().db, randomUUID(), tokenOf(old.invite_url), {
