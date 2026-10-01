@@ -124,10 +124,11 @@ export async function seedDemo(db: Db) {
     const accounts = await tx
       .select()
       .from(users)
-      .where(inArray(users.login_id, ['admin', 'driver1', 'driver2']));
+      .where(inArray(users.login_id, ['admin', 'site', 'driver1', 'driver2']));
     const admin = accounts.find((user) => user.login_id === 'admin');
+    const site = accounts.find((user) => user.login_id === 'site');
     const driverAccounts = ['driver1', 'driver2'].map((id) => accounts.find((user) => user.login_id === id));
-    if (!admin || driverAccounts.some((user) => !user?.driver_id))
+    if (!admin || !site || driverAccounts.some((user) => !user?.driver_id))
       throw new Error('먼저 npm run seed를 실행하세요.');
     const ctx: Context = { db: tx, user: admin, request_id: randomUUID() };
     const existing = await tx
@@ -157,7 +158,7 @@ export async function seedDemo(db: Db) {
       if (!driver.default_vehicle_id) throw new Error('기사 기본 차량이 필요합니다.');
       const author = sample.customer ? ctx : { ...ctx, user: account };
       let use = await createUse(author, {
-        reviewer_user_id: ctx.user.id,
+        reviewer_user_id: site.id,
         load_tonnage: sample.driver === 0 ? '1' : '5',
         client_request_id: requestId(index),
         use_date: sample.date,
@@ -187,7 +188,9 @@ export async function seedDemo(db: Db) {
               },
               { charge_type: 'TOLL', requested_amount: 6600, reason: '수도권 순환고속도로 통행 영수증' },
             ]
-          : undefined,
+          : sample.status === 'DRAFT'
+            ? [{ charge_type: 'BASE', requested_amount: 330000, quantity: sample.quantity ?? '1' }]
+            : undefined,
       });
       // Drafts intentionally await evidence so the dashboard has a missing-evidence example.
       if (sample.status === 'DRAFT') continue;
