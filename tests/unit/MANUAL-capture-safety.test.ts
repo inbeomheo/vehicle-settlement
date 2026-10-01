@@ -16,18 +16,18 @@ function loadCapture(base?: string) {
   );
 }
 
-it('설명서 캡처 기본 주소는 이 워크트리의 로컬 3175다', () => {
-  expect(loadCapture().stdout.trim()).toBe('http://localhost:3175');
+it('설명서 캡처 기본 주소는 이 워크트리의 로컬 3183다', () => {
+  expect(loadCapture().stdout.trim()).toBe('http://localhost:3183');
 });
 it.each([
   'https://vehicle-settlement.vercel.app',
   'https://vehicle-settlement.vercel.app/manual',
   'https://example.com',
   'http://localhost:3000',
-  'http://localhost:3175@vehicle-settlement.vercel.app',
+  'http://localhost:3183@vehicle-settlement.vercel.app',
   'not-a-url',
 ])('브라우저 실행 전에 안전하지 않은 BASE를 거부한다: %s', (base) => {
   const result = loadCapture(base);
   expect(result.status).not.toBe(0);
-  expect(result.stderr).toContain('설명서 도구는 http://localhost:3175');
+  expect(result.stderr).toContain('설명서 도구는 http://localhost:3183');
 });

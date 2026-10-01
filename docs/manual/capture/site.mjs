@@ -13,6 +13,7 @@ try {
   await shot(page, '21c-review-all');
   await page.goto(BASE + '/m/approvals?from=2026-09-01&to=2026-09-30');
   await page.waitForLoadState('networkidle');
+  await page.locator('summary').filter({ hasText: '필터 ·' }).click();
   await shot(page, '20b-approvals');
   await page.goto(BASE + '/m/review?reviewer_scope=all');
   await page.waitForLoadState('networkidle');

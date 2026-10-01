@@ -8,21 +8,21 @@
 
 ## 안전 및 로컬 준비
 
-캡처·감사·PDF 내보내기는 **`http://localhost:3175`만 허용**한다. `BASE`를 생략해도 같은 주소다. 운영 주소·외부 주소·다른 포트가 들어오면 브라우저 실행 전에 종료하며, 브라우저의 외부 요청도 차단한다. 운영 사이트와 운영 DB에는 접속하지 않는다.
+캡처·감사·PDF 내보내기는 **`http://localhost:3183`만 허용**한다. `BASE`를 생략해도 같은 주소다. 운영 주소·외부 주소·다른 포트가 들어오면 브라우저 실행 전에 종료하며, 브라우저의 외부 요청도 차단한다. 운영 사이트와 운영 DB에는 접속하지 않는다.
 
-이 워크트리 `.env.local`의 `PG_PORT=54375`를 확인한다. CLI는 `.env.local`을 자동으로 읽지 않으므로 아래 환경 변수를 지정한다. DB 명령의 `DATABASE_URL`이 별도로 설정되어 있다면 반드시 전용 로컬 DB인지 먼저 확인한다.
+이 워크트리 `.env.local`의 `PG_PORT=54383`를 확인한다. CLI는 `.env.local`을 자동으로 읽지 않으므로 아래 환경 변수를 지정한다. DB 명령의 `DATABASE_URL`이 별도로 설정되어 있다면 반드시 전용 로컬 DB인지 먼저 확인한다.
 
 ```sh
 export DOTENV_CONFIG_PATH=.env.local
-export PG_PORT=54375
-export PORT=3175
-export APP_URL=http://localhost:3175
-export BASE=http://localhost:3175
+export PG_PORT=54383
+export PORT=3183
+export APP_URL=http://localhost:3183
+export BASE=http://localhost:3183
 npm run db:start
 npm run db:migrate
 npm run seed
 npm run seed:demo
-npm run dev -- -p 3175
+npm run dev -- -p 3183
 ```
 
 `seed`·`seed:demo`는 재실행해도 기존 자료를 유지한다. **이미 촬영한 흐름을 처음부터 다시 찍을 때만** 이 워크트리의 버려도 되는 시연 DB를 `npm run db:reset`으로 초기화하고 `seed`·`seed:demo`를 다시 실행한다. DB 초기화 없이 `all.mjs`를 반복하면 이미 보완·승인·정산한 상태가 남아 실패할 수 있다.
@@ -34,7 +34,7 @@ node --input-type=module <<'JS'
 import webPush from 'web-push';
 import { spawn } from 'node:child_process';
 const keys = webPush.generateVAPIDKeys();
-const server = spawn('npm', ['run', 'dev', '--', '-p', '3175'], {
+const server = spawn('npm', ['run', 'dev', '--', '-p', '3183'], {
   stdio: 'inherit',
   env: { ...process.env, VAPID_PUBLIC_KEY: keys.publicKey,
     VAPID_PRIVATE_KEY: keys.privateKey, VAPID_SUBJECT: 'mailto:manual@example.com' },
@@ -48,12 +48,12 @@ JS
 서버를 실행한 상태에서 저장소 루트의 별도 터미널에서 실행한다.
 
 ```sh
-BASE=http://localhost:3175 node docs/manual/capture/all.mjs
+BASE=http://localhost:3183 node docs/manual/capture/all.mjs
 ```
 
 `all.mjs`는 다음 순서로 실행하며 실패하면 멈춘다.
 
-1. `checklist.mjs`: 시작 준비. **54375의 vehicle_app만** 사용하며 시연 회사 설정을 잠시 비웠다가 `finally`에서 복원한다.
+1. `checklist.mjs`: 시작 준비. **54383의 vehicle_app만** 사용하며 시연 회사 설정을 잠시 비웠다가 `finally`에서 복원한다.
 2. `driver-a.mjs`: 로그인, 기사 홈, 프로젝트·운행일, 담당자·적재용량, 운송내역, 금액, 사진, 보내기 확인·완료.
 3. `driver-b.mjs`: 보완 요청·재전송, 현장별/날짜별 정산, 비밀번호 변경, 글자 크기 예시.
 4. `driver-extra.mjs`: 목록 탭·필터, 알림 받기, 계약 없는 과금방식의 금액 직접 입력.
@@ -69,22 +69,22 @@ BASE=http://localhost:3175 node docs/manual/capture/all.mjs
 ## PDF 재생성과 검증
 
 ```sh
-BASE=http://localhost:3175 node docs/manual/export.mjs
+BASE=http://localhost:3183 node docs/manual/export.mjs
 mkdir -p /private/tmp/manual-qa
-BASE=http://localhost:3175 OUT=/private/tmp/manual-qa node docs/manual/capture/audit-manual.mjs
-BASE=http://localhost:3175 node docs/manual/capture/audit-app.mjs
-BASE=http://localhost:3175 OUT=/private/tmp/manual-qa SIZE=390x844 node docs/manual/capture/audit-scroll.mjs
+BASE=http://localhost:3183 OUT=/private/tmp/manual-qa node docs/manual/capture/audit-manual.mjs
+BASE=http://localhost:3183 node docs/manual/capture/audit-app.mjs
+BASE=http://localhost:3183 OUT=/private/tmp/manual-qa SIZE=390x844 node docs/manual/capture/audit-scroll.mjs
 pdftotext -layout public/manual/vehicle-manual.pdf /private/tmp/manual-qa/manual.txt
 pdftoppm -scale-to 1100 -png public/manual/vehicle-manual.pdf /private/tmp/manual-qa/pdf
 ```
 
 PNG의 담당자·적재용량, 금액 → 사진 순서, 탭·필터, 결재 표, 가입 폼을 직접 열어 확인한다. PDF 텍스트의 입력 순서와 전액 1회 지급 안내를 확인하고, 렌더링한 페이지의 잘림·빈 페이지·그림 배치를 확인한다. 감사 도구는 화면낭독기 전용 숨김 문구(`sr-only`)를 시각적 잘림에서 제외한다.
 
-E2E는 3175를 직접 기동하므로 촬영용 서버를 종료한 뒤 실행한다. E2E는 같은 54375 서버의 별도 `vehicle_e2e` DB를 사용한다.
+E2E는 3183 포트를 직접 기동하므로 촬영용 서버를 종료한 뒤 실행한다. E2E는 같은 54383 서버의 별도 `vehicle_e2e` DB를 사용한다.
 
 ```sh
 npm run typecheck && npm run lint && npm run format:check && npm test
-PORT=3175 npx playwright test tests/e2e/FIX-REQ-manual.spec.ts tests/e2e/MANUAL-captures.spec.ts
+PORT=3183 npx playwright test tests/e2e/FIX-REQ-manual.spec.ts tests/e2e/MANUAL-captures.spec.ts
 ```
 
 새 E2E는 390/1440px에서 추가 장면, 모든 그림의 실제 로딩, 원본/공개 파일 일치, 이미지 크기, 가로 넘침, 데모 계정 미노출을 확인한다. 안전 가드는 `tests/unit/MANUAL-capture-safety.test.ts`, 시연 담당자·적재용량·기사 금액은 `tests/integration/W6-demo.test.ts`로 검증한다.
@@ -92,10 +92,10 @@ PORT=3175 npx playwright test tests/e2e/FIX-REQ-manual.spec.ts tests/e2e/MANUAL-
 ## 이번 검증 결과
 
 - 타입 검사·린트·포맷 검사 통과, Vitest 81개 파일 / 473개 테스트 통과.
-- 관련 E2E 37건 중 35건 통과. 새 설명서 E2E 2건과 기존 웹·PDF 설명서 E2E 1건 모두 통과.
-- 설명서 47개 그림의 원본/공개 파일 일치 및 로딩 확인, PDF 34쪽 렌더링·텍스트 추출 확인.
-- 설명서 360/390/1440px 감사에서 가로 넘침·글자 잘림 없음. 앱 60개 화면/글자 크기 조합에서 가로 넘침·실제 잘림 없음(목록의 의도된 말줄임은 별도 표시). 설명서 스크롤 캡처 50장 확인용 생성.
+- 관련 E2E 49건 중 47건 통과, 기존 AGG 대장 연결 2건 실패. 새 F2-UI 6건과 설명서 3건 모두 통과. 자세한 결과는 [F2-UI 보고서](../reports/F2-UI.md)에 기록했다.
+- 원본/공개 PNG 56쌍 일치, 설명서 본문 47개 그림 로딩 확인, PDF 34쪽 렌더링·텍스트 추출 확인.
+- 설명서 360/390/1440px 감사에서 가로 넘침·글자 잘림 없음. 앱 60개 화면/글자 크기 조합에서 가로 넘침·실제 잘림 없음(목록의 의도된 말줄임은 별도 표시). PDF 34쪽을 다시 렌더링해 그림과 본문 배치를 확인했다.
 
 ## 확인된 범위 밖 문제
 
-전체 관련 E2E 중 `AGG-summary.spec.ts`의 1440px/390px 두 건은 집계에서 사용대장으로 이동한 뒤 기사 필터가 비어 실패한다. `/api/ledger/options`가 현장 담당자에게 허용되지 않는 `listMaster`를 호출하는 기존 경로다. 설명서 작업에서는 해당 업무 화면·권한 코드를 변경하지 않았다. 집계 화면 자체의 수치·표·엑셀 검증은 통과했다.
+전체 관련 E2E 중 `AGG-summary.spec.ts`의 1440px/390px 두 건은 집계에서 사용대장으로 이동한 뒤 기사 필터가 비어 실패한다. `/api/ledger/options`가 현장 담당자에게 허용되지 않는 `listMaster`를 호출하는 기존 경로다. 해당 업무 권한 코드는 F2-LOOKUP 범위여서 이번 작업에서는 변경하지 않았다. F2-UI는 선택 표시·결재 표·사이드바·기사 필터와 설명서 캡처를 수정했다. 집계 화면 자체의 수치·표·엑셀 검증은 통과했다.

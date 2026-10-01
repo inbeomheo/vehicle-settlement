@@ -127,16 +127,18 @@ export function ManagerNavigation({
   return (
     <>
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col bg-ink px-3 py-4 text-white md:flex">
-        <div className="px-2 pb-6">
+        <div className="shrink-0 px-2 pb-3">
           <Brand />
         </div>
-        <nav aria-label="주 메뉴" className="flex-1 overflow-y-auto">
+        <nav aria-label="주 메뉴" className="min-h-11 flex-1 overflow-y-auto">
           <MenuLinks items={items} />
-          <PushSettings manager />
         </nav>
-        <div className="mt-4 border-t border-white/10 px-2 pt-4">
+        <div className="shrink-0">
+          <PushSettings manager />
+        </div>
+        <div className="shrink-0 border-t border-white/10 px-2 pt-3">
           <p className="mb-1.5 text-sm text-slate-300">글자 크기</p>
-          <div className="mb-4">
+          <div className="mb-2">
             <TextSizeControl fallback="normal" tone="dark" />
           </div>
           <p className="font-semibold">{userName}</p>

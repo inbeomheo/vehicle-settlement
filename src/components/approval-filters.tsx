@@ -53,7 +53,7 @@ export function ApprovalTabs({
           key={value}
           type="button"
           aria-pressed={(status || 'ALL') === value}
-          className={`${driver ? driverButton : secondaryClass} flex-wrap whitespace-normal ${(status || 'ALL') === value ? 'border-blue-700 bg-blue-50 text-blue-900' : ''}`}
+          className={`inline-flex items-center justify-center gap-1.5 rounded-lg border px-4 py-2 whitespace-normal ${driver ? 'min-h-14' : 'min-h-11 text-sm'} ${(status || 'ALL') === value ? 'border-ink bg-ink font-bold text-white hover:bg-slate-700' : 'border-slate-300 bg-white font-medium text-ink hover:bg-slate-50'}`}
           onClick={() => onChange(value === 'ALL' ? '' : value)}
         >
           {approvalLabels[value]} <span className="num">{counts?.[value] ?? '…'}</span>
@@ -74,8 +74,8 @@ export function ApprovalDates({
   onChange: (patch: Record<string, string>) => void;
 }) {
   return (
-    <div className="grid min-w-0 gap-2">
-      <div className="flex flex-wrap gap-1">
+    <div className="grid min-w-0 gap-2 sm:grid-cols-2">
+      <div className="flex flex-wrap gap-1 sm:col-span-2">
         {driver && (
           <button type="button" className={driverButton} onClick={() => onChange({ from: '', to: '' })}>
             전체 기간
