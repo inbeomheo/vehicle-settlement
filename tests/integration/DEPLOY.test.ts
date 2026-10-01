@@ -95,7 +95,7 @@ it('제한 롤: 모든 연결의 vehicle search_path, 내장 UUID, 마이그레�
     connections.forEach((client) => client.release());
   }
   await migrateDatabase(database.db);
-  expect((await database.pool.query('SELECT count(*) FROM __drizzle_migrations')).rows[0].count).toBe('11');
+  expect((await database.pool.query('SELECT count(*) FROM __drizzle_migrations')).rows[0].count).toBe('12');
   expect((await owner.query("SELECT tablename FROM pg_tables WHERE schemaname='public'")).rows).toEqual([
     { tablename: 'other_app' },
   ]);
@@ -247,6 +247,47 @@ it('vehicle 스키마에서 비밀번호 재설정 링크와 감사·세션 갱�
     (
       await owner.query(
         "SELECT count(*)::int n FROM pg_tables WHERE schemaname='public' AND tablename='password_resets'",
+      )
+    ).rows[0].n,
+  ).toBe(0);
+});
+
+it('vehicle 스키마에서 공용 링크 가입·기사 정보 변경·현장 삭제 보호가 동작한다', async () => {
+  const { createJoinLink, registerDriver } = await import('../../src/server/services/driver-join');
+  const { getDriverProfile, updateDriverProfile } = await import('../../src/server/services/driver-profiles');
+  const { deleteProject } = await import('../../src/server/services/admin');
+  const f = factories(database.db);
+  const adminUser = await f.user();
+  const project = await f.project();
+  const ctx = f.context(adminUser);
+  const link = await createJoinLink(ctx, { project_ids: [project.id] });
+  const token = new URL(link.join_url).pathname.split('/').at(-1)!;
+  const profile = {
+    name: '스키마 기사',
+    phone: '01098761234',
+    business_name: '스키마 운송',
+    biz_no: '999-88-77777',
+    plate_no: '서울80아9999',
+    vehicle_type: '카고',
+    tonnage: '8',
+  };
+  const joined = await registerDriver(database.db, randomUUID(), token, {
+    profile,
+    client_request_id: randomUUID(),
+    login_id: `schema-${randomUUID()}`,
+    password: 'password1234',
+  });
+  expect((await getDriverProfile(ctx, joined.user.id)).projects).toEqual([
+    { id: project.id, name: project.name },
+  ]);
+  expect(
+    (await updateDriverProfile(ctx, joined.user.id, { ...profile, name: '변경 기사', version: 1 })).name,
+  ).toBe('변경 기사');
+  await expect(deleteProject(ctx, project.id)).rejects.toThrow('사용 중지');
+  expect(
+    (
+      await owner.query(
+        "SELECT count(*)::int n FROM pg_tables WHERE schemaname='public' AND tablename IN ('driver_join_links','driver_registrations')",
       )
     ).rows[0].n,
   ).toBe(0);
