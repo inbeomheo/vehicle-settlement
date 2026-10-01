@@ -1,7 +1,7 @@
 import { eligibleReviewers } from './use-reviewers';
 import { randomUUID } from 'node:crypto';
 import { storageDriver, writeStoredFile, readStoredFile, deleteStoredFile } from '../storage';
-import { uploadLimit, uploadLimitMessage } from '../upload-limits';
+import { importFileLimit, importUploadLimitMessage } from '../upload-limits';
 import { boundedPayload, readCsv, readXlsx } from './import-file';
 import ExcelJS from 'exceljs';
 import { and, desc, eq, inArray, lt, sql } from 'drizzle-orm';
@@ -18,6 +18,9 @@ import { findRate } from './rates';
 import { importDate, parseImportSource, importSourceHash, importIdentityLock } from './import-source';
 import {
   importFields,
+  importPageSchema,
+  IMPORT_PAGE_SIZE,
+  type ImportPreviewRow,
   previewSchema,
   presetSchema,
   type ImportMapping,
@@ -43,8 +46,37 @@ async function jobFor(ctx: Context, id: string, lock = false) {
   if (!job) notFound();
   return job;
 }
-function view(job: Job, name?: string) {
+function view(job: Job, name?: string, requestedPage = 1) {
   const payload = job.rows as Payload;
+  const selection = job.mapping as z.infer<typeof previewSchema> | null;
+  const excluded = new Set(selection?.excluded_rows ?? []);
+  const isAttention = (row: ImportRow) =>
+    row.status === 'ERROR' || row.warnings.length > 0 || excluded.has(row.row);
+  const regular = payload.preview.filter((row) => !isAttention(row));
+  const pages = Math.max(1, Math.ceil(regular.length / IMPORT_PAGE_SIZE));
+  const page = Math.min(requestedPage, pages);
+  const pageRows = new Set(
+    regular.slice((page - 1) * IMPORT_PAGE_SIZE, page * IMPORT_PAGE_SIZE).map((row) => row.row),
+  );
+  // Keep the original first-page contract; additional warning rows only need mapped context.
+  const originalPageRows = new Set(payload.preview.slice(0, IMPORT_PAGE_SIZE).map((row) => row.row));
+  const warningColumns = [...new Set(Object.values(selection?.mapping ?? {}))].sort((a, b) => a - b);
+  const preview: ImportPreviewRow[] = payload.preview
+    .filter((row) => isAttention(row) || pageRows.has(row.row))
+    .map((row) => ({
+      ...(originalPageRows.has(row.row) || pageRows.has(row.row)
+        ? { source_row_hash: row.source_row_hash, source_ids: row.source_ids }
+        : {}),
+      row: row.row,
+      status: row.status,
+      values:
+        row.status !== 'ERROR' && row.warnings.length > 0 && !originalPageRows.has(row.row)
+          ? warningColumns.map((column) => row.values[column] ?? '')
+          : row.values,
+      errors: row.errors,
+      warnings: row.warnings,
+      ...(row.use_id ? { use_id: row.use_id } : {}),
+    }));
   const result = {
     id: job.id,
     file_name: job.file_name,
@@ -57,13 +89,14 @@ function view(job: Job, name?: string) {
       header_row: sheet.header_row,
       mapping: sheet.mapping,
     })),
-    selection: job.mapping as z.infer<typeof previewSchema> | null,
-    preview: payload.preview.filter(
-      (row, index) =>
-        index < 100 ||
-        row.status === 'ERROR' ||
-        (job.mapping as z.infer<typeof previewSchema> | null)?.excluded_rows?.includes(row.row),
-    ),
+    selection,
+    preview,
+    preview_page: page,
+    preview_pages: pages,
+    preview_regular_total: regular.length,
+    preview_warning_total: payload.preview.filter((row) =>
+      row.warnings.some((warning) => warning !== '사용자가 제외한 행'),
+    ).length,
     preview_total: payload.preview.length,
     summary: job.summary as ImportSummary | null,
   };
@@ -113,8 +146,7 @@ export async function uploadImport(ctx: Context, fileName: string, bytes: Buffer
   await assertImportUploadAccess(ctx);
   if (!/\.(xlsx|csv)$/i.test(fileName) || fileName.length > 255)
     invalid('xlsx 또는 UTF-8 csv 파일을 선택하세요.');
-  if (!bytes.length || bytes.length > uploadLimit(10 * 1024 * 1024))
-    invalid(uploadLimitMessage(uploadLimit(10 * 1024 * 1024)));
+  if (!bytes.length || bytes.length > importFileLimit()) invalid(importUploadLimitMessage());
   const xlsx = /\.xlsx$/i.test(fileName);
   const sheets = xlsx ? await readXlsx(bytes, -1, true) : readCsv(bytes);
   for (const sheet of sheets) {
@@ -432,11 +464,12 @@ export async function commitImport(ctx: Context, id: string) {
     return view(saved, tx.user.name);
   });
 }
-export async function getImport(ctx: Context, id: string) {
+export async function getImport(ctx: Context, id: string, raw: unknown = {}) {
+  const { page } = importPageSchema.parse(raw);
   const job = await jobFor(ctx, id);
   const uses = await ctx.db.select().from(vehicleUses).where(eq(vehicleUses.import_job_id, id));
   for (const use of uses) await assertProjectAccess(ctx, use.project_id);
-  return view(job, ctx.user.name);
+  return view(job, ctx.user.name, page);
 }
 export async function listImports(ctx: Context) {
   await manager(ctx);

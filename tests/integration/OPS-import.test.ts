@@ -42,10 +42,10 @@ it('1,100행 XLSX 응답은 원본 중복 없이 4MiB 미만이며 전체 오류
   await errors.xlsx.load((await importErrors(s.adminCtx, uploaded.id)) as never);
   expect(errors.worksheets[0].rowCount).toBe(1101);
 });
-it('일반 미리보기는 앞 100행만 응답하고 확정은 저장 원본 전체를 사용한다', async () => {
+it('경고 없는 일반 미리보기는 앞 100행만 응답하고 확정은 저장 원본 전체를 사용한다', async () => {
   const s = await setupScenario(database().db);
-  const header = '사용일,현장,기사,차량번호,지급처,출발지,도착지,과금단위';
-  const row = `2026-09-15,${s.project.id},${s.driver.id},${s.vehicle.id},${s.payee.id},부산,서울,일대`;
+  const header = '사용일,현장,기사,차량번호,지급처,출발지,도착지,과금단위,단가';
+  const row = `2026-09-15,${s.project.id},${s.driver.id},${s.vehicle.id},${s.payee.id},부산,서울,일대,300000`;
   const uploaded = await uploadImport(
     s.adminCtx,
     '101행.csv',

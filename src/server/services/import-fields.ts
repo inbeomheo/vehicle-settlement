@@ -57,6 +57,12 @@ export type ImportRow = {
   use_id?: string;
 };
 export type ImportSummary = { valid: number; errors: number; skipped: number; success: number };
+export const importPageSchema = z.object({
+  page: z.coerce.number().int().min(1).max(2000).default(1),
+});
+export const IMPORT_PAGE_SIZE = 100;
+export type ImportPreviewRow = Omit<ImportRow, 'source_row_hash' | 'source_ids'> &
+  Partial<Pick<ImportRow, 'source_row_hash' | 'source_ids'>>;
 export type ImportView = {
   id: string;
   file_name: string;
@@ -65,7 +71,11 @@ export type ImportView = {
   created_by_name?: string;
   sheets: SheetData[];
   selection: z.infer<typeof previewSchema> | null;
-  preview: ImportRow[];
+  preview: ImportPreviewRow[];
+  preview_page: number;
+  preview_pages: number;
+  preview_regular_total: number;
+  preview_warning_total: number;
   preview_total: number;
   summary: ImportSummary | null;
 };

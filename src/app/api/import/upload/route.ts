@@ -1,12 +1,12 @@
-import { uploadLimit, uploadLimitMessage } from '@/server/upload-limits';
+import { importRequestLimit, importUploadLimitMessage } from '@/server/upload-limits';
 import { withRoute } from '@/server/http';
 import { invalid } from '@/server/errors';
 import { uploadImport, assertImportUploadAccess } from '@/server/services/import';
 export const POST = withRoute(
   async ({ ctx, request }) => {
     await assertImportUploadAccess(ctx);
-    if (Number(request.headers.get('content-length')) > uploadLimit(11 * 1024 * 1024))
-      invalid(uploadLimitMessage(uploadLimit(10 * 1024 * 1024)));
+    if (Number(request.headers.get('content-length')) > importRequestLimit())
+      invalid(importUploadLimitMessage());
     const reader = request.body?.getReader();
     if (!reader) invalid('파일을 선택하세요.');
     const chunks: Uint8Array[] = [];
@@ -15,9 +15,9 @@ export const POST = withRoute(
       const { value, done } = await reader.read();
       if (done) break;
       size += value.byteLength;
-      if (size > uploadLimit(11 * 1024 * 1024)) {
+      if (size > importRequestLimit()) {
         await reader.cancel();
-        invalid(uploadLimitMessage(uploadLimit(10 * 1024 * 1024)));
+        invalid(importUploadLimitMessage());
       }
       chunks.push(value);
     }
