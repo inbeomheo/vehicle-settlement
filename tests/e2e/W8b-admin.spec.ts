@@ -31,6 +31,7 @@ for (const width of [360, 390, 1440]) {
     );
     await select.selectOption(driver.id);
     await page.getByLabel('초대 이름').fill(name);
+    await page.getByRole('button', { name: '모든 현장 선택', exact: true }).click();
     const invitation = page.waitForResponse(
       (response) =>
         new URL(response.url()).pathname === '/api/invites' && response.request().method() === 'POST',

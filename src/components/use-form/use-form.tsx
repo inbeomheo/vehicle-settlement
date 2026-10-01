@@ -1,4 +1,5 @@
 'use client';
+import { NoProjectNotice } from './no-project-notice';
 import { ReviewerFields, useReviewerOptions } from './reviewer-fields';
 import type { RecentRoute } from '@/client/types';
 import { proposedAmount } from '@/shared/charge-amount';
@@ -499,6 +500,7 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
       (mode === 'driver' && draft.server?.review_status === 'APPROVED' && !editApproved)
     )
       return;
+    if (mode === 'driver' && !lookups.projects.length) return;
     if (!settings.ready) return;
     if (!startAction()) return;
     setError('');
@@ -853,24 +855,28 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
   };
   const dateFields = (
     <>
-      <Field label="현장" target="project_id" group={chipProjects}>
-        {chipProjects ? (
-          <ChoiceChips
-            name="project_id"
-            value={form.project_id}
-            onChange={(project_id) => change({ project_id, reviewer_user_id: '' })}
-            choices={sortedProjects.map((p) => ({ value: p.id, name: p.name, label: p.name }))}
-          />
-        ) : (
-          <select
-            className={control}
-            value={form.project_id}
-            onChange={(e) => change({ project_id: e.target.value, reviewer_user_id: '' })}
-          >
-            {options(sortedProjects, form.project_id, draft.server?.snapshot.project_name)}
-          </select>
-        )}
-      </Field>
+      {mode === 'driver' && !lookups.projects.length ? (
+        <NoProjectNotice />
+      ) : (
+        <Field label="현장" target="project_id" group={chipProjects}>
+          {chipProjects ? (
+            <ChoiceChips
+              name="project_id"
+              value={form.project_id}
+              onChange={(project_id) => change({ project_id, reviewer_user_id: '' })}
+              choices={sortedProjects.map((p) => ({ value: p.id, name: p.name, label: p.name }))}
+            />
+          ) : (
+            <select
+              className={control}
+              value={form.project_id}
+              onChange={(e) => change({ project_id: e.target.value, reviewer_user_id: '' })}
+            >
+              {options(sortedProjects, form.project_id, draft.server?.snapshot.project_name)}
+            </select>
+          )}
+        </Field>
+      )}
       <Field label="사용일" target="use_date">
         <input
           className={control}
@@ -1577,7 +1583,7 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
                   type="button"
                   aria-label="서버 저장"
                   className={`${button} min-h-14 shrink-0 px-5`}
-                  disabled={locked || evidenceBusy}
+                  disabled={locked || evidenceBusy || (mode === 'driver' && !lookups.projects.length)}
                   onClick={() => {
                     void enqueue('save');
                   }}
@@ -1588,7 +1594,7 @@ export function FormWorkspace({ boot, mode, useId }: { boot: Bootstrap; mode: Mo
                   ref={submitButton}
                   type="submit"
                   className={`${primary} min-h-14 flex-1 text-lg`}
-                  disabled={locked || evidenceBusy}
+                  disabled={locked || evidenceBusy || (mode === 'driver' && !lookups.projects.length)}
                 >
                   {draft.server?.review_status === 'NEEDS_FIX'
                     ? '고쳐서 다시 보내기'

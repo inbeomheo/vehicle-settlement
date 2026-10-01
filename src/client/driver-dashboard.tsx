@@ -1,4 +1,5 @@
 'use client';
+import { NoProjectNotice } from '@/components/use-form/no-project-notice';
 import { useEffect, useState } from 'react';
 import { api, ApiError } from './api';
 import { errorMessage } from './error-message';
@@ -115,6 +116,7 @@ export function DriverDashboard() {
   return (
     <div className="space-y-6">
       <PwaRegistration />
+      {!data.lookups.projects.length && <NoProjectNotice />}
       <div>
         <p className="text-[0.9375rem] text-slate-700">{koreanDate(todaySeoul())}</p>
         <h1 className="mt-0.5 text-[1.75rem] font-bold">{data.user.name}님</h1>

@@ -72,7 +72,7 @@ function SetupChecklist() {
   if (!data) return null;
   const required = setupSteps.filter((step) => !step.optional);
   const done = required.filter((step) => data[step.key] > 0).length;
-  if (done === required.length) return null;
+  if (done === required.length && !data.unassigned_drivers) return null;
   return (
     <section aria-labelledby="setup-title" className="mb-8 rounded-lg border-2 border-signal bg-white p-5">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -86,6 +86,14 @@ function SetupChecklist() {
       <p className="mt-1 text-[0.9375rem] text-slate-600">
         기사님이 운행을 보내기 전에 위에서부터 차례로 등록해 주세요.
       </p>
+      {data.unassigned_drivers > 0 && (
+        <Link
+          href="/m/drivers"
+          className="mt-4 flex min-h-14 items-center gap-3 rounded-lg border border-orange-200 bg-orange-50 p-3 font-semibold text-orange-800"
+        >
+          현장 배정이 없는 기사 {data.unassigned_drivers}명 → 기사관리에서 배정
+        </Link>
+      )}
       <ol className="mt-4 divide-y divide-slate-100">
         {setupSteps.map((step, index) => {
           const ok = data[step.key] > 0;

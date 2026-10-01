@@ -78,7 +78,15 @@ export function DriverJoinLinks() {
           }}
         >
           <fieldset>
-            <legend className="mb-2 font-semibold">담당 현장 (여러 개 선택)</legend>
+            <legend className="mb-2 font-semibold">담당 현장 (필수, 여러 개 선택)</legend>
+            <button
+              type="button"
+              className={`${secondaryClass} mb-3`}
+              disabled={busy || !lookups.data?.projects.length}
+              onClick={() => setSelected(lookups.data?.projects.map((p) => p.id) ?? [])}
+            >
+              모든 현장 선택
+            </button>
             <div className="grid gap-2 sm:grid-cols-2">
               {lookups.data?.projects.map((project) => (
                 <label
