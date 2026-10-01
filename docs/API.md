@@ -223,3 +223,11 @@ commit은 generic 응답 캐시를 사용하지 않는다. job 행 잠금 + 가�
 - `options: {projects,drivers,reviewers}`는 현재 접근 가능한 운행에 존재하는 선택지다. 다른 날짜로 이동해도 유지하며, 기사는 projects만 제공한다. 담당자는 reviewer_user_id와 연결된 현재 사용자 이름을 본다. null은 미지정이며 ‘나’에 포함하지 않는다.
 - `GET /api/approvals/export.xlsx`: 담당자 전용. 같은 필터와 권한으로 모든 페이지를 출력하며 입력·검토 공급가와 승인 공급가를 구분한다. 취소 행을 남기고 합계에서 제외한다.
 - `/m/approvals`, `/d`는 필터와 페이지를 URL 쿼리에 유지한다. 승인·선택 승인은 기존 `/api/uses/:id/approve`의 버전·멱등·감사·권한 검사를 그대로 사용한다. 검수함과 동일한 quickApprovable 규칙으로 선택을 제한하며 여러 건 중 실패한 건은 개별 오류로 남긴다.
+
+## PUSH 웹 푸시
+
+- `GET /api/push`: 로그인 필수. `{enabled, publicKey}`만 반환하며 VAPID 비밀키·subject는 노출하지 않는다. 설정 누락·오류 시 false/null.
+- `POST /api/push/subscriptions`: `{endpoint, keys:{p256dh,auth}, expirationTime?:number|null}`. 현재 사용자에게 구독을 저장·갱신한다. endpoint는 HTTPS 브라우저 푸시 서비스(Google/Mozilla/Apple/Windows)만 허용한다. 타인 endpoint 소유권 변경은 403, 사용자 ID 입력은 422. user_agent는 요청 헤더에서 최대 512자로 저장한다. 설정이 꺼져 있으면 저장 없이 `{enabled:false,subscribed:false}`.
+- `GET /api/push/subscriptions?endpoint=...`: 본인 해당 기기의 `{subscribed}`만 반환한다. 타인 구독 정보는 노출하지 않는다.
+- `DELETE /api/push/subscriptions`: `{endpoint}`. 본인 소유만 삭제하며 없으면 같은 성공 응답 `{subscribed:false}`. 등록·삭제는 원자적이며 반복 호출 결과가 동일하다. 별도 Idempotency-Key 응답 저장은 사용하지 않는다(끄기 후 다시 켜기 가능). 감사에는 구독 ID만 남기고 endpoint·구독 키는 제외한다.
+- 제출·보완 API 성공 커밋 후 비동기 발송. 제출·재제출은 `reviewer_user_id` 지정 담당자, 미지정 시 현재 현장 검수 권한자 전원. 지정자가 비활성/권한 밖이면 다른 사람에게 확대 발송하지 않는다. 보완은 해당 기사 계정 중 현재 현장 접근 가능한 활성 사용자에게 보낸다. 지연 발송 시 version·상태가 달라졌으면 생략한다. 사용자에게 표시하는 금액은 저장된 PAYABLE 요청액/계산액만 사용한다.

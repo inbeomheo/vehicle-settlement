@@ -673,3 +673,24 @@ export const loginThrottles = pgTable(
     index('login_throttles_updated_idx').on(t.updated_at),
   ],
 );
+
+export const pushSubscriptions = pgTable(
+  'push_subscriptions',
+  {
+    id: id(),
+    user_id: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    endpoint: text('endpoint').notNull().unique(),
+    keys: jsonb('keys').$type<{ p256dh: string; auth: string }>().notNull(),
+    user_agent: text('user_agent'),
+    created_at: created(),
+    updated_at: updated(),
+    last_success_at: time('last_success_at'),
+    failure_count: integer('failure_count').notNull().default(0),
+  },
+  (table) => [
+    index('push_subscriptions_user_idx').on(table.user_id),
+    check('push_subscriptions_failure_count_check', sql`${table.failure_count} >= 0`),
+  ],
+);
