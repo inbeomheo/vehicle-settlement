@@ -215,3 +215,11 @@ commit은 generic 응답 캐시를 사용하지 않는다. job 행 잠금 + 가�
 - `GET /api/uses/recent-routes?driver_id=<본인 기사 UUID>`의 각 경로에 `last_amount: number | null`(공급가)을 추가한다. 같은 출발·도착의 가장 최근 제출본 시각, 생성시각, ID 순으로 선택한 제출 스냅샷의 PAYABLE BASE 제안 금액 합이다. 제출 뒤 아직 보내지 않은 수정값과 다른 기사로 귀속된 제출본은 참고하지 않는다. 최신 건의 금액이 미정이면 과거 금액으로 건너뛰지 않는다. 미제출·취소·삭제·반려 비용은 참고 금액에서 제외하고 현재 현장 권한을 검사한다. 기존 `driver_id`/`user_id` 조회 범위는 유지한다. 폼은 선택한 기사 ID를 명시하고, 1회차 최근 경로 선택 시 계약이 없고 빈 요청액에만 채운다. 직접 입력은 덮어쓰지 않는다.
 - 가져오기 단가 열은 기존대로 **단가 × 청구수량**이다. 파일 단가 합계는 기존처럼 계산액에 저장한다(별도 요청액은 null). 기존 단가/계산액/중복 식별자와 사용일·과금단위 변경 시 재조회 동작을 유지한다. `agreement_snapshot.contract_computed_amount`, `contract_min_charge`에 계약 비교 근거를 보관해 다른 금액을 검수 이슈로 표시한다. 같은 계약에서 수량 수정 시 비교 계약액도 갱신한다. 단가 빈칸/계약단가 적용 옵션/0원 처리의 기존 규칙은 유지한다.
 - 폼의 숫자 표시는 천 단위 쉼표이고 API에는 정수만 전송한다. IndexedDB 초안·원본 생성 요청 재생·생성 행 ID 복원에도 BASE 요청액을 보존한다. 최근 금액 표시용 로컬 필드는 API에서 제외한다.
+
+## LIST 운행 결재 목록
+
+- `GET /api/approvals`: 담당자는 기존 유효 현장 범위, 기사는 유효 현장과 본인 기사 범위를 서버에서 강제한다. `from`, `to`는 실제 운송일 양끝 포함(각 기본 서울 오늘), `project_id`, `driver_id`, `reviewer_user_id`(UUID 또는 `me`), `transport_search`(출발·도착·사용 건/회차 운반 내용, 최대 100자), `review_status`, `page`, `pageSize`(최대 100)를 받는다. 날짜 내림차순이며 같은 날짜의 순서는 기존 목록 정렬을 따른다.
+- `rows/page/pageSize/total/totals`는 기존 담당자 대장·기사 목록 응답을 재사용한다. `counts: {ALL,DRAFT,SUBMITTED,NEEDS_FIX,APPROVED}`는 상태를 제외한 같은 필터의 개수다. 취소는 ALL에만 포함한다. `summary: {count,amount,unknown_count}`는 현재 상태까지 포함한 전체 검색 결과의 취소 제외 건수·지급 공급가·미확정 비용 개수다. 금액은 기존 검토 공급가(저장된 승인액 우선, 기본운임 요청액→계약액, VAT_INCLUDED 공급가 환산)를 합하며 삭제·반려 비용과 고객청구는 제외한다. 페이지와 무관하다.
+- `options: {projects,drivers,reviewers}`는 현재 접근 가능한 운행에 존재하는 선택지다. 다른 날짜로 이동해도 유지하며, 기사는 projects만 제공한다. 담당자는 reviewer_user_id와 연결된 현재 사용자 이름을 본다. null은 미지정이며 ‘나’에 포함하지 않는다.
+- `GET /api/approvals/export.xlsx`: 담당자 전용. 같은 필터와 권한으로 모든 페이지를 출력하며 입력·검토 공급가와 승인 공급가를 구분한다. 취소 행을 남기고 합계에서 제외한다.
+- `/m/approvals`, `/d`는 필터와 페이지를 URL 쿼리에 유지한다. 승인·선택 승인은 기존 `/api/uses/:id/approve`의 버전·멱등·감사·권한 검사를 그대로 사용한다. 검수함과 동일한 quickApprovable 규칙으로 선택을 제한하며 여러 건 중 실패한 건은 개별 오류로 남긴다.

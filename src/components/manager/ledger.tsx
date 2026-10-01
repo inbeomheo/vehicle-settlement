@@ -1,4 +1,5 @@
 'use client';
+import { quickApprovable, approveUse } from './quick-approval';
 import { useEffect, useState } from 'react';
 import type { LedgerResult, LedgerRow } from '@/server/services/ledger';
 import {
@@ -16,8 +17,6 @@ import {
   secondaryClass,
   buttonClass,
   useRemote,
-  api,
-  mutate,
   signalClass,
 } from './common';
 import { Plate } from '@/components/ui/plate';
@@ -438,23 +437,6 @@ const reviewTabs = [
   ['NEEDS_FIX', '보완 요청'],
   ['MISSING', '증빙 누락'],
 ] as const;
-
-/** 증빙·단가·추가비 요청에 걸리는 것이 없으면 목록에서 바로 승인할 수 있다. */
-function quickApprovable(row: LedgerRow) {
-  return (
-    row.review_status === 'SUBMITTED' &&
-    row.operation_status !== 'CANCELED' &&
-    !row.evidence_missing &&
-    !row.has_requested_extra &&
-    !row.has_base_amount_difference &&
-    row.review_total_amount !== null
-  );
-}
-
-async function approveUse(id: string) {
-  const detail = await api<{ version: number }>(`/api/uses/${id}`);
-  await mutate(`/api/uses/${id}/approve`, 'POST', { version: detail.version });
-}
 
 type CardResult = 'approved' | { error: string } | undefined;
 

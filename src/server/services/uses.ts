@@ -1036,7 +1036,12 @@ export async function listUses(ctx: Context, raw: unknown = {}) {
     q.from ? gte(vehicleUses.use_date, q.from) : undefined,
     q.to ? lte(vehicleUses.use_date, q.to) : undefined,
     q.review_status ? eq(vehicleUses.review_status, q.review_status) : undefined,
+    q.reviewer_user_id ? eq(vehicleUses.reviewer_user_id, q.reviewer_user_id) : undefined,
+    q.transport_search
+      ? sql`(${vehicleUses.cargo_desc} ILIKE ${'%' + q.transport_search.replace(/[\\%_]/g, '\\$&') + '%'} OR EXISTS (SELECT 1 FROM trips WHERE vehicle_use_id=vehicle_uses.id AND concat_ws(' ',origin,destination,cargo_desc) ILIKE ${'%' + q.transport_search.replace(/[\\%_]/g, '\\$&') + '%'}))`
+      : undefined,
     q.operation_status ? eq(vehicleUses.operation_status, q.operation_status) : undefined,
+    q.exclude_canceled ? ne(vehicleUses.operation_status, 'CANCELED') : undefined,
     q.search
       ? or(ilike(vehicleUses.use_no, `%${q.search}%`), ilike(vehicleUses.cargo_desc, `%${q.search}%`))
       : undefined,

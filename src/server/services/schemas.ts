@@ -165,6 +165,9 @@ export const rateLookupSchema = z.object({
   completed_trips: z.coerce.number().int().min(0).max(500).default(0),
 });
 export const listUsesSchema = z.object({
+  reviewer_user_id: uuid.optional(),
+  transport_search: z.string().trim().max(100).optional(),
+  exclude_canceled: z.enum(['true']).optional(),
   page: z.coerce.number().int().positive().default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
   project_id: uuid.optional(),
