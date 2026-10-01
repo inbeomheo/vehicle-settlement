@@ -156,8 +156,8 @@ export function Approvals() {
   const amounts = (row: LedgerRow) => (
     <div className="num space-y-1">
       <p>
-        <span className="block text-xs text-slate-600">입력·검토 지급</span>
-        {money(row.review_total_amount)}
+        <span className="block text-xs text-slate-600">입력·검토</span>
+        지급 {money(row.review_total_amount)}
       </p>
       <ReviewOtherAmounts row={row} />
       {row.review_status === 'SUBMITTED' &&
