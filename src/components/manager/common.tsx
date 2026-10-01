@@ -114,6 +114,7 @@ export const labels: Record<string, string> = {
   REVOKE_JOIN_LINK: '기사 가입 링크 끄기',
   REGISTER_DRIVER: '기사 가입',
   UPDATE_DRIVER_PROFILE: '기사 정보 변경',
+  UPDATE_DRIVER_AFFILIATION: '기사 소속 시작일 변경',
   DELETE_PROJECT: '현장 삭제',
   driver_join_link: '기사 가입 링크',
   REVOKE_INVITE: '초대 취소',

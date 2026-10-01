@@ -111,9 +111,13 @@ export async function saveDriverIdentity(db: Db, input: DriverInformation, drive
           .where(eq(driverAffiliations.id, row.id));
     }
     if (!current.some((row) => row.valid_from === today))
-      await db
-        .insert(driverAffiliations)
-        .values({ driver_id: driver.id, counterparty_id: party.id, valid_from: today });
+      await db.insert(driverAffiliations).values({
+        driver_id: driver.id,
+        counterparty_id: party.id,
+        // Only a newly created driver receives a retrospective first affiliation.
+        // Business/vehicle reuse does not change that driver's own history.
+        valid_from: driverId ? today : sql`(${today}::date - interval '1 year')::date`,
+      });
   }
   return driver;
 }

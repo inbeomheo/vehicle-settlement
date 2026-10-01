@@ -4,6 +4,7 @@ import Link from 'next/link';
 import type { DriverProfile } from '@/server/services/driver-profiles';
 import { Modal, ConfirmDialog } from '@/components/ui/modal';
 import { DriverProfileEditor } from '@/components/driver-profile-editor';
+import { DriverAffiliationEditor } from './driver-affiliation-editor';
 import { DriverJoinLinks } from './driver-join-links';
 import {
   Badge,
@@ -22,6 +23,7 @@ export function Drivers() {
   const me = useRemote<{ role: string }>('/api/me');
   const rows = useRemote<DriverProfile[]>('/api/drivers');
   const [search, setSearch] = useState('');
+  const [affiliationTarget, setAffiliationTarget] = useState<DriverProfile | null>(null);
   const [editing, setEditing] = useState<DriverProfile | null>(null);
   const [statusTarget, setStatusTarget] = useState<DriverProfile | null>(null);
   const [resetTarget, setResetTarget] = useState<DriverProfile | null>(null);
@@ -30,6 +32,7 @@ export function Drivers() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const admin = me.data?.role === 'ADMIN';
+  const canEditAffiliation = admin || me.data?.role === 'SETTLEMENT_MANAGER';
   const filtered =
     rows.data?.filter((row) =>
       [
@@ -54,44 +57,55 @@ export function Drivers() {
   const titles = ['전화번호', '상호', '사업자번호', '차량번호', '차종·톤수', '담당 현장', '가입일'];
   function actions(row: DriverProfile) {
     return (
-      admin && (
+      canEditAffiliation && (
         <div className="flex flex-wrap gap-2">
-          <button className={secondaryClass} onClick={() => setEditing(row)}>
-            정보 수정
-          </button>
           <button
             className={secondaryClass}
-            onClick={() => {
-              setError('');
-              setStatusTarget(row);
-            }}
+            disabled={!row.affiliations.length}
+            onClick={() => setAffiliationTarget(row)}
           >
-            {row.status === 'ACTIVE' ? '계정 끄기' : '계정 켜기'}
+            소속 시작일 수정
           </button>
-          <button
-            disabled={row.status !== 'ACTIVE' || busy}
-            className={`${secondaryClass} whitespace-normal`}
-            onClick={async () => {
-              setBusy(true);
-              setError('');
-              try {
-                const result = await mutate<{ reset_url?: string; message?: string }>(
-                  `/api/admin/users/${row.id}/password-reset`,
-                  'POST',
-                  {},
-                );
-                if (!result.reset_url) throw new Error(result.message ?? '새 링크를 다시 만드세요.');
-                setResetTarget(row);
-                setResetUrl(result.reset_url);
-              } catch (reason) {
-                setError(reason instanceof Error ? reason.message : '링크를 만들지 못했습니다.');
-              } finally {
-                setBusy(false);
-              }
-            }}
-          >
-            비밀번호 재설정 링크
-          </button>
+          {admin && (
+            <>
+              <button className={secondaryClass} onClick={() => setEditing(row)}>
+                정보 수정
+              </button>
+              <button
+                className={secondaryClass}
+                onClick={() => {
+                  setError('');
+                  setStatusTarget(row);
+                }}
+              >
+                {row.status === 'ACTIVE' ? '계정 끄기' : '계정 켜기'}
+              </button>
+              <button
+                disabled={row.status !== 'ACTIVE' || busy}
+                className={`${secondaryClass} whitespace-normal`}
+                onClick={async () => {
+                  setBusy(true);
+                  setError('');
+                  try {
+                    const result = await mutate<{ reset_url?: string; message?: string }>(
+                      `/api/admin/users/${row.id}/password-reset`,
+                      'POST',
+                      {},
+                    );
+                    if (!result.reset_url) throw new Error(result.message ?? '새 링크를 다시 만드세요.');
+                    setResetTarget(row);
+                    setResetUrl(result.reset_url);
+                  } catch (reason) {
+                    setError(reason instanceof Error ? reason.message : '링크를 만들지 못했습니다.');
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+              >
+                비밀번호 재설정 링크
+              </button>
+            </>
+          )}
         </div>
       )
     );
@@ -103,7 +117,9 @@ export function Drivers() {
         description={
           admin
             ? '가입한 기사님의 정보·계정과 공용 가입 링크를 관리합니다.'
-            : '기사 정보를 볼 수 있습니다. 정보 변경은 관리자에게 요청하세요.'
+            : canEditAffiliation
+              ? '기사 정보를 보고 소속 시작일을 수정할 수 있습니다. 그 밖의 정보 변경은 관리자에게 요청하세요.'
+              : '기사 정보를 볼 수 있습니다. 정보 변경은 관리자에게 요청하세요.'
         }
       />
       <Notice
@@ -154,7 +170,7 @@ export function Drivers() {
             <table className="w-full text-left text-sm">
               <thead className="bg-slate-100">
                 <tr>
-                  {['이름', ...titles, '계정 상태', ...(admin ? ['관리'] : [])].map((title) => (
+                  {['이름', ...titles, '계정 상태', ...(canEditAffiliation ? ['관리'] : [])].map((title) => (
                     <th key={title} className="px-4 py-3 whitespace-nowrap">
                       {title}
                     </th>
@@ -191,7 +207,7 @@ export function Drivers() {
                     <td className="px-4 py-3">
                       <Badge value={row.status} />
                     </td>
-                    {admin && (
+                    {canEditAffiliation && (
                       <td className="min-w-60 px-4 py-3" onClick={(e) => e.stopPropagation()}>
                         {actions(row)}
                       </td>
@@ -202,6 +218,22 @@ export function Drivers() {
             </table>
           </div>
         </>
+      )}
+      {affiliationTarget && (
+        <Modal
+          title={`${affiliationTarget.name} 소속 시작일 수정`}
+          onClose={() => setAffiliationTarget(null)}
+        >
+          <DriverAffiliationEditor
+            profile={affiliationTarget}
+            onClose={() => setAffiliationTarget(null)}
+            onSaved={() => {
+              setAffiliationTarget(null);
+              rows.refresh();
+              setSuccess('소속 시작일을 저장했습니다.');
+            }}
+          />
+        </Modal>
       )}
       {editing && (
         <Modal title={`${editing.name} 기사 정보 수정`} onClose={() => setEditing(null)}>
