@@ -11,7 +11,15 @@ async function login(page: Page, login_id: string) {
 test('11: 역할별 메뉴 및 직접 URL의 서버 권한 가드', async ({ page }) => {
   await login(page, 'site');
   const menu = page.getByRole('navigation', { name: '주 메뉴' });
-  for (const label of ['대시보드', '검수함', '차량 사용대장', '대리 입력', '엑셀 가져오기', '변경 이력']) {
+  for (const label of [
+    '대시보드',
+    '검수함',
+    '차량 사용대장',
+    '대리 입력',
+    '엑셀 가져오기',
+    '기사관리',
+    '변경 이력',
+  ]) {
     await expect(menu.getByRole('link', { name: label, exact: true })).toBeVisible();
   }
   for (const label of ['월 정산', '지급 관리', '기준정보', '사용자 관리']) {
@@ -22,7 +30,7 @@ test('11: 역할별 메뉴 및 직접 URL의 서버 권한 가드', async ({ pag
     await expect(page).toHaveURL('/m');
   }
   await login(page, 'settlement');
-  for (const label of ['월 정산', '지급 관리', '엑셀 가져오기']) {
+  for (const label of ['월 정산', '지급 관리', '엑셀 가져오기', '기사관리']) {
     await expect(menu.getByRole('link', { name: label, exact: true })).toBeVisible();
   }
   for (const label of ['기준정보', '사용자 관리']) {
@@ -32,7 +40,7 @@ test('11: 역할별 메뉴 및 직접 URL의 서버 권한 가드', async ({ pag
   await expect(page).toHaveURL('/m');
   await login(page, 'admin');
   await expect(menu.getByRole('link', { name: '현장·기사별 집계', exact: true })).toBeVisible();
-  await expect(menu.getByRole('link')).toHaveCount(11);
+  await expect(menu.getByRole('link')).toHaveCount(12);
   await page.goto('/m/users');
   await expect(page.getByRole('heading', { name: '사용자 관리' })).toBeVisible();
 });

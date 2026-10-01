@@ -349,6 +349,12 @@ export function DriverDashboard() {
       </section>
       <p className="flex flex-wrap justify-center gap-x-4 pt-2 text-center">
         <a
+          href="/d/profile"
+          className="inline-flex min-h-12 items-center font-semibold text-slate-700 underline underline-offset-4"
+        >
+          내 정보
+        </a>
+        <a
           href="/manual#driver"
           className="inline-flex min-h-12 items-center font-semibold text-slate-700 underline underline-offset-4"
         >

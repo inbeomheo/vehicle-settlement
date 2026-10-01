@@ -18,8 +18,8 @@ export const masterConfigs: Record<string, MasterConfig> = {
   projects: {
     title: '현장',
     fields: [
-      { key: 'code', title: '현장 코드', required: true },
-      name,
+      { key: 'name', title: '현장(프로젝트) 이름 (예: 탕정)', required: true },
+      { key: 'code', title: '현장 코드 (선택, 비우면 자동)' },
       {
         key: 'evidence_policy',
         title: '증빙 정책',

@@ -18,6 +18,7 @@ const icons: Record<string, string> = {
   '/m/payments': 'M3 7h18v10H3zM3 11h18M7 15h3',
   '/m/import': 'M12 3v12M7 10l5 5 5-5M4 19h16',
   '/m/master': 'M4 6h16M4 12h16M4 18h10',
+  '/m/drivers': 'M16 19v-1a4 4 0 0 0-8 0v1M12 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6',
   '/m/users':
     'M16 19v-1a4 4 0 0 0-8 0v1M12 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6M19 19v-1a3 3 0 0 0-2-2.8M17 5.2a3 3 0 0 1 0 5.6',
   '/m/audit': 'M12 8v4l3 2M3 12a9 9 0 1 0 3-6.7M3 4v4h4',
