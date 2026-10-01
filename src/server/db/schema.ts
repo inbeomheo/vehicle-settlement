@@ -104,7 +104,7 @@ export const projects = pgTable('projects', {
   code: text('code').notNull().unique(),
   name: text('name').notNull(),
   active: boolean('active').notNull().default(true),
-  evidence_policy: evidencePolicyEnum('evidence_policy').notNull().default('PHOTO_REQUIRED'),
+  evidence_policy: evidencePolicyEnum('evidence_policy').notNull().default('NONE'),
   created_at: created(),
   updated_at: updated(),
 });
@@ -218,6 +218,7 @@ export const projectAssignments = pgTable(
 );
 export const invites = pgTable('invites', {
   id: id(),
+  counterparty_id: uuid('counterparty_id').references(() => counterparties.id),
   token_hash: text('token_hash').notNull().unique(),
   role: roleEnum('role').notNull(),
   name: text('name').notNull(),
@@ -699,6 +700,7 @@ export const pushSubscriptions = pgTable(
 
 export const driverJoinLinks = pgTable('driver_join_links', {
   id: id(),
+  counterparty_id: uuid('counterparty_id').references(() => counterparties.id),
   token_hash: text('token_hash').notNull().unique(),
   project_ids: jsonb('project_ids').$type<string[]>().notNull(),
   expires_at: time('expires_at').notNull(),

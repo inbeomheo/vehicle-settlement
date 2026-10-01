@@ -1,3 +1,4 @@
+import { joinBusinessFields } from './driver-schemas';
 import { uploadLimit, uploadLimitMessage } from '../upload-limits';
 import { passwordWithinByteLimit } from '../auth/password';
 import { z } from 'zod';
@@ -161,6 +162,7 @@ export const evidenceSchema = z
   });
 export const inviteSchema = z
   .object({
+    ...joinBusinessFields,
     role: z.enum(roleEnum.enumValues),
     name: z.string().trim().min(1).max(100),
     phone: z.string().max(100).optional(),
@@ -171,7 +173,12 @@ export const inviteSchema = z
   .refine((input) => input.role !== 'DRIVER' || input.project_ids.length > 0, {
     path: ['project_ids'],
     message: '기사에게 배정할 현장을 하나 이상 선택하세요.',
-  });
+  })
+  .refine(
+    (input) =>
+      !(input.counterparty_id || input.new_business) || (input.role === 'DRIVER' && !input.driver_id),
+    { message: '소속 사업자는 기사 연결 없는 기사 초대에서만 지정하세요.' },
+  );
 export const loginSchema = z
   .object({
     login_id: z.string().min(1).max(200),

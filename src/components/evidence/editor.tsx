@@ -139,7 +139,13 @@ export function EvidenceEditor({
     (f) => !pending.some((p) => p.serverId === f.id || p.replacesId === f.id),
   );
   return (
-    <Section title="사진·증빙" target="evidence" feedbackId={feedbackId} step={step} done={done}>
+    <Section
+      title={policy === 'NONE' ? '사진·증빙 (선택)' : '사진·증빙'}
+      target="evidence"
+      feedbackId={feedbackId}
+      step={step}
+      done={done}
+    >
       {validationError && (
         <p
           role="alert"
@@ -150,7 +156,7 @@ export function EvidenceEditor({
         </p>
       )}
       <p className="mb-3 text-[0.9375rem] text-slate-700">
-        {evidenceInstruction(policy) || '필요한 사진이나 서류를 첨부하세요.'}
+        {evidenceInstruction(policy) || '사진이나 서류는 선택입니다. 첨부하지 않아도 보낼 수 있습니다.'}
       </p>
       <div
         className={`grid grid-cols-2 gap-2.5 sm:grid-cols-3 ${serverFiles.length + pending.length ? 'mb-4' : ''}`}

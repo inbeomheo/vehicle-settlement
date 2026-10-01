@@ -291,3 +291,11 @@ commit은 generic 응답 캐시를 사용하지 않는다. job 행 잠금 + 가�
 - `POST /api/admin/projects`는 `assign_all_drivers?: boolean`을 받는다. 화면 기본값은 true, 옵션을 생략한 기존 API 호출은 false다. true이면 현장 생성과 활성 DRIVER 사용자 전원의 오늘부터 종료일 없는 배정·`ASSIGN_PROJECT` 감사를 같은 트랜잭션에 저장한다. 비활성 현장에 자동 배정은 422다. 생성 응답에 `assigned_driver_count`를 반환한다. PATCH에서는 이 옵션을 받지 않는다.
 - 기사관리 배정 체크박스는 ADMIN만 사용할 수 있으며 기존 `/api/admin/assignments` POST와 `/:id` DELETE를 사용한다. 기존 기간 중복·권한·감사·멱등 규칙을 유지한다. 배정에는 별도 version 필드가 없으며 기사 정보 수정의 사용자 version 계약은 유지한다.
 - 기사관리의 `projects`는 현재 유효 배정 중 활성 현장만 표시한다. `GET /api/setup-status`의 `unassigned_drivers`는 이 현장이 없는 활성 DRIVER 사용자 수다. 0명일 때는 대시보드 안내를 숨긴다. 기사 홈과 운행 폼은 기존 lookups의 활성·유효 배정 현장이 없을 때 안내하며 보내기를 막는다.
+
+## F4-JOINBIZ 소속 지정 가입·사진 선택
+
+- 새 현장의 `evidence_policy` 기본값은 화면·API·DB 모두 `NONE`(증빙 선택)이다. 기존 현장 정책은 그대로 유지한다. `NONE` 현장에서는 사진 없이 제출할 수 있다.
+- `POST /api/driver-join-links`는 `counterparty_id?: uuid|null` 또는 `new_business?: {name,biz_no}`를 추가로 받는다. 둘을 함께 지정할 수 없다. ADMIN만 활성 `DRIVER_BUSINESS`/`CARRIER`를 지정할 수 있다. 새 사업자는 정규화한 사업자번호 중복 검사 후 `DRIVER_BUSINESS`로 링크와 같은 트랜잭션에서 생성하며 각각 감사한다.
+- `GET /api/driver-join-links`는 `counterparty_id`, `business_name`을 추가 반환한다. 가입 화면은 토큰에 지정된 상호와 마스킹한 사업자번호만 표시한다. 지정 링크의 가입 `profile`에는 `business_name`, `biz_no`를 보내지 않으며 해당 필드를 보내면 거부한다. 소속은 서버가 링크에 저장된 ID로 결정하고 가입 시 활성·종류를 재검사한다. 최초 소속은 가입일 1년 전부터 적용하며 기사별 운행·금액 조회 격리는 유지한다.
+- 사업자를 지정하지 않은 공용 링크·개별 초대는 기존처럼 새 사업자만 등록하며 기존 사업자번호 중복을 거부한다. ADMIN의 `POST /api/invites`도 기사 연결 없는 DRIVER 초대에 한해 위 사업자 지정/새 사업자 등록을 지원한다. 기존 기사를 연결한 초대 및 다른 역할 초대에는 사업자를 별도 지정할 수 없다. 개별 초대의 1회 수락 규칙은 유지한다.
+- `0750_join_business_optional_evidence.sql`은 현장 증빙 기본값과 `driver_join_links.counterparty_id`, `invites.counterparty_id` nullable FK를 추가한다. 기존 행 값은 변경하지 않는다.

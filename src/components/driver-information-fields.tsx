@@ -33,11 +33,13 @@ export function DriverInformationFields({
   onChange,
   manager = false,
   joining = false,
+  business,
 }: {
   value: DriverInformationValues;
   onChange: (value: DriverInformationValues) => void;
   manager?: boolean;
   joining?: boolean;
+  business?: { name: string; masked_biz_no: string } | null;
 }) {
   const className = manager ? inputClass : control;
   function field(
@@ -73,22 +75,30 @@ export function DriverInformationFields({
         </div>
       </Section>
       <Section title="사업자 정보" step={2}>
-        <div className="grid gap-4 sm:grid-cols-2">
-          {field('business_name', '상호명', { autoComplete: 'organization' })}
-          {field('biz_no', '사업자번호', {
-            inputMode: 'numeric',
-            maxLength: 12,
-            placeholder: '000-00-00000',
-            pattern: '[0-9]{3}-[0-9]{2}-[0-9]{5}',
-          })}
-        </div>
-        <p className="mt-3 text-sm text-slate-600">
-          {joining
-            ? '같은 사업자로 이미 등록된 차량이 있으면 관리자에게 기사 추가(개별 초대)를 요청해 주세요.'
-            : manager
-              ? '기존 사업자로 연결하면 해당 사업자 정보를 사용합니다.'
-              : '등록된 다른 사업자로 변경하려면 관리자에게 문의해 주세요.'}
-        </p>
+        {business ? (
+          <p className="break-words font-semibold">
+            소속: {business.name}({business.masked_biz_no})
+          </p>
+        ) : (
+          <>
+            <div className="grid gap-4 sm:grid-cols-2">
+              {field('business_name', '상호명', { autoComplete: 'organization' })}
+              {field('biz_no', '사업자번호', {
+                inputMode: 'numeric',
+                maxLength: 12,
+                placeholder: '000-00-00000',
+                pattern: '[0-9]{3}-[0-9]{2}-[0-9]{5}',
+              })}
+            </div>
+            <p className="mt-3 text-sm text-slate-600">
+              {joining
+                ? '같은 사업자로 이미 등록된 차량이 있으면 관리자에게 기사 추가(개별 초대)를 요청해 주세요.'
+                : manager
+                  ? '기존 사업자로 연결하면 해당 사업자 정보를 사용합니다.'
+                  : '등록된 다른 사업자로 변경하려면 관리자에게 문의해 주세요.'}
+            </p>
+          </>
+        )}
       </Section>
       <Section title="차량 정보" step={3}>
         <div className="grid gap-4 sm:grid-cols-2">

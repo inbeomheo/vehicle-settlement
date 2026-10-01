@@ -31,6 +31,10 @@ export type DriverInformation = z.output<typeof driverInformationSchema>;
 export const driverProfilePatchSchema = driverInformationSchema.extend({
   version: z.number().int().positive(),
 });
+export const joinBusinessFields = {
+  counterparty_id: z.string().uuid().nullable().optional(),
+  new_business: z.object({ name, biz_no: driverInformationSchema.shape.biz_no }).strict().optional(),
+};
 export const joinLinkSchema = z
   .object({
     project_ids: z
@@ -38,6 +42,7 @@ export const joinLinkSchema = z
       .min(1)
       .max(500)
       .transform((ids) => [...new Set(ids)]),
+    ...joinBusinessFields,
     expires_in_days: z.number().int().min(1).max(90).default(14),
   })
   .strict();

@@ -1,4 +1,5 @@
 'use client';
+import { JoinBusinessFields, emptyJoinBusiness, joinBusinessPayload } from './join-business-fields';
 import { useState } from 'react';
 import { ConfirmDialog } from '@/components/ui/modal';
 import {
@@ -17,6 +18,7 @@ type JoinLink = {
   id: string;
   version: number;
   project_names: string[];
+  business_name: string | null;
   used_count: number;
   expires_at: string;
   revoked_at: string | null;
@@ -24,6 +26,7 @@ type JoinLink = {
 export function DriverJoinLinks() {
   const links = useRemote<JoinLink[]>('/api/driver-join-links');
   const lookups = useRemote<{ projects: { id: string; name: string }[] }>('/api/lookups');
+  const [business, setBusiness] = useState(emptyJoinBusiness);
   const [selected, setSelected] = useState<string[]>([]);
   const [open, setOpen] = useState(false);
   const [url, setUrl] = useState('');
@@ -64,11 +67,16 @@ export function DriverJoinLinks() {
               const result = await mutate<{ join_url?: string; message?: string }>(
                 '/api/driver-join-links',
                 'POST',
-                { project_ids: selected, expires_in_days: Number(form.get('days')) },
+                {
+                  project_ids: selected,
+                  expires_in_days: Number(form.get('days')),
+                  ...joinBusinessPayload(business),
+                },
               );
               if (!result.join_url) throw new Error(result.message ?? '새 링크를 다시 만드세요.');
               setUrl(result.join_url);
               setOpen(false);
+              setBusiness(emptyJoinBusiness);
               links.refresh();
             } catch (reason) {
               setError(reason instanceof Error ? reason.message : '링크를 만들지 못했습니다.');
@@ -112,6 +120,7 @@ export function DriverJoinLinks() {
             {lookups.loading && <p>현장을 불러오는 중…</p>}
             {lookups.data && !lookups.data.projects.length && <p>기준정보에서 현장을 먼저 등록하세요.</p>}
           </fieldset>
+          <JoinBusinessFields value={business} onChange={setBusiness} disabled={busy} />
           <Field title="유효기간 (일)">
             <input
               name="days"
@@ -163,6 +172,9 @@ export function DriverJoinLinks() {
               >
                 <div className="min-w-0 break-words">
                   <p className="font-semibold">{link.project_names.join(', ')}</p>
+                  <p className="text-sm">
+                    {link.business_name ? `소속: ${link.business_name}` : '소속 미지정 · 새 사업자만 가입'}
+                  </p>
                   <p className="text-sm">
                     가입 {link.used_count}명 · {link.revoked_at ? '꺼짐' : expired ? '만료됨' : '사용 중'}
                   </p>

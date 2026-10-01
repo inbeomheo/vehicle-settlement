@@ -1,3 +1,4 @@
+import { approvedJoinBusiness, resolveJoinBusiness, joinBusinessSummary } from './join-business';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Context } from '../context';
@@ -25,7 +26,7 @@ export const registerDriverSchema = z
     client_request_id: z.string().uuid(),
     login_id: z.string().trim().min(1).max(100),
     password: z.string().min(8).refine(passwordWithinByteLimit, '비밀번호가 너무 깁니다'),
-    profile: driverInformationSchema,
+    profile: driverInformationSchema.partial({ business_name: true, biz_no: true }),
   })
   .strict();
 
@@ -47,10 +48,12 @@ export async function createJoinLink(ctx: Context, raw: unknown) {
     await assertActive(tx);
     assertAdmin(tx);
     await activeProjects(tx.db, input.project_ids);
+    const counterpartyId = await resolveJoinBusiness(tx, input);
     const token = newToken();
     const [row] = await tx.db
       .insert(driverJoinLinks)
       .values({
+        counterparty_id: counterpartyId,
         token_hash: hashToken(token),
         project_ids: input.project_ids,
         expires_at: new Date(Date.now() + input.expires_in_days * 86400000),
@@ -67,10 +70,11 @@ export async function listJoinLinks(ctx: Context) {
   await assertActive(ctx);
   assertAdmin(ctx);
   return (
-    await ctx.db.execute(sql`SELECT l.id, l.project_ids, l.expires_at, l.revoked_at, l.created_at, l.version,
+    await ctx.db
+      .execute(sql`SELECT l.id, l.counterparty_id, c.name AS business_name, l.project_ids, l.expires_at, l.revoked_at, l.created_at, l.version,
     (SELECT count(*)::int FROM driver_registrations r WHERE r.link_id=l.id) AS used_count,
     (SELECT coalesce(jsonb_agg(p.name ORDER BY p.name), '[]') FROM projects p WHERE l.project_ids ? p.id::text) AS project_names
-    FROM driver_join_links l ORDER BY l.created_at DESC, l.id`)
+    FROM driver_join_links l LEFT JOIN counterparties c ON c.id=l.counterparty_id ORDER BY l.created_at DESC, l.id`)
   ).rows;
 }
 export async function revokeJoinLink(ctx: Context, id: string, raw: unknown) {
@@ -115,7 +119,9 @@ export async function getJoinLinkStatus(db: Db, token: string) {
         .where(inArray(projects.id, row.project_ids))
     : [];
   if (assigned.length !== row.project_ids.length || assigned.some((p) => !p.active)) return null;
-  return { project_names: assigned.map((p) => p.name) };
+  const business = await joinBusinessSummary(db, row.counterparty_id);
+  if (row.counterparty_id && !business) return null;
+  return { project_names: assigned.map((p) => p.name), business };
 }
 export async function registerDriver(
   db: Db,
@@ -142,6 +148,7 @@ export async function registerDriver(
           .where(eq(driverJoinLinks.token_hash, hashToken(token)))
           .for('update');
     if (!source || source.revoked_at || source.expires_at <= new Date()) notFound();
+    const party = source.counterparty_id ? await approvedJoinBusiness(tx, source.counterparty_id) : null;
     if ('role' in source && (source.role !== 'DRIVER' || source.driver_id)) notFound();
     const [prior] = await tx
       .select()
@@ -175,7 +182,16 @@ export async function registerDriver(
       invalid(
         '같은 차량번호가 다른 기사에 연결되어 있습니다. 관리자에게 기사 추가(개별 초대)를 요청해 주세요.',
       );
-    const driver = await saveDriverIdentity(tx, input.profile);
+    if (party && (input.profile.business_name !== undefined || input.profile.biz_no !== undefined))
+      invalid('지정된 소속 사업자는 가입 화면에서 변경할 수 없습니다.');
+    const profile = party
+      ? {
+          ...driverInformationSchema.omit({ business_name: true, biz_no: true }).parse(input.profile),
+          business_name: party.name,
+          biz_no: party.biz_no ?? '',
+        }
+      : driverInformationSchema.parse(input.profile);
+    const driver = await saveDriverIdentity(tx, profile, undefined, false, party?.id);
     const [user] = await tx
       .insert(users)
       .values({
@@ -209,7 +225,8 @@ export async function registerDriver(
         .where(eq(invites.id, source.id));
     await audit({ db: tx, user, request_id: requestId }, 'REGISTER_DRIVER', 'user', user.id, null, {
       driver_id: driver.id,
-      profile: input.profile,
+      profile,
+      counterparty_id: party?.id ?? null,
       project_ids: source.project_ids,
       link_id: individual ? null : source.id,
       invite_id: individual ? source.id : null,

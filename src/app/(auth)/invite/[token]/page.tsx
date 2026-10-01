@@ -62,7 +62,7 @@ export default async function InvitePage({ params }: { params: Promise<{ token: 
               <dd>{roleLabels[invite.role]}</dd>
             </dl>
             {invite.needs_profile ? (
-              <DriverJoinForm token={token} individual name={invite.name} />
+              <DriverJoinForm token={token} individual name={invite.name} business={invite.business} />
             ) : (
               <>
                 {invite.role === 'DRIVER' && (

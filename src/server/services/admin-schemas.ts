@@ -11,7 +11,7 @@ export const masterSchemas = {
       code: z.string().trim().max(200).nullable().optional(),
       name,
       active,
-      evidence_policy: z.enum(['PHOTO_REQUIRED', 'PHOTO_OR_ALTERNATIVE', 'NONE']),
+      evidence_policy: z.enum(['PHOTO_REQUIRED', 'PHOTO_OR_ALTERNATIVE', 'NONE']).default('NONE'),
     })
     .strict(),
   'work-types': z.object({ name, active }).strict(),

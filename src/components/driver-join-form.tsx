@@ -9,10 +9,12 @@ export function DriverJoinForm({
   token,
   individual = false,
   name = '',
+  business,
 }: {
   token: string;
   individual?: boolean;
   name?: string;
+  business?: { name: string; masked_biz_no: string } | null;
 }) {
   const [value, setValue] = useState({ ...emptyDriverInformation, name });
   const [ready, setReady] = useState(false);
@@ -26,7 +28,14 @@ export function DriverJoinForm({
     setBusy(true);
     setError('');
     const form = new FormData(event.currentTarget);
-    const body = { profile: value, login_id: form.get('login_id'), password: form.get('password') };
+    const { business_name: _name, biz_no: _biz, ...driverProfile } = value;
+    void _name;
+    void _biz;
+    const body = {
+      profile: business ? driverProfile : value,
+      login_id: form.get('login_id'),
+      password: form.get('password'),
+    };
     // Keep the key on uncertain retries, but a deliberately edited form is a
     // different request. Credentials live only in memory, never localStorage.
     const serialized = JSON.stringify(body);
@@ -58,7 +67,7 @@ export function DriverJoinForm({
   }
   return (
     <form onSubmit={submit} className="space-y-5">
-      <DriverInformationFields joining value={value} onChange={setValue} />
+      <DriverInformationFields joining business={business} value={value} onChange={setValue} />
       <Section title="로그인 정보">
         <div className="space-y-4">
           <Field label="아이디">

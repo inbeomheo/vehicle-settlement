@@ -21,7 +21,7 @@ export default async function Page({ params }: { params: Promise<{ token: string
         {link ? (
           <>
             <p className="break-words text-slate-700">담당 현장: {link.project_names.join(', ')}</p>
-            <DriverJoinForm token={token} />
+            <DriverJoinForm token={token} business={link.business} />
           </>
         ) : (
           <>
