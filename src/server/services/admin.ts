@@ -36,6 +36,13 @@ export async function adminTransaction<T>(ctx: Context, fn: (tx: Context) => Pro
     assertAdmin(tx);
     // All administrative writes share one lock: period checks and last-admin checks are atomic.
     await tx.db.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended('w3:administration', 0))`);
+    // 잠금을 기다리는 동안 권한이 회수됐을 수 있으므로 잠금 뒤 최신 상태로 다시 확인한다.
+    const [actor] = await tx.db
+      .select({ role: users.role, status: users.status })
+      .from(users)
+      .where(eq(users.id, tx.user.id));
+    if (!actor || actor.role !== 'ADMIN' || actor.status !== 'ACTIVE')
+      throw new AppError('FORBIDDEN', '관리자 권한이 필요합니다.');
     return fn(tx);
   });
 }
