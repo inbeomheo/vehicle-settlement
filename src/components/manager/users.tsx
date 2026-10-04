@@ -1,4 +1,5 @@
 'use client';
+import { AccountDeleteAction, DisabledAccountsToggle, useDisabledAccounts } from './account-management';
 import { useBusy } from '@/components/ui/use-busy';
 import { JoinBusinessFields, emptyJoinBusiness, joinBusinessPayload } from './join-business-fields';
 import { useState } from 'react';
@@ -37,6 +38,8 @@ type User = {
   status: string;
   version: number;
   assignments: Assignment[];
+  deletable: boolean;
+  delete_reason: string | null;
 };
 type Invite = {
   id: string;
@@ -50,6 +53,7 @@ type Option = { id: string; name: string };
 const roles = ['DRIVER', 'SITE_MANAGER', 'SETTLEMENT_MANAGER', 'ADMIN'];
 export function Users() {
   const users = useRemote<User[]>('/api/admin/users');
+  const disabledAccounts = useDisabledAccounts();
   const invites = useRemote<Invite[]>('/api/invites');
   const lookups = useRemote<{ projects: Option[]; drivers: Option[] }>('/api/lookups');
   const [error, setError] = useState('');
@@ -433,9 +437,15 @@ export function Users() {
               />
             </Field>
           </div>
+          <DisabledAccountsToggle
+            count={users.data?.filter((user) => user.status === 'DISABLED').length ?? 0}
+            checked={disabledAccounts.showDisabled}
+            onChange={disabledAccounts.change}
+          />
           <div className="grid gap-3">
             {users.data
-              ?.filter((user) => `${user.name} ${user.login_id} ${user.phone}`.includes(search))
+              ?.filter((user) => disabledAccounts.showDisabled || user.status !== 'DISABLED')
+              .filter((user) => `${user.name} ${user.login_id} ${user.phone}`.includes(search))
               .map((user) => (
                 <article key={user.id} className={panelClass}>
                   <div className="flex flex-wrap items-center justify-between gap-3">
@@ -451,7 +461,7 @@ export function Users() {
                           : `배정 ${user.assignments.filter((a) => !a.revoked_at).length}건`}
                       </p>
                     </div>
-                    <div className="flex items-center gap-3">
+                    <div className="flex min-w-0 flex-wrap items-center gap-3">
                       <Badge value={user.status} />
                       <button
                         className={secondaryClass}
@@ -464,6 +474,17 @@ export function Users() {
                       >
                         사용자 관리
                       </button>
+                      <AccountDeleteAction
+                        user={user}
+                        onDeleted={() => {
+                          if (selected?.id === user.id) setSelected(null);
+                          if (resetLink?.userId === user.id) setResetLink(null);
+                          users.refresh();
+                          invites.refresh();
+                          lookups.refresh();
+                          setSuccess('계정을 삭제했습니다.');
+                        }}
+                      />
                     </div>
                   </div>
                   <p className="mt-2 break-all text-xs text-slate-600">사용자 ID: {user.id}</p>

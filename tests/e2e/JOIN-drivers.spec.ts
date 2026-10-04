@@ -84,6 +84,8 @@ for (const font of ['보통', '아주 크게']) {
       await page.keyboard.press('Escape');
       await row.getByRole('button', { name: '계정 끄기' }).click();
       await page.getByRole('dialog').getByRole('button', { name: '계정 상태 변경' }).click();
+      await expect(row).toHaveCount(0);
+      await page.getByRole('checkbox', { name: /꺼진 계정 \d+명 보기/ }).check();
       await expect(row).toContainText('비활성');
       expect((await driver.request.get('/api/driver-profile')).status()).toBe(401);
       await row.getByRole('button', { name: '계정 켜기' }).click();

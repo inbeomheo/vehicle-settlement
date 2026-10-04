@@ -1,4 +1,5 @@
 'use client';
+import { AccountDeleteAction, DisabledAccountsToggle, useDisabledAccounts } from './account-management';
 import { useState } from 'react';
 import { DriverAssignments } from './driver-assignments';
 import type { DriverProfile } from '@/server/services/driver-profiles';
@@ -26,6 +27,7 @@ function tons(value: string | null | undefined) {
 export function Drivers() {
   const me = useRemote<{ role: string }>('/api/me');
   const rows = useRemote<DriverProfile[]>('/api/drivers');
+  const disabledAccounts = useDisabledAccounts();
   const [search, setSearch] = useState('');
   const [affiliationTarget, setAffiliationTarget] = useState<DriverProfile | null>(null);
   const [assignmentTarget, setAssignmentTarget] = useState<DriverProfile | null>(null);
@@ -39,17 +41,19 @@ export function Drivers() {
   const admin = me.data?.role === 'ADMIN';
   const canEditAffiliation = admin || me.data?.role === 'SETTLEMENT_MANAGER';
   const filtered =
-    rows.data?.filter((row) =>
-      [
-        row.name,
-        row.phone,
-        row.login_id,
-        row.business_name,
-        row.biz_no,
-        row.plate_no,
-        ...row.projects.map((p) => p.name),
-      ].some((value) => value?.toLowerCase().includes(search.trim().toLowerCase())),
-    ) ?? [];
+    rows.data
+      ?.filter((row) => disabledAccounts.showDisabled || row.status !== 'DISABLED')
+      .filter((row) =>
+        [
+          row.name,
+          row.phone,
+          row.login_id,
+          row.business_name,
+          row.biz_no,
+          row.plate_no,
+          ...row.projects.map((p) => p.name),
+        ].some((value) => value?.toLowerCase().includes(search.trim().toLowerCase())),
+      ) ?? [];
   const properties = (row: DriverProfile) => [
     row.phone ?? '—',
     row.business_name ?? '—',
@@ -122,6 +126,13 @@ export function Drivers() {
               >
                 비밀번호 재설정 링크
               </button>
+              <AccountDeleteAction
+                user={row}
+                onDeleted={() => {
+                  rows.refresh();
+                  setSuccess('계정을 삭제했습니다.');
+                }}
+              />
             </>
           )}
         </div>
@@ -159,6 +170,11 @@ export function Drivers() {
           />
         </Field>
       </div>
+      <DisabledAccountsToggle
+        count={rows.data?.filter((row) => row.status === 'DISABLED').length ?? 0}
+        checked={disabledAccounts.showDisabled}
+        onChange={disabledAccounts.change}
+      />
       {rows.loading ? (
         <Empty loading />
       ) : !filtered.length ? (
