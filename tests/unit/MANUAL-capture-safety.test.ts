@@ -40,3 +40,8 @@ it('F4 가입 링크 캡처는 전용 로컬 3197 주소만 추가 허용한다'
 it('F4 설명서 부분 촬영은 전용 로컬 3196을 허용한다', () => {
   expect(loadCapture('http://localhost:3196').stdout.trim()).toBe('http://localhost:3196');
 });
+
+it('G-PERIOD 설명서는 전용 로컬 3202만 추가 허용한다', () => {
+  expect(loadCapture('http://localhost:3202').stdout.trim()).toBe('http://localhost:3202');
+  expect(loadCapture('http://localhost:3202@evil.example').status).not.toBe(0);
+});
