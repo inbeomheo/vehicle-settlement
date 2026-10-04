@@ -44,7 +44,16 @@ export async function saveDriverIdentity(
         .limit(1)
         .for('update')
     : [];
-  const sameBusiness = currentParty?.party.biz_no?.replace(/\D/g, '') === input.biz_no.replaceAll('-', '');
+  const businessNumber = input.biz_no.replace(/\D/g, '');
+  const sameBusiness = Boolean(
+    currentParty && (currentParty.party.biz_no ?? '').replace(/\D/g, '') === businessNumber,
+  );
+  if (
+    !approvedCounterpartyId &&
+    !businessNumber &&
+    (!sameBusiness || currentParty.party.name !== input.business_name)
+  )
+    invalid('새 사업자를 등록하려면 사업자번호를 입력하세요.');
   let [party] = approvedCounterpartyId
     ? [await approvedJoinBusiness(db, approvedCounterpartyId)]
     : sameBusiness
@@ -54,7 +63,9 @@ export async function saveDriverIdentity(
           .from(counterparties)
           .where(
             and(
-              allowExistingBusiness ? eq(counterparties.kind, 'DRIVER_BUSINESS') : undefined,
+              allowExistingBusiness
+                ? sql`${counterparties.kind} IN ('DRIVER_BUSINESS','CARRIER')`
+                : undefined,
               sql`regexp_replace(${counterparties.biz_no}, '[^0-9]', '', 'g')=${input.biz_no.replaceAll('-', '')}`,
             ),
           )
@@ -84,42 +95,23 @@ export async function saveDriverIdentity(
         ...businessDetails(input),
       })
       .returning();
-  else if (
-    driverId &&
-    party.name !== input.business_name &&
-    (
-      await db.execute(
-        sql`SELECT id FROM driver_affiliations WHERE driver_id=${driverId}::uuid AND counterparty_id=${party.id}::uuid AND valid_from<=${today}::date AND (valid_to IS NULL OR valid_to>=${today}::date)`,
-      )
-    ).rows.length
-  ) {
-    const others = await db.execute(
-      sql`SELECT id FROM driver_affiliations WHERE counterparty_id=${party.id}::uuid AND driver_id<>${driverId}::uuid AND (valid_to IS NULL OR valid_to>=${today}::date)`,
-    );
-    if (others.rows.length)
-      invalid(
-        '여러 기사가 사용하는 상호는 여기서 변경할 수 없습니다. 기존 상호를 입력하거나 관리자에게 거래처 수정을 요청하세요.',
-      );
-    [party] = await db
-      .update(counterparties)
-      .set({ name: input.business_name, updated_at: new Date() })
-      .where(eq(counterparties.id, party.id))
-      .returning();
-  }
-  if (
-    driverId &&
-    !approvedCounterpartyId &&
-    businessDetailKeys.some((key) => input[key] !== undefined && input[key] !== party[key])
-  ) {
+  else if (driverId && !approvedCounterpartyId) {
     const others = await db.execute(sql`SELECT 1 FROM driver_affiliations
       WHERE counterparty_id=${party.id}::uuid AND driver_id<>${driverId}::uuid LIMIT 1`);
-    if (!allowExistingBusiness && (!ownsParty || party.kind !== 'DRIVER_BUSINESS' || others.rows.length))
-      invalid('공유 운송사 사업자 정보는 관리자만 수정할 수 있습니다. 관리자에게 거래처 수정을 요청하세요.');
-    [party] = await db
-      .update(counterparties)
-      .set({ ...businessDetails(input), updated_at: new Date() })
-      .where(eq(counterparties.id, party.id))
-      .returning();
+    const editable = sameBusiness && ownsParty && party.kind === 'DRIVER_BUSINESS' && !others.rows.length;
+    const changed =
+      party.name !== input.business_name ||
+      businessDetailKeys.some((key) => input[key] !== undefined && input[key] !== party[key]);
+    if (changed && editable) {
+      [party] = await db
+        .update(counterparties)
+        .set({ name: input.business_name, ...businessDetails(input), updated_at: new Date() })
+        .where(eq(counterparties.id, party.id))
+        .returning();
+    } else if (changed && !allowExistingBusiness) {
+      invalid('공유 운송사 사업자 정보는 여기서 변경할 수 없습니다. 관리자에게 거래처 수정을 요청하세요.');
+    }
+    // Admin affiliation edits reuse the master verbatim, even when old form details were sent.
   }
   let [vehicle] = await db
     .select()
