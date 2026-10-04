@@ -211,6 +211,12 @@ export function Approvals() {
             <span className="block text-sm text-slate-600">
               검색 전체 · 취소 제외 · 공급가 · 미확정 비용 {data.summary.unknown_count}개
             </span>
+            {data.summary.held_count > 0 && (
+              <span className="block text-sm text-amber-800">
+                보류 {money(data.summary.held_amount)} · 합계 제외
+                {data.summary.held_unknown_count > 0 && ` · 금액 미정 ${data.summary.held_unknown_count}개`}
+              </span>
+            )}
           </p>
           <div className="flex flex-wrap gap-2">
             <button

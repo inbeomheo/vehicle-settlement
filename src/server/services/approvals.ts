@@ -55,15 +55,21 @@ export async function getApprovals(ctx: Context, raw: unknown, exportAll = false
     WITH filtered AS (SELECT * FROM vehicle_uses WHERE ${sql.join(clauses, sql` AND `)}),
     selected AS (SELECT * FROM filtered WHERE ${q.review_status ? sql`review_status=${q.review_status} AND operation_status<>'CANCELED'` : sql`true`}),
     amounts AS (SELECT selected.id, selected.operation_status,
-      count(*) FILTER (WHERE cl.id IS NOT NULL AND ${reviewSupplySql} IS NULL)::int AS unknown_count,
-      sum(${reviewSupplySql}) AS amount
+      count(*) FILTER (WHERE cl.line_review_status IN ('PENDING','APPROVED') AND ${reviewSupplySql} IS NULL)::int AS unknown_count,
+      sum(${reviewSupplySql}) FILTER (WHERE cl.line_review_status IN ('PENDING','APPROVED')) AS amount,
+      count(*) FILTER (WHERE cl.line_review_status='HELD')::int AS held_count,
+      count(*) FILTER (WHERE cl.line_review_status='HELD' AND ${reviewSupplySql} IS NULL)::int AS held_unknown_count,
+      sum(${reviewSupplySql}) FILTER (WHERE cl.line_review_status='HELD') AS held_amount
       FROM selected LEFT JOIN charge_lines cl ON cl.vehicle_use_id=selected.id AND cl.direction='PAYABLE' AND cl.deleted_at IS NULL AND cl.line_review_status<>'REJECTED'
       GROUP BY selected.id,selected.operation_status)
     SELECT (SELECT count(*)::int FROM filtered) AS all_count,
       (SELECT COALESCE(jsonb_object_agg(review_status,n),'{}'::jsonb) FROM (SELECT review_status,count(*)::int AS n FROM filtered WHERE operation_status<>'CANCELED' GROUP BY review_status) c) AS counts,
       (SELECT count(*)::int FROM amounts WHERE operation_status<>'CANCELED') AS count,
       (SELECT COALESCE(sum(amount),0)::text FROM amounts WHERE operation_status<>'CANCELED') AS amount,
-      (SELECT COALESCE(sum(unknown_count),0)::int FROM amounts WHERE operation_status<>'CANCELED') AS unknown_count`);
+      (SELECT COALESCE(sum(unknown_count),0)::int FROM amounts WHERE operation_status<>'CANCELED') AS unknown_count,
+      (SELECT COALESCE(sum(held_count),0)::int FROM amounts WHERE operation_status<>'CANCELED') AS held_count,
+      (SELECT COALESCE(sum(held_unknown_count),0)::int FROM amounts WHERE operation_status<>'CANCELED') AS held_unknown_count,
+      (SELECT COALESCE(sum(held_amount),0)::text FROM amounts WHERE operation_status<>'CANCELED') AS held_amount`);
   const summary = result.rows[0];
   const optionResult = await ctx.db
     .execute(sql`SELECT vehicle_uses.project_id, vehicle_uses.driver_id, vehicle_uses.reviewer_user_id,
@@ -82,7 +88,9 @@ export async function getApprovals(ctx: Context, raw: unknown, exportAll = false
   // Drivers go through the existing driver redaction and never receive ledger customer amounts.
   const list = driver ? await listUses(ctx, query) : await getLedger(ctx, query, exportAll);
   const amount = Number(summary.amount);
-  if (!Number.isSafeInteger(amount)) throw new RangeError('합계 금액 범위를 초과했습니다.');
+  const heldAmount = Number(summary.held_amount);
+  if (!Number.isSafeInteger(amount) || !Number.isSafeInteger(heldAmount))
+    throw new RangeError('합계 금액 범위를 초과했습니다.');
   return {
     ...list,
     counts: {
@@ -93,7 +101,14 @@ export async function getApprovals(ctx: Context, raw: unknown, exportAll = false
       APPROVED: 0,
       ...(summary.counts as Record<string, number>),
     },
-    summary: { count: Number(summary.count), amount, unknown_count: Number(summary.unknown_count) },
+    summary: {
+      count: Number(summary.count),
+      amount,
+      unknown_count: Number(summary.unknown_count),
+      held_amount: heldAmount,
+      held_count: Number(summary.held_count),
+      held_unknown_count: Number(summary.held_unknown_count),
+    },
     options: {
       projects: options('project_id', 'project_name'),
       drivers: driver ? [] : options('driver_id', 'driver_name'),

@@ -49,7 +49,14 @@ it('다섯 탭은 취소를 전체에만 포함하며 개수·공급가 합계·
   expect(all.total).toBe(5);
   expect(all.rows).toHaveLength(2);
   expect(all.counts).toEqual({ ALL: 5, DRAFT: 1, SUBMITTED: 1, NEEDS_FIX: 1, APPROVED: 1 });
-  expect(all.summary).toEqual({ count: 4, amount: 1200000, unknown_count: 0 });
+  expect(all.summary).toEqual({
+    count: 4,
+    amount: 1200000,
+    unknown_count: 0,
+    held_amount: 0,
+    held_count: 0,
+    held_unknown_count: 0,
+  });
   for (const review_status of ['DRAFT', 'SUBMITTED', 'NEEDS_FIX', 'APPROVED']) {
     const data = await getApprovals(s.managerCtx, { ...s.query, review_status });
     expect(data.total).toBe(1);
@@ -169,7 +176,14 @@ it('0원·미확정·부가세 포함과 고객청구 제외를 공급가 합계
   });
   await createUse(s.adminCtx, { ...s.input, billing_unit: 'PER_HOUR' });
   const data = await getApprovals(s.managerCtx, s.query);
-  expect(data.summary).toEqual({ count: 3, amount: 100000, unknown_count: 1 });
+  expect(data.summary).toEqual({
+    count: 3,
+    amount: 100000,
+    unknown_count: 1,
+    held_amount: 0,
+    held_count: 0,
+    held_unknown_count: 0,
+  });
   const driver = await getApprovals(s.driverCtx, { ...s.query, transport_search: '상차장' });
   expect(driver.summary).toEqual(data.summary);
   expect(driver.total).toBe(3);
