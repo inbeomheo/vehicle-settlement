@@ -28,9 +28,13 @@ export function DriverJoinForm({
     setBusy(true);
     setError('');
     const form = new FormData(event.currentTarget);
-    const { business_name: _name, biz_no: _biz, ...driverProfile } = value;
-    void _name;
-    void _biz;
+    const driverProfile = {
+      name: value.name,
+      phone: value.phone,
+      plate_no: value.plate_no,
+      vehicle_type: value.vehicle_type,
+      tonnage: value.tonnage,
+    };
     const body = {
       profile: business ? driverProfile : value,
       login_id: form.get('login_id'),

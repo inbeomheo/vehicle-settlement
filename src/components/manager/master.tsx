@@ -300,7 +300,7 @@ export function Master({ resource }: { resource: string }) {
                       type={field.type ?? 'text'}
                       min={field.type === 'number' ? '0' : undefined}
                       step={field.step ?? '1'}
-                      maxLength={2000}
+                      maxLength={field.maxLength ?? 2000}
                       value={String(form[field.key] ?? '')}
                       onChange={(e) => setForm({ ...form, [field.key]: e.target.value })}
                     />

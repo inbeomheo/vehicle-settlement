@@ -7,6 +7,10 @@ export type DriverInformationValues = {
   phone: string;
   business_name: string;
   biz_no: string;
+  representative_name: string;
+  address: string;
+  business_type: string;
+  business_item: string;
   plate_no: string;
   vehicle_type: string;
   tonnage: string;
@@ -16,6 +20,10 @@ export const emptyDriverInformation: DriverInformationValues = {
   phone: '',
   business_name: '',
   biz_no: '',
+  representative_name: '',
+  address: '',
+  business_type: '운수',
+  business_item: '화물',
   plate_no: '',
   vehicle_type: '카고',
   tonnage: '',
@@ -34,11 +42,13 @@ export function DriverInformationFields({
   manager = false,
   joining = false,
   business,
+  businessDetailsReadOnly = false,
 }: {
   value: DriverInformationValues;
   onChange: (value: DriverInformationValues) => void;
   manager?: boolean;
   joining?: boolean;
+  businessDetailsReadOnly?: boolean;
   business?: { name: string; masked_biz_no: string } | null;
 }) {
   const className = manager ? inputClass : control;
@@ -90,6 +100,33 @@ export function DriverInformationFields({
                 pattern: '[0-9]{3}-[0-9]{2}-[0-9]{5}',
               })}
             </div>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              {field('representative_name', '대표자 (선택)', {
+                required: false,
+                maxLength: 200,
+                readOnly: businessDetailsReadOnly,
+              })}
+              {field('address', '사업장 주소 (선택)', {
+                required: false,
+                maxLength: 500,
+                readOnly: businessDetailsReadOnly,
+              })}
+              {field('business_type', '업태 (선택)', {
+                required: false,
+                maxLength: 100,
+                readOnly: businessDetailsReadOnly,
+              })}
+              {field('business_item', '종목 (선택)', {
+                required: false,
+                maxLength: 100,
+                readOnly: businessDetailsReadOnly,
+              })}
+            </div>
+            {businessDetailsReadOnly && (
+              <p className="mt-3 text-sm text-slate-600">
+                공유 운송사 사업자 정보는 관리자에게 수정을 요청해 주세요.
+              </p>
+            )}
             <p className="mt-3 text-sm text-slate-600">
               {joining
                 ? '같은 사업자로 이미 등록된 차량이 있으면 관리자에게 기사 추가(개별 초대)를 요청해 주세요.'

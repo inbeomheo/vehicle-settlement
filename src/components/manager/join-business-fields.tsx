@@ -7,16 +7,33 @@ export type JoinBusinessSelection = {
   counterpartyId: string;
   name: string;
   bizNo: string;
+  representative_name: string;
+  address: string;
+  business_type: string;
+  business_item: string;
 };
 export const emptyJoinBusiness: JoinBusinessSelection = {
   mode: 'existing',
   counterpartyId: '',
   name: '',
   bizNo: '',
+  representative_name: '',
+  address: '',
+  business_type: '운수',
+  business_item: '화물',
 };
 export function joinBusinessPayload(value: JoinBusinessSelection) {
   return value.mode === 'new'
-    ? { new_business: { name: value.name, biz_no: value.bizNo } }
+    ? {
+        new_business: {
+          name: value.name,
+          biz_no: value.bizNo,
+          representative_name: value.representative_name,
+          address: value.address,
+          business_type: value.business_type,
+          business_item: value.business_item,
+        },
+      }
     : { counterparty_id: value.counterpartyId || null };
 }
 export function JoinBusinessFields({
@@ -97,6 +114,23 @@ export function JoinBusinessFields({
               onChange={(e) => onChange({ ...value, bizNo: formatBusinessNumber(e.target.value) })}
             />
           </Field>
+          {(
+            [
+              ['representative_name', '대표자 (선택)', 200],
+              ['address', '사업장 주소 (선택)', 500],
+              ['business_type', '업태 (선택)', 100],
+              ['business_item', '종목 (선택)', 100],
+            ] as const
+          ).map(([key, title, maxLength]) => (
+            <Field key={key} title={title}>
+              <input
+                className={inputClass}
+                value={value[key]}
+                maxLength={maxLength}
+                onChange={(e) => onChange({ ...value, [key]: e.target.value })}
+              />
+            </Field>
+          ))}
         </div>
       )}
       <p className="text-sm text-slate-600">

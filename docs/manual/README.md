@@ -124,3 +124,8 @@ BASE=http://localhost:3196 node docs/manual/export.mjs
 ```
 
 부분 촬영은 시연 데이터만 사용해 `29b-summary-detail`(상세와 합계), `45-drivers`(기사관리 관리 열)의 원본·공개 PNG를 갱신한다. 공용 도구의 로컬 허용 목록에 3196을 추가했고 외부 요청 차단은 유지한다.
+
+
+### 거래처·회사 사업자 정보 (G-BIZ)
+
+거래처와 회사 정보의 대표자·주소·업태·종목 안내를 보완했다. 이 작업은 `DOTENV_CONFIG_PATH=.env.local PG_PORT=54401 DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54401/vehicle_app PORT=3201` 환경만 사용한다. 설명서 PDF는 로컬 3201 서버에서 `BASE=http://localhost:3201 node docs/manual/export.mjs`로 재생성한다. 기존 캡처는 유지하며 고객 개인정보는 사용하지 않는다.

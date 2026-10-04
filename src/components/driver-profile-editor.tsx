@@ -21,6 +21,10 @@ export function DriverProfileEditor({
     phone: profile.phone ?? '',
     business_name: profile.business_name ?? '',
     biz_no: profile.biz_no ?? '',
+    representative_name: profile.representative_name ?? '',
+    address: profile.address ?? '',
+    business_type: profile.business_type ?? '',
+    business_item: profile.business_item ?? '',
     plate_no: profile.plate_no ?? '',
     vehicle_type: profile.vehicle_type ?? '카고',
     tonnage: profile.tonnage ?? '',
@@ -51,7 +55,12 @@ export function DriverProfileEditor({
       <p className="text-sm text-slate-600">
         변경 사항은 오늘부터 적용됩니다. 과거 운행에 저장된 정보는 유지됩니다.
       </p>
-      <DriverInformationFields value={value} onChange={setValue} manager={manager} />
+      <DriverInformationFields
+        value={value}
+        onChange={setValue}
+        manager={manager}
+        businessDetailsReadOnly={!manager && !profile.business_details_editable}
+      />
       {error && (
         <p role="alert" className="text-red-800">
           {error}
