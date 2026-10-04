@@ -40,12 +40,15 @@ test('새 기사 대리 입력 선택과 현장 담당자 가져오기 경고·�
   await page.getByRole('button', { name: '서버 저장', exact: true }).click();
   const savedResponse = await saved;
   expect(savedResponse.ok()).toBe(true);
-  expect((await savedResponse.json()).data).toMatchObject({
+  const savedUse = (await savedResponse.json()).data;
+  expect(savedUse).toMatchObject({
     entered_as: 'PROXY',
     driver_id: driver.id,
     vehicle_id: vehicle.id,
     payee_counterparty_id: payee.id,
   });
+  // 저장 응답 뒤 IndexedDB 동기화와 location.assign이 끝나야 다음 이동과 경합하지 않는다.
+  await expect(page).toHaveURL(`/m/uses/${savedUse.id}`);
   await page.goto('/m/import');
   const header = '사용일,현장,기사,차량번호,지급처,출발지,도착지,과금단위,단가';
   const rows = Array.from(

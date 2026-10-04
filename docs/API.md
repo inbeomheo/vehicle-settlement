@@ -226,7 +226,7 @@ commit은 generic 응답 캐시를 사용하지 않는다. job 행 잠금 + 가�
 ## LIST 운행 결재 목록
 
 - `GET /api/approvals`: 담당자는 기존 유효 현장 범위, 기사는 유효 현장과 본인 기사 범위를 서버에서 강제한다. `from`, `to`는 실제 운송일 양끝 포함(각 기본 서울 오늘), `project_id`, `driver_id`, `reviewer_user_id`(UUID 또는 `me`), `transport_search`(출발·도착·사용 건/회차 운반 내용, 최대 100자), `review_status`, `page`, `pageSize`(최대 100)를 받는다. 날짜 내림차순이며 같은 날짜의 순서는 기존 목록 정렬을 따른다.
-- `rows/page/pageSize/total/totals`는 기존 담당자 대장·기사 목록 응답을 재사용한다. `counts: {ALL,DRAFT,SUBMITTED,NEEDS_FIX,APPROVED}`는 상태를 제외한 같은 필터의 개수다. 취소는 ALL에만 포함한다. `summary: {count,amount,unknown_count}`는 현재 상태까지 포함한 전체 검색 결과의 취소 제외 건수·지급 공급가·미확정 비용 개수다. 금액은 기존 검토 공급가(저장된 승인액 우선, 기본운임 요청액→계약액, VAT_INCLUDED 공급가 환산)를 합하며 삭제·반려 비용과 고객청구는 제외한다. 페이지와 무관하다.
+- `rows/page/pageSize/total/totals`는 기존 담당자 대장·기사 목록 응답을 재사용한다. `counts: {ALL,DRAFT,SUBMITTED,NEEDS_FIX,APPROVED}`는 상태를 제외한 같은 필터의 개수다. 취소는 ALL에만 포함한다. `summary: {count,amount,unknown_count,held_amount,held_count,held_unknown_count}`는 현재 상태까지 포함한 전체 검색 결과의 취소 제외 건수·지급 공급가·미확정 비용 개수다. 금액은 기존 검토 공급가(저장된 승인액 우선, 기본운임 요청액→계약액, VAT_INCLUDED 공급가 환산)를 합하며 삭제·반려 비용과 고객청구는 제외한다. PENDING/APPROVED 줄만 합산하며 보류 공급가·줄 수·미정 줄 수는 `held_amount/held_count/held_unknown_count`로 별도 반환한다. 페이지와 무관하다.
 - `options: {projects,drivers,reviewers}`는 현재 접근 가능한 운행에 존재하는 선택지다. 다른 날짜로 이동해도 유지하며, 기사는 본인 운행 범위의 projects와 reviewers만 제공한다. reviewers는 ID·이름만 포함하며 타인 운행의 담당자는 노출하지 않는다. 담당자는 reviewer_user_id와 연결된 현재 사용자 이름을 본다. null은 미지정이며 ‘나’에 포함하지 않는다.
 - `GET /api/approvals/export.xlsx`: 담당자 전용. 같은 필터와 권한으로 모든 페이지를 출력하며 입력·검토 공급가와 승인 공급가를 구분한다. 취소 행을 남기고 합계에서 제외한다.
 - `/m/approvals`, `/d`는 필터와 페이지를 URL 쿼리에 유지한다. 승인·선택 승인은 기존 `/api/uses/:id/approve`의 버전·멱등·감사·권한 검사를 그대로 사용한다. 검수함과 동일한 quickApprovable 규칙으로 선택을 제한하며 여러 건 중 실패한 건은 개별 오류로 남긴다.
@@ -250,7 +250,7 @@ commit은 generic 응답 캐시를 사용하지 않는다. job 행 잠금 + 가�
 - `PATCH /api/drivers/:userId` (ADMIN, 멱등): `{...profile,version}`. 계정 끄기/켜기는 기존 `/api/admin/users/:id`의 status/version, 비밀번호 재설정은 기존 `/api/admin/users/:id/password-reset`을 사용한다.
 - `PATCH /api/drivers/:userId`의 소속 시작일 전용 본문(ADMIN/SETTLEMENT_MANAGER, 멱등): `{version,affiliation_id,valid_from}`. 조회 응답의 `affiliations:[{id,business_name,valid_from,valid_to}]`에서 해당 소속을 고른다. 사용자 version·기사 귀속·유효 날짜·종료일·같은 기사 소속의 기간 중복을 서버에서 검사한다. 이미 저장된 운행일을 소속 기간 밖으로 밀어내는 변경은 422다. 관리자 기준정보와 같은 잠금 아래 소속 날짜·사용자 version·`UPDATE_DRIVER_AFFILIATION` 감사(변경 전후)를 원자적으로 저장하며 기존 운행·정산 스냅샷은 유지한다. 정산 담당자의 일반 기사 정보 수정은 계속 금지한다.
 - `GET /api/driver-profile` (DRIVER): 본인 정보만, 본인 전화번호 포함. `PATCH /api/driver-profile`은 동일 profile/version으로 본인만 수정하며 멱등 재생을 지원한다. 저장 응답은 `{id,version}`이고 화면은 GET으로 갱신한다. 일반 기사 응답의 타인 연락처 숨김 규칙은 그대로 유지한다.
-- 정보 수정은 사용자 version 검사·관리자 공통 잠금·중복 검사를 수행하고 사용자와 기사 이름/전화를 함께 갱신한다. 사업자 변경 시 기존 소속은 어제 종료하고 오늘 새 소속을 만든다. 오늘 이미 변경한 소속은 오늘 행을 갱신하며 감사로 이력을 남긴다. 미래 예약 소속이 있으면 관리자 확인을 안내한다. 여러 기사가 공유하는 거래처의 상호 변경은 거부하며 기준정보에서 관리자에게 수정하도록 안내한다. 차량번호 변경은 차량 재사용/생성과 기본차량 변경으로 처리한다. 사용 건·제출본·정산 스냅샷은 수정하지 않는다.
+- 정보 수정은 사용자 version 검사·관리자 공통 잠금·중복 검사를 수행하고 사용자와 기사 이름/전화를 함께 갱신한다. 사업자 변경 시 기존 소속은 어제 종료하고 오늘 새 소속을 만든다. 오늘 이미 변경한 소속은 오늘 행을 갱신하며 감사로 이력을 남긴다. 미래 예약 소속이 있으면 관리자 확인을 안내한다. 공유 거래처의 상호는 기사 본인 변경 요청을 거부하며 관리자 기사 정보 저장에서는 원장 값을 보존한다. 상호 변경은 기준정보 > 거래처에서 한다. 차량번호 변경은 차량 재사용/생성과 기본차량 변경으로 처리한다. 사용 건·제출본·정산 스냅샷은 수정하지 않는다.
 - `POST /api/admin/projects`: code는 선택(null/빈 문자열/생략 가능)이며 서버가 `P-<UUID>`를 생성한다. 기존 고유 제약을 유지한다. PATCH의 빈 code는 기존 코드를 유지한다. `DELETE /api/admin/projects/:id` (ADMIN, 멱등)는 현장 잠금 후 운행·계약·배정·항목설정·개별초대·공용링크 연결을 검사한다. 연결이 있으면 422와 사용 중지 안내, 없으면 실제 삭제하고 감사를 남긴다. FK가 동시 참조 추가도 보호한다.
 
 
@@ -338,6 +338,12 @@ commit은 generic 응답 캐시를 사용하지 않는다. job 행 잠금 + 가�
 
 - `0760_business_details.sql`: counterparties의 `representative_name`(200자), `address`(500자), `business_type`(100자), `business_item`(100자)를 nullable text로 추가한다. company_settings는 기존 representative/address를 유지하고 business_type/business_item만 추가한다. 새 열은 DB CHECK와 서버 검증으로 길이를 제한하며 빈 문자열은 null이다.
 - 관리자 거래처·회사 정보 저장, 새 사업자 `/join`·기사 연결 없는 `/invite` 가입, 관리자 가입 링크/개별 초대의 `new_business`에 네 선택 항목을 받는다. 신규 가입 폼의 업태·종목 기본값은 운수·화물이다. 지정 사업자 가입은 이 필드를 포함한 모든 사업자 값 전송을 거부하며 서버의 지정 소속만 사용한다.
-- 기사 본인 정보 GET은 현재 소속의 사업자 상세와 `business_details_editable`을 반환한다. 본인 소속이 DRIVER_BUSINESS이고 다른 기사(비활성·과거·미래 소속 포함) 연결이 전혀 없을 때만 상세 수정이 가능하다. CARRIER와 공유 사업자는 읽기 전용이며 서버에서 변경값을 거부한다. 동일값 재전송·필드 생략은 허용한다. ADMIN 기사 정보 수정은 상세 수정이 가능하다. 기존 사용자 version·공통 관리 잠금·감사·트랜잭션·차량 보호를 유지한다.
+- 기사 본인 정보 GET은 현재 소속의 사업자 상세와 `business_details_editable`을 반환한다. 본인 소속이 DRIVER_BUSINESS이고 다른 기사(비활성·과거·미래 소속 포함) 연결이 전혀 없을 때만 상세 수정이 가능하다. CARRIER와 공유 사업자는 읽기 전용이며 서버에서 기사 본인 요청의 변경값을 거부한다. 동일값 재전송·필드 생략은 허용한다. ADMIN 기사 정보 수정도 사업자번호가 같은 본인 전용 DRIVER_BUSINESS만 상호·상세 수정이 가능하다. 기존 사업자로 소속을 바꾸거나 공유/CARRIER 소속을 유지할 때 관리자 요청의 상호·상세는 원장에 쓰지 않고 현재 원장을 그대로 사용한다. 관리자 폼은 기존 번호와 일치하면 원장 상호·상세를 채우고 읽기 전용으로 표시한다. 원장 변경은 기준정보 > 거래처에서 한다. 기존 사용자 version·공통 관리 잠금·감사·트랜잭션·차량 보호를 유지한다.
 - `/api/lookups`에는 새 상세 필드를 노출하지 않는다. 대표자·주소는 현장 담당자 기사 목록, 중첩 업무 응답·감사·멱등 재생과 거래명세표에서 제외한다. 관리자·정산 담당자와 본인 정보 전용 GET의 본인 소속 조회만 허용한다.
 - 거래명세표는 현재 값을, 월 정산 PDF/XLSX는 명세 머리 스냅샷을 사용한다. PAYABLE의 거래 상대방은 공급자, 회사는 공급받는자이며 RECEIVABLE은 반대다. 과거 확정 스냅샷에 없는 값을 현재 정보로 보충하지 않는다.
+
+
+## H-FIX 4차 운영 결함 보완
+
+- 기본운임 합산 대상(PENDING/APPROVED)이 없으면 `review_base_amount=0`이다. 대상 비용의 실제 금액이 없을 때만 null이며, 기본운임 반려 뒤 개별 승인한 추가비도 바로/선택 승인 판정에 같은 합계를 사용한다.
+- 기사 정보 PATCH만 빈 `biz_no`를 허용하며 서버가 현재 소속의 빈 번호·동일 상호를 확인할 때만 소속을 유지한다. 새 사업자 등록·가입은 기존처럼 사업자번호가 필수다.

@@ -59,6 +59,7 @@ test('편집 중 다른 사용자 선택 시 모든 입력과 저장 대상이 �
     await route.fulfill({ json: { data: {} } });
   });
   await page.goto('/m/users');
+  await page.getByRole('checkbox', { name: '꺼진 계정 1명 보기', exact: true }).check();
   await page
     .locator('article')
     .filter({ hasText: '담당자 가' })
@@ -251,6 +252,7 @@ test('같은 프레임의 중복 저장도 한 요청만 보내고 다른 사용
     await route.fulfill({ json: { data: {} } });
   });
   await page.goto('/m/users');
+  await page.getByRole('checkbox', { name: '꺼진 계정 1명 보기', exact: true }).check();
   await page
     .locator('article')
     .filter({ hasText: '담당자 가' })

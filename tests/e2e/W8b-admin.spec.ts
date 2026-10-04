@@ -81,7 +81,9 @@ for (const width of [360, 390, 1440]) {
     } else {
       await expect(cards).not.toBeVisible();
       await expect(page.getByRole('table')).toBeVisible();
-      await expect(page.getByRole('table').getByText('없음', { exact: true }).first()).toBeVisible();
+      await expect(
+        page.getByRole('table').getByText('최소요금 (원): 없음', { exact: true }).first(),
+      ).toBeVisible();
     }
     expect(
       await page

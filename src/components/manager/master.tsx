@@ -154,6 +154,38 @@ export function Master({ resource }: { resource: string }) {
     'valid_from',
     'valid_to',
   ];
+  const groupedColumns: Record<string, { title: string; keys: string[] }[]> = {
+    counterparties: [
+      { title: '이름', keys: ['name'] },
+      { title: '구분·사업자번호', keys: ['kind', 'biz_no'] },
+      { title: '담당자·연락처·계좌', keys: ['contact_name', 'phone', 'bank_account'] },
+      { title: '사용 중', keys: ['active'] },
+    ],
+    rates: [
+      { title: '계약명', keys: ['name'] },
+      { title: '방향·거래처·현장', keys: ['direction', 'counterparty_id', 'project_id'] },
+      { title: '차량·과금', keys: ['vehicle_type', 'tonnage', 'billing_unit'] },
+      { title: '단가·최소요금', keys: ['unit_price', 'min_charge'] },
+      { title: '적용 기간', keys: ['valid_from', 'valid_to'] },
+      { title: '사용 중', keys: ['active'] },
+    ],
+    company: [
+      { title: '회사명', keys: ['name'] },
+      { title: '사업자번호', keys: ['biz_no'] },
+      { title: '정산 연락처', keys: ['settlement_contact'] },
+      { title: '마감 시작일', keys: ['closing_start_day'] },
+      { title: '기본 세금', keys: ['default_tax_mode'] },
+    ],
+  };
+  const tableColumns = (
+    groupedColumns[resource] ?? config.fields.map((field) => ({ title: field.title, keys: [field.key] }))
+  ).map((column) => ({
+    ...column,
+    fields: column.keys.map((key) => config.fields.find((field) => field.key === key)!),
+  }));
+  const detailFields = config.fields.filter(
+    (field) => !tableColumns.some((column) => column.keys.includes(field.key)),
+  );
   const rowActions = (row: Row) =>
     admin && (
       <div className="flex flex-wrap gap-2">
@@ -385,27 +417,51 @@ export function Master({ resource }: { resource: string }) {
       <div
         className={`${resource === 'rates' ? 'hidden md:block' : ''} max-w-full overflow-x-auto rounded-xl border border-slate-200 bg-white`}
       >
-        <table className="w-full text-left text-sm">
+        <table className="w-full min-w-[640px] table-fixed text-left text-sm lg:min-w-0 [&_td]:align-top [&_td]:wrap-anywhere">
           <thead className="bg-slate-100 text-xs">
             <tr>
-              {config.fields.map((field) => (
-                <th key={field.key} className="whitespace-nowrap px-4 py-3">
-                  {field.title}
+              {tableColumns.map((column) => (
+                <th key={column.title} className="px-3 py-3">
+                  {column.title}
                 </th>
               ))}
-              {admin && <th className="px-4 py-3">관리</th>}
+              {admin && <th className={resource === 'rates' ? 'w-44 px-3 py-3' : 'w-32 px-3 py-3'}>관리</th>}
             </tr>
           </thead>
           <tbody>
             {!rows.loading &&
               filtered.map((row) => (
                 <tr key={row.id} className="border-t border-slate-100">
-                  {config.fields.map((field) => (
-                    <td className="min-w-28 px-4 py-3" key={field.key}>
-                      {fieldValue(row, field)}
+                  {tableColumns.map((column, index) => (
+                    <td className="px-3 py-3" key={column.title}>
+                      <div className="space-y-1">
+                        {column.fields.map((field) => (
+                          <div key={field.key}>
+                            {column.fields.length > 1 && (
+                              <span className="text-xs text-slate-600">{field.title}: </span>
+                            )}
+                            {fieldValue(row, field)}
+                          </div>
+                        ))}
+                      </div>
+                      {index === 0 && detailFields.length > 0 && (
+                        <details className="mt-2">
+                          <summary className="min-h-11 cursor-pointer py-3 font-semibold">
+                            {resource === 'rates' ? '적용 조건 더 보기' : '사업자 정보'}
+                          </summary>
+                          <dl className="space-y-2">
+                            {detailFields.map((field) => (
+                              <div key={field.key}>
+                                <dt className="text-xs text-slate-600">{field.title}</dt>
+                                <dd>{fieldValue(row, field)}</dd>
+                              </div>
+                            ))}
+                          </dl>
+                        </details>
+                      )}
                     </td>
                   ))}
-                  {admin && <td className="min-w-44 px-4 py-3">{rowActions(row)}</td>}
+                  {admin && <td className="px-3 py-3">{rowActions(row)}</td>}
                 </tr>
               ))}
           </tbody>
