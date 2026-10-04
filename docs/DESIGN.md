@@ -307,3 +307,7 @@ PW 작업 지시에 따라 `0600_pw_password_resets.sql`에 `password_resets(id,
 ## 18. F4-JOINBIZ 고객 운영 반영
 
 새 현장 증빙 기본값은 `NONE`이다. 기존 정책은 유지하며 기사 화면에서 선택임을 표시한다. 관리자 승인 링크에 `counterparty_id`를 지정하면 같은 활성 DRIVER_BUSINESS/CARRIER에 여러 기사 가입을 허용한다. 지정이 없으면 기존 신규 사업자만 가입 규칙을 유지한다. 기사 연결 없는 개별 초대도 같은 방식을 지원한다. `0750_join_business_optional_evidence.sql`의 두 nullable FK와 상세 계약은 [API](API.md)의 F4-JOINBIZ 절을 따른다.
+
+## 19. G-PERIOD 회사 마감일
+
+사용자 지시에 따라 `0761_company_closing_period.sql`에서 `company_settings.closing_start_day`(정수, 기본 19, 1~28 CHECK)를 추가한다. 새 명세·집계·기사 내 정산의 기본은 서울 기준 오늘이 포함된 회사 마감 기간이다. 확정 명세와 스냅샷은 변경하지 않는다. 권한·기본 기간 예외는 [API](API.md)의 G-PERIOD 절을 따른다.

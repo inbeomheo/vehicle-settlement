@@ -1,4 +1,6 @@
 'use client';
+import { ClosingPeriodLoader, ClosingPeriodButtons } from '@/components/closing-period';
+import { closingPeriod, type ClosingPeriodSettings } from '@/shared/closing-period';
 import { errorMessage } from '@/client/error-message';
 import { Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -55,15 +57,15 @@ function Arrow({ dir }: { dir: 'left' | 'right' }) {
   );
 }
 
-/** 기사의 "내 정산": 이번 달 받은 돈·받을 돈을 먼저 보여 준다. */
+/** 기사의 "내 정산": 이번 마감 받은 돈·받을 돈을 먼저 보여 준다. */
 export default function DriverSettlementsPage() {
   return (
     <Suspense fallback={<p role="status">불러오는 중…</p>}>
-      <DriverSettlements />
+      <ClosingPeriodLoader>{(settings) => <DriverSettlements settings={settings} />}</ClosingPeriodLoader>
     </Suspense>
   );
 }
-function DriverSettlements() {
+function DriverSettlements({ settings }: { settings: ClosingPeriodSettings }) {
   const search = useSearchParams();
   const router = useRouter();
   const requested = search.get('month');
@@ -71,10 +73,12 @@ function DriverSettlements() {
     requested && /^\d{4}-(0[1-9]|1[0-2])$/.test(requested) && Number(requested.slice(0, 4)) >= 1000
       ? requested
       : thisMonth();
-  const custom = search.has('from') || search.has('to');
+  const explicitPeriod = search.has('from') || search.has('to');
+  const custom = explicitPeriod || !requested;
+  const current = closingPeriod(settings.today, settings.closing_start_day);
   const monthly = period(month);
-  const start = custom ? (search.get('from') ?? '') : monthly.start;
-  const end = custom ? (search.get('to') ?? '') : monthly.end;
+  const start = explicitPeriod ? (search.get('from') ?? '') : requested ? monthly.start : current.from;
+  const end = explicitPeriod ? (search.get('to') ?? '') : requested ? monthly.end : current.to;
   const valid = driverSettlementPeriodSchema.safeParse({ periodStart: start, periodEnd: end }).success;
   const label = custom ? (valid ? periodLabel(start, end) : '기간을 확인해 주세요') : monthLabel(month);
   const view = search.get('view') === 'date' ? 'date' : 'project';
@@ -98,12 +102,17 @@ function DriverSettlements() {
     <div className="min-w-0 space-y-6 break-keep [overflow-wrap:anywhere]">
       <h1 className="text-[1.75rem] font-bold">내 정산</h1>
 
+      <ClosingPeriodButtons
+        settings={settings}
+        driver
+        onChange={(period) => navigate({ ...period, month: null })}
+      />
       {custom ? (
         <div className="space-y-2 rounded-lg border border-slate-200 bg-white p-4">
           <p className="text-xl font-bold" aria-live="polite">
             {label}
           </p>
-          <button type="button" className={button} onClick={() => navigate({ from: null, to: null })}>
+          <button type="button" className={button} onClick={() => navigate({ month, from: null, to: null })}>
             월별로 돌아가기
           </button>
         </div>

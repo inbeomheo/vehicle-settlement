@@ -20,6 +20,7 @@ it('기존 public/drizzle 이력의 알려진 해시만 보정하고 업무 자�
       'DROP TABLE driver_registrations, driver_join_links, evidence_blobs, password_resets, push_subscriptions',
     );
     await client.query('ALTER TABLE invites DROP COLUMN counterparty_id');
+    await client.query('ALTER TABLE company_settings DROP COLUMN closing_start_day');
     await client.query('ALTER TABLE vehicle_uses DROP COLUMN reviewer_user_id, DROP COLUMN load_tonnage');
     await client.query('DELETE FROM drizzle.__drizzle_migrations WHERE created_at >= $1', [
       journal.entries.find((entry) => entry.tag === '0500_deploy_evidence_blobs')!.when,

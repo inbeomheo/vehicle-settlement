@@ -395,8 +395,8 @@ export default function ManualPage() {
               shot={<Shot src="15-my-settlement" alt="내 정산" phone />}
             >
               <p>
-                맨 위에 이번 달 <B>받은 돈</B>과 <B>받을 돈</B>이 크게 나옵니다. 다른 달은 ‹ › 버튼으로
-                넘깁니다.
+                맨 위에 이번 마감의 <B>받은 돈</B>과 <B>받을 돈</B>이 크게 나옵니다. <B>지난 마감</B>을 누르면
+                직전 기간을 봅니다.
               </p>
               <p>
                 지급명세마다 ‘지급 완료’ 또는 ‘미지급’이 붙고, <B>운행 N건 자세히 보기</B>로 어떤 운행이
@@ -415,7 +415,7 @@ export default function ManualPage() {
                 현장 운행이 날짜순으로 펼쳐집니다.
               </p>
               <p>
-                마감이 19일~다음 달 18일처럼 달 중간이면 <B>기간 직접 고르기</B>로 시작일·종료일을 정합니다.
+                기본은 회사 마감일(19일~다음 달 18일)이며, 다른 기간은 <B>기간 직접 고르기</B>로 정합니다.
               </p>
             </Step>
             <Step
@@ -527,9 +527,9 @@ export default function ManualPage() {
 
           <h3 className="text-xl font-bold md:text-2xl">1. 현장별·기사별로 먼저 보기</h3>
           <p className="text-[1.0625rem] leading-relaxed">
-            왼쪽 메뉴 <B>현장·기사별 집계</B>. 기간을 고르고(19일~18일 마감이면 직접 입력) <B>조회하기</B>를
-            누르면 현장마다 기사님별 금액, 기사님마다 현장별 금액이 나옵니다. 엑셀 마감 양식의 집계 시트와
-            같은 숫자입니다.
+            왼쪽 메뉴 <B>현장·기사별 집계</B>. <B>이번 마감</B>·<B>지난 마감</B>을 누르거나 기간을 입력해{' '}
+            <B>조회하기</B>를 누르면 현장마다 기사님별 금액, 기사님마다 현장별 금액이 나옵니다. 엑셀 마감
+            양식의 집계 시트와 같은 숫자입니다.
           </p>
           <Shot src="28-summary" alt="현장·기사별 집계 — 현장별" />
           <p className="text-[1.0625rem] leading-relaxed">
@@ -545,11 +545,15 @@ export default function ManualPage() {
           </p>
           <Shot src="29b-summary-detail" alt="현장 상세 운행 목록과 거래명세표 엑셀" />
 
-          <h3 className="pt-4 text-xl font-bold md:text-2xl">2. 이번 달 건 묶기</h3>
           <p className="text-[1.0625rem] leading-relaxed">
-            왼쪽 메뉴 <B>월 정산</B> → 노란 <B>새 정산</B>. 거래처 한길 운송, 기간은 9월 1일~30일(이번 달
-            정산이면 <B>당월</B>), 지급 예정일 10월 10일을 넣고 <B>후보 조회</B>. 승인된 비용이 줄마다 나오고
-            기본은 ‘포함’입니다. 아직 승인 안 된 건은 자동으로 ‘제외’입니다.
+            관리자는 <B>회사 정보 → 마감 시작일</B>을 1~28일로 바꿀 수 있고, 1일이면 달력 월을 씁니다. 집계
+            상세·거래명세표 엑셀도 선택한 기간을 따릅니다.
+          </p>
+          <h3 className="pt-4 text-xl font-bold md:text-2xl">2. 이번 마감 건 묶기</h3>
+          <p className="text-[1.0625rem] leading-relaxed">
+            왼쪽 메뉴 <B>월 정산</B> → 노란 <B>새 정산</B>. 거래처 한길 운송, 기간은 <B>이번 마감</B>(아래
+            시연은 9월 1일~30일 직접 입력), 지급 예정일 10월 10일을 넣고 <B>후보 조회</B>. 승인된 비용이
+            줄마다 나오고 기본은 ‘포함’입니다. 아직 승인 안 된 건은 자동으로 ‘제외’입니다.
           </p>
           <Shot src="31-candidates" alt="정산 후보 — 대기료 한 줄을 보류로 돌린 모습" />
           <ul className="grid gap-3 md:grid-cols-2">

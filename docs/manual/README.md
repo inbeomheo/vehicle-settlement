@@ -124,3 +124,7 @@ BASE=http://localhost:3196 node docs/manual/export.mjs
 ```
 
 부분 촬영은 시연 데이터만 사용해 `29b-summary-detail`(상세와 합계), `45-drivers`(기사관리 관리 열)의 원본·공개 PNG를 갱신한다. 공용 도구의 로컬 허용 목록에 3196을 추가했고 외부 요청 차단은 유지한다.
+
+### 회사 마감 기간 (G-PERIOD)
+
+전용 PostgreSQL `54402`, 웹 `3202`만 사용한다. 마이그레이션·시연 자료가 준비된 로컬 서버에서 `BASE=http://localhost:3202 node docs/manual/capture/closing-period.mjs`로 집계의 `이번 마감` 버튼을 포함한 `28-summary` 원본·공개 PNG 한 쌍을 갱신한다. `BASE=http://localhost:3202 node docs/manual/export.mjs`로 마감 시작일·빠른 기간 안내를 반영한 PDF를 재생성한다. 캡처 도구는 3202를 로컬 허용 목록에 추가했고 외부 요청은 계속 차단한다.

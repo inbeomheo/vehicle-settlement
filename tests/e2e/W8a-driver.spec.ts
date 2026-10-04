@@ -275,8 +275,8 @@ test('내 정산 검수 전 표시와 날짜 16px·44px', async ({ page }) => {
   const card = page.locator('article').filter({ hasText: use.use_no });
   await expect(card).toContainText('인정 공급가 검수 전');
   await expect(card).not.toContainText('인정 공급가 0원');
-  // 기간은 날짜 입력 대신 큰 이전/다음 달 버튼으로 바꾼다.
-  for (const name of ['이전 달', '다음 달'])
+  // 마감 빠른 선택도 기사 터치 영역을 확보한다.
+  for (const name of [/^이번 마감 \(/, /^지난 마감 \(/])
     expect(
       (await page.getByRole('button', { name, exact: true }).boundingBox())!.height,
     ).toBeGreaterThanOrEqual(44);

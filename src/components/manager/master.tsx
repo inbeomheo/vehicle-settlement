@@ -104,7 +104,7 @@ export function Master({ resource }: { resource: string }) {
             ? Boolean(value)
             : value === '' || value === undefined
               ? null
-              : field.type === 'number' && field.key !== 'tonnage'
+              : (field.type === 'number' && field.key !== 'tonnage') || field.key === 'closing_start_day'
                 ? Number(value)
                 : value;
       }

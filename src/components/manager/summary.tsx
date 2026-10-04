@@ -1,4 +1,6 @@
 'use client';
+import { ClosingPeriodLoader, ClosingPeriodButtons } from '@/components/closing-period';
+import { closingPeriod, type ClosingPeriodSettings } from '@/shared/closing-period';
 import { formatQuantity } from '@/shared/quantity';
 import Link from 'next/link';
 import { SummaryDetail } from './summary-detail';
@@ -28,15 +30,6 @@ type Query = {
   detail: string;
   sort: string;
 };
-function monthPeriod(today: string, offset = 0) {
-  const date = new Date(`${today}T00:00:00Z`);
-  date.setUTCDate(1);
-  date.setUTCMonth(date.getUTCMonth() + offset);
-  const from = date.toISOString().slice(0, 10);
-  date.setUTCMonth(date.getUTCMonth() + 1);
-  date.setUTCDate(0);
-  return { from, to: date.toISOString().slice(0, 10) };
-}
 const queryString = (query: Query) => new URLSearchParams(query).toString();
 function Amount({
   value,
@@ -224,9 +217,23 @@ function SummaryTable({ data, query }: { data: SummaryResult; query: Query }) {
     </div>
   );
 }
-export function Summary({ initial, today }: { initial: Record<string, string>; today: string }) {
+export function Summary({ initial }: { initial: Record<string, string> }) {
+  return (
+    <ClosingPeriodLoader>
+      {(settings) => <SummaryContent initial={initial} settings={settings} />}
+    </ClosingPeriodLoader>
+  );
+}
+function SummaryContent({
+  initial,
+  settings,
+}: {
+  initial: Record<string, string>;
+  settings: ClosingPeriodSettings;
+}) {
+  const { today, closing_start_day: startDay } = settings;
   const defaults = {
-    ...monthPeriod(today),
+    ...closingPeriod(today, startDay),
     include: 'approved',
     view: 'projects',
     project_id: '',
@@ -262,7 +269,7 @@ export function Summary({ initial, today }: { initial: Record<string, string>; t
   const { data, loading, error, refresh } = useRemote<SummaryResult>(`/api/summary?${apiQuery}`);
   useEffect(() => {
     const defaults = {
-      ...monthPeriod(today),
+      ...closingPeriod(today, startDay),
       include: 'approved',
       view: 'projects',
       project_id: '',
@@ -281,7 +288,7 @@ export function Summary({ initial, today }: { initial: Record<string, string>; t
     };
     window.addEventListener('popstate', restore);
     return () => window.removeEventListener('popstate', restore);
-  }, [today]);
+  }, [today, startDay]);
   const change = (next: Query) => {
     setQuery(next);
     setDraft({ from: next.from, to: next.to });
@@ -337,13 +344,8 @@ export function Summary({ initial, today }: { initial: Record<string, string>; t
         </button>
       </Heading>
       <section aria-label="조회 조건" className={`${panelClass} mb-5`}>
-        <div className="mb-4 flex flex-wrap gap-2">
-          <button className={secondaryClass} onClick={() => change({ ...query, ...monthPeriod(today) })}>
-            이번 달
-          </button>
-          <button className={secondaryClass} onClick={() => change({ ...query, ...monthPeriod(today, -1) })}>
-            지난달
-          </button>
+        <div className="mb-4">
+          <ClosingPeriodButtons settings={settings} onChange={(period) => change({ ...query, ...period })} />
         </div>
         <form
           className="grid min-w-0 items-end gap-3 sm:grid-cols-[1fr_1fr_auto]"
@@ -375,7 +377,7 @@ export function Summary({ initial, today }: { initial: Record<string, string>; t
           </button>
         </form>
         <p className="mt-2 text-sm text-slate-600">
-          19일~다음 달 18일처럼 마감 기간을 직접 선택할 수 있습니다. 최대 1년까지 조회합니다.
+          회사 마감일 기준으로 빠르게 고르거나 기간을 직접 입력하세요. 최대 1년까지 조회합니다.
         </p>
         <div className="mt-4 grid min-w-0 gap-3 sm:grid-cols-2">
           <Field title="지급처">

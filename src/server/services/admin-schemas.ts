@@ -38,6 +38,7 @@ export const masterSchemas = {
       address: text,
       representative: text,
       settlement_contact: text,
+      closing_start_day: z.number().int().min(1).max(28).default(19),
       default_tax_mode: z.enum(taxModeEnum.enumValues),
     })
     .strict(),

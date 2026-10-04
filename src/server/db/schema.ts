@@ -616,10 +616,14 @@ export const companySettings = pgTable(
     representative: text('representative'),
     default_tax_mode: taxModeEnum('default_tax_mode').notNull().default('VAT_EXCLUDED'),
     settlement_contact: text('settlement_contact'),
+    closing_start_day: integer('closing_start_day').notNull().default(19),
     created_at: created(),
     updated_at: updated(),
   },
-  () => [uniqueIndex('company_singleton_unique').on(sql`(true)`)],
+  (t) => [
+    uniqueIndex('company_singleton_unique').on(sql`(true)`),
+    check('company_closing_start_day_check', sql`${t.closing_start_day} BETWEEN 1 AND 28`),
+  ],
 );
 
 export const formFieldModeEnum = pgEnum('form_field_mode', fieldModes);

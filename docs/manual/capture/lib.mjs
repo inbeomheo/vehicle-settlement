@@ -16,10 +16,12 @@ if (
     'http://localhost:3196/',
     'http://localhost:3197',
     'http://localhost:3197/',
+    'http://localhost:3202',
+    'http://localhost:3202/',
   ].includes(requestedBase)
 ) {
   throw new Error(
-    '설명서 도구는 http://localhost:3183, 3191, 3196, 3197 로컬 서버만 사용할 수 있습니다. 운영 접속은 금지합니다.',
+    '설명서 도구는 http://localhost:3183, 3191, 3196, 3197, 3202 로컬 서버만 사용할 수 있습니다. 운영 접속은 금지합니다.',
   );
 }
 export const BASE = requestedBase.replace(/\/$/, '');
