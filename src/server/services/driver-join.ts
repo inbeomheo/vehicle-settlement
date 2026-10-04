@@ -1,3 +1,4 @@
+import { businessDetailKeys } from './business-details';
 import { approvedJoinBusiness, resolveJoinBusiness, joinBusinessSummary } from './join-business';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { z } from 'zod';
@@ -183,7 +184,10 @@ export async function registerDriver(
       invalid(
         '같은 차량번호가 다른 기사에 연결되어 있습니다. 관리자에게 기사 추가(개별 초대)를 요청해 주세요.',
       );
-    if (party && (input.profile.business_name !== undefined || input.profile.biz_no !== undefined))
+    if (
+      party &&
+      ['business_name', 'biz_no', ...businessDetailKeys].some((key) => Object.hasOwn(input.profile, key))
+    )
       invalid('지정된 소속 사업자는 가입 화면에서 변경할 수 없습니다.');
     const profile = party
       ? {

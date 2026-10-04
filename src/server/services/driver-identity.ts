@@ -1,3 +1,4 @@
+import { businessDetails, businessDetailKeys } from './business-details';
 import { approvedJoinBusiness } from './join-business';
 import { and, eq, sql } from 'drizzle-orm';
 import Decimal from 'decimal.js';
@@ -76,7 +77,12 @@ export async function saveDriverIdentity(
   if (!party)
     [party] = await db
       .insert(counterparties)
-      .values({ name: input.business_name, biz_no: input.biz_no, kind: 'DRIVER_BUSINESS' })
+      .values({
+        name: input.business_name,
+        biz_no: input.biz_no,
+        kind: 'DRIVER_BUSINESS',
+        ...businessDetails(input),
+      })
       .returning();
   else if (
     driverId &&
@@ -97,6 +103,21 @@ export async function saveDriverIdentity(
     [party] = await db
       .update(counterparties)
       .set({ name: input.business_name, updated_at: new Date() })
+      .where(eq(counterparties.id, party.id))
+      .returning();
+  }
+  if (
+    driverId &&
+    !approvedCounterpartyId &&
+    businessDetailKeys.some((key) => input[key] !== undefined && input[key] !== party[key])
+  ) {
+    const others = await db.execute(sql`SELECT 1 FROM driver_affiliations
+      WHERE counterparty_id=${party.id}::uuid AND driver_id<>${driverId}::uuid LIMIT 1`);
+    if (!allowExistingBusiness && (!ownsParty || party.kind !== 'DRIVER_BUSINESS' || others.rows.length))
+      invalid('공유 운송사 사업자 정보는 관리자만 수정할 수 있습니다. 관리자에게 거래처 수정을 요청하세요.');
+    [party] = await db
+      .update(counterparties)
+      .set({ ...businessDetails(input), updated_at: new Date() })
       .where(eq(counterparties.id, party.id))
       .returning();
   }

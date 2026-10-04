@@ -1,5 +1,6 @@
 import Decimal from 'decimal.js';
 import { z } from 'zod';
+import { businessDetailsFields } from './business-details';
 
 const name = z.string().trim().min(1).max(200);
 export const driverInformationSchema = z
@@ -12,6 +13,7 @@ export const driverInformationSchema = z
       .transform((value) => value.replace(/\D/g, ''))
       .refine((value) => /^0\d{8,10}$/.test(value), '전화번호를 확인하세요.'),
     business_name: name,
+    ...businessDetailsFields,
     biz_no: z
       .string()
       .trim()
@@ -33,7 +35,10 @@ export const driverProfilePatchSchema = driverInformationSchema.extend({
 });
 export const joinBusinessFields = {
   counterparty_id: z.string().uuid().nullable().optional(),
-  new_business: z.object({ name, biz_no: driverInformationSchema.shape.biz_no }).strict().optional(),
+  new_business: z
+    .object({ name, biz_no: driverInformationSchema.shape.biz_no, ...businessDetailsFields })
+    .strict()
+    .optional(),
 };
 export const joinLinkSchema = z
   .object({

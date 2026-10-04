@@ -19,6 +19,11 @@ export type DriverProfile = {
   phone: string | null;
   business_name: string | null;
   biz_no: string | null;
+  representative_name: string | null;
+  address: string | null;
+  business_type: string | null;
+  business_item: string | null;
+  business_details_editable: boolean;
   plate_no: string | null;
   vehicle_type: string | null;
   tonnage: string | null;
@@ -49,7 +54,12 @@ export async function listDriverProfiles(ctx: Context, id?: string) {
   return (
     await ctx.db
       .execute(sql`SELECT u.id, u.driver_id, u.login_id, d.name, d.phone, u.version, u.status, u.created_at,
-    c.name AS business_name, c.biz_no, v.plate_no, v.vehicle_type, v.tonnage,
+    c.name AS business_name, c.biz_no,
+    ${ctx.user.role === 'SITE_MANAGER' ? sql`NULL::text` : sql`c.representative_name`} AS representative_name,
+    ${ctx.user.role === 'SITE_MANAGER' ? sql`NULL::text` : sql`c.address`} AS address,
+    c.business_type, c.business_item,
+    (c.kind='DRIVER_BUSINESS' AND NOT EXISTS (SELECT 1 FROM driver_affiliations shared WHERE shared.counterparty_id=c.id AND shared.driver_id<>d.id)) AS business_details_editable,
+    v.plate_no, v.vehicle_type, v.tonnage,
     coalesce((SELECT jsonb_agg(jsonb_build_object('id', da.id, 'business_name', cp.name, 'valid_from', da.valid_from, 'valid_to', da.valid_to) ORDER BY da.valid_from DESC, da.id)
       FROM driver_affiliations da JOIN counterparties cp ON cp.id=da.counterparty_id WHERE da.driver_id=d.id), '[]') AS affiliations,
     coalesce((SELECT jsonb_agg(jsonb_build_object('id', p.id, 'name', p.name) ORDER BY p.name) FROM projects p WHERE p.active AND p.id IN

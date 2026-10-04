@@ -113,6 +113,13 @@
       "when": 1790667600000,
       "tag": "0750_join_business_optional_evidence",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1790667700000,
+      "tag": "0760_business_details",
+      "breakpoints": true
     }
   ]
 }

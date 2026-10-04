@@ -307,3 +307,8 @@ PW 작업 지시에 따라 `0600_pw_password_resets.sql`에 `password_resets(id,
 ## 18. F4-JOINBIZ 고객 운영 반영
 
 새 현장 증빙 기본값은 `NONE`이다. 기존 정책은 유지하며 기사 화면에서 선택임을 표시한다. 관리자 승인 링크에 `counterparty_id`를 지정하면 같은 활성 DRIVER_BUSINESS/CARRIER에 여러 기사 가입을 허용한다. 지정이 없으면 기존 신규 사업자만 가입 규칙을 유지한다. 기사 연결 없는 개별 초대도 같은 방식을 지원한다. `0750_join_business_optional_evidence.sql`의 두 nullable FK와 상세 계약은 [API](API.md)의 F4-JOINBIZ 절을 따른다.
+
+
+## 19. G-BIZ 사업자 상세 정보
+
+고객 거래명세표의 공급자/공급받는자 머리를 위해 `0760_business_details.sql`로 거래처 대표자·주소·업태·종목과 회사 업태·종목을 선택 입력으로 추가한다. 대표자는 담당자와 구분한다. 길이·기사 본인 소유 판정·공유 사업자 보호·개인정보 제외·확정 스냅샷 보존 규칙은 [API](API.md)의 G-BIZ 절을 따른다.
