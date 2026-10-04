@@ -1,3 +1,4 @@
+import { userDeletionFlags, type UserDeletion } from './user-deletion';
 import { eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Context } from '../context';
@@ -11,7 +12,7 @@ import { lockDriverIdentity, saveDriverIdentity } from './driver-identity';
 import { dateString, uuid } from './schemas';
 import { driverProfilePatchSchema } from './driver-schemas';
 
-export type DriverProfile = {
+export type DriverProfile = UserDeletion & {
   id: string;
   driver_id: string;
   login_id: string;
@@ -46,7 +47,7 @@ export async function listDriverProfiles(ctx: Context, id?: string) {
             sql`,`,
           )})`
         : sql`false`;
-  return (
+  const rows = (
     await ctx.db
       .execute(sql`SELECT u.id, u.driver_id, u.login_id, d.name, d.phone, u.version, u.status, u.created_at,
     c.name AS business_name, c.biz_no, v.plate_no, v.vehicle_type, v.tonnage,
@@ -61,6 +62,11 @@ export async function listDriverProfiles(ctx: Context, id?: string) {
     AND ${ids === null ? sql`true` : sql`EXISTS (SELECT 1 FROM project_assignments pa WHERE pa.user_id=u.id AND pa.revoked_at IS NULL AND pa.valid_from<=${today}::date AND (pa.valid_to IS NULL OR pa.valid_to>=${today}::date) AND ${scope})`}
     ORDER BY d.name, u.id`)
   ).rows as DriverProfile[];
+  const deletion = await userDeletionFlags(
+    ctx,
+    rows.map((row) => row.id),
+  );
+  return rows.map((row) => ({ ...row, ...deletion.get(row.id)! }));
 }
 export async function getDriverProfile(ctx: Context, id: string) {
   const [row] = await listDriverProfiles(ctx, id);
