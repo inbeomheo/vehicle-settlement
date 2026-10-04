@@ -128,3 +128,8 @@ BASE=http://localhost:3196 node docs/manual/export.mjs
 ### 회사 마감 기간 (G-PERIOD)
 
 전용 PostgreSQL `54402`, 웹 `3202`만 사용한다. 마이그레이션·시연 자료가 준비된 로컬 서버에서 `BASE=http://localhost:3202 node docs/manual/capture/closing-period.mjs`로 집계의 `이번 마감` 버튼을 포함한 `28-summary` 원본·공개 PNG 한 쌍을 갱신한다. `BASE=http://localhost:3202 node docs/manual/export.mjs`로 마감 시작일·빠른 기간 안내를 반영한 PDF를 재생성한다. 캡처 도구는 3202를 로컬 허용 목록에 추가했고 외부 요청은 계속 차단한다.
+
+
+### 거래처·회사 사업자 정보 (G-BIZ)
+
+거래처와 회사 정보의 대표자·주소·업태·종목 안내를 보완했다. 이 작업은 `DOTENV_CONFIG_PATH=.env.local PG_PORT=54401 DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54401/vehicle_app PORT=3201` 환경만 사용한다. 설명서 PDF는 로컬 3201 서버에서 `BASE=http://localhost:3201 node docs/manual/export.mjs`로 재생성한다. 기존 캡처는 유지하며 고객 개인정보는 사용하지 않는다.

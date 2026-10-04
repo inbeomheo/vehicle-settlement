@@ -1,3 +1,4 @@
+import type { BusinessDetails } from './business-details';
 import { eq, sql } from 'drizzle-orm';
 import type { Context } from '../context';
 import type { Db } from '../db/client';
@@ -16,7 +17,7 @@ export async function resolveJoinBusiness(
   ctx: Context,
   input: {
     counterparty_id?: string | null;
-    new_business?: { name: string; biz_no: string };
+    new_business?: { name: string; biz_no: string } & BusinessDetails;
   },
 ) {
   if (input.counterparty_id && input.new_business) invalid('기존 사업자와 새 사업자 중 하나만 지정하세요.');

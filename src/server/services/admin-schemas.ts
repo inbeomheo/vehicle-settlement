@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { businessDetailsFields } from './business-details';
 import { amount, dateString, quantity, uuid } from './schemas';
 import { billingUnitEnum, directionEnum, taxModeEnum, roundingEnum, roleEnum } from '../db/schema';
 const name = z.string().trim().min(1).max(200);
@@ -20,6 +21,7 @@ export const masterSchemas = {
       name,
       kind: z.enum(['CARRIER', 'DRIVER_BUSINESS', 'CUSTOMER']),
       biz_no: text,
+      ...businessDetailsFields,
       contact_name: text,
       phone: text,
       bank_account: text,
@@ -37,6 +39,8 @@ export const masterSchemas = {
       biz_no: text,
       address: text,
       representative: text,
+      business_type: businessDetailsFields.business_type,
+      business_item: businessDetailsFields.business_item,
       settlement_contact: text,
       closing_start_day: z.number().int().min(1).max(28).default(19),
       default_tax_mode: z.enum(taxModeEnum.enumValues),

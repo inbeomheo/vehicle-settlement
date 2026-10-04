@@ -6,6 +6,7 @@ export type MasterField = {
   options?: string[];
   source?: string;
   step?: string;
+  maxLength?: number;
 };
 export type MasterConfig = { title: string; fields: MasterField[] };
 const name: MasterField = { key: 'name', title: '이름', required: true };
@@ -43,6 +44,10 @@ export const masterConfigs: Record<string, MasterConfig> = {
         required: true,
       },
       { key: 'biz_no', title: '사업자번호' },
+      { key: 'representative_name', title: '대표자', maxLength: 200 },
+      { key: 'address', title: '사업장 주소', maxLength: 500 },
+      { key: 'business_type', title: '업태', maxLength: 100 },
+      { key: 'business_item', title: '종목', maxLength: 100 },
       { key: 'contact_name', title: '담당자' },
       { key: 'phone', title: '연락처' },
       { key: 'bank_account', title: '계좌' },
@@ -125,6 +130,8 @@ export const masterConfigs: Record<string, MasterConfig> = {
       { key: 'biz_no', title: '사업자번호' },
       { key: 'address', title: '주소' },
       { key: 'representative', title: '대표자' },
+      { key: 'business_type', title: '업태', maxLength: 100 },
+      { key: 'business_item', title: '종목', maxLength: 100 },
       { key: 'settlement_contact', title: '정산 담당 연락처' },
       {
         key: 'closing_start_day',

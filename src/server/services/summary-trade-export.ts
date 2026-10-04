@@ -15,10 +15,7 @@ export async function exportSummaryTrade(ctx: Context, raw: unknown) {
     data.rows.length && data.options.payees.some((p) => p.id === query.payee_counterparty_id);
   const [payee] =
     visiblePayee && query.payee_counterparty_id
-      ? await ctx.db
-          .select({ name: counterparties.name, biz_no: counterparties.biz_no })
-          .from(counterparties)
-          .where(eq(counterparties.id, query.payee_counterparty_id))
+      ? await ctx.db.select().from(counterparties).where(eq(counterparties.id, query.payee_counterparty_id))
       : [];
   const book = new ExcelJS.Workbook();
   book.creator = '차량 사용·정산';
@@ -59,9 +56,21 @@ export async function exportSummaryTrade(ctx: Context, raw: unknown) {
         ctx.user.role === 'SITE_MANAGER' ? '' : (company?.biz_no ?? ''),
       ],
       ['상호', query.payee_counterparty_id ? (payee?.name ?? '') : '여러 지급처', company?.name ?? ''],
-      ['성명', '', company?.representative ?? ''],
-      ['사업장 주소', '', company?.address ?? ''],
-      ['업태 / 종목', '', ''],
+      [
+        '성명',
+        ctx.user.role === 'SITE_MANAGER' ? '' : (payee?.representative_name ?? ''),
+        ctx.user.role === 'SITE_MANAGER' ? '' : (company?.representative ?? ''),
+      ],
+      [
+        '사업장 주소',
+        ctx.user.role === 'SITE_MANAGER' ? '' : (payee?.address ?? ''),
+        ctx.user.role === 'SITE_MANAGER' ? '' : (company?.address ?? ''),
+      ],
+      [
+        '업태 / 종목',
+        [payee?.business_type, payee?.business_item].filter(Boolean).join(' / '),
+        [company?.business_type, company?.business_item].filter(Boolean).join(' / '),
+      ],
     ];
     identity.forEach(([label, supplier, buyer], index) => {
       const row = index + 4;
@@ -112,6 +121,13 @@ export async function exportSummaryTrade(ctx: Context, raw: unknown) {
     [5, 5, 30, 10, 10, 16, 18, 28, 14].forEach((width, index) => (sheet.getColumn(index + 1).width = width));
     sheet.eachRow((row) => {
       row.height = row.number === 1 ? 34 : row.number >= 11 && row.number < 11 + rows.length ? 42 : 28;
+      if (row.number >= 4 && row.number <= 8) {
+        row.height = Math.max(
+          28,
+          15 *
+            Math.max(Math.ceil(row.getCell(3).text.length / 19), Math.ceil(row.getCell(6).text.length / 36)),
+        );
+      }
       row.eachCell({ includeEmpty: true }, (cell) => {
         cell.font = { name: '맑은 고딕', size: 10, ...cell.font };
         cell.alignment = { vertical: 'middle', wrapText: true };

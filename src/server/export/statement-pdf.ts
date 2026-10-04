@@ -1,6 +1,12 @@
 import path from 'node:path';
 import PDFDocument from 'pdfkit';
-import { exportHeaders, formatWon, rowValues, type StatementExportModel } from './statement-model';
+import {
+  exportHeaders,
+  formatWon,
+  rowValues,
+  statementPartyHeaders,
+  type StatementExportModel,
+} from './statement-model';
 export async function renderStatementPdf(model: StatementExportModel): Promise<Buffer> {
   const doc = new PDFDocument({
     size: 'A4',
@@ -25,7 +31,13 @@ export async function renderStatementPdf(model: StatementExportModel): Promise<B
   const left = 28;
   let y = 28;
   const label = (text: string, size = 10) => {
-    doc.fontSize(size).fillColor('#173849').text(text, left, y, { width: totalWidth });
+    doc.fontSize(size);
+    if (y + doc.heightOfString(text, { width: totalWidth }) > 510) {
+      doc.addPage();
+      watermark();
+      y = 28;
+    }
+    doc.fillColor('#173849').text(text, left, y, { width: totalWidth });
     y = doc.y + 6;
   };
   function watermark() {
@@ -37,11 +49,9 @@ export async function renderStatementPdf(model: StatementExportModel): Promise<B
   watermark();
   label(model.title, 21);
   label(`문서번호 ${model.document_no}    정산 기간 ${model.period}`, 10);
-  label(`거래 상대방  ${model.counterparty.name ?? ''}    사업자번호 ${model.counterparty.biz_no ?? ''}`);
-  label(
-    `발행 회사  ${model.issuer.name ?? ''}    사업자번호 ${model.issuer.biz_no ?? ''}    대표자 ${model.issuer.representative ?? ''}`,
-  );
-  label(`주소 ${model.issuer.address ?? ''}`);
+  for (const party of statementPartyHeaders(model)) {
+    for (const line of party) label(line, 9);
+  }
   label(`발행일 ${model.issued_on}    확정 시각 ${model.confirmed_at}    예정일 ${model.due_date}`);
   label(`담당자 ${model.contact}    연락처 ${model.issuer.settlement_contact ?? ''}`);
   y += 7;
@@ -79,7 +89,8 @@ export async function renderStatementPdf(model: StatementExportModel): Promise<B
     }
     return lines;
   }
-  header();
+  if (y + 51 > 538) newPage();
+  else header();
   for (const row of model.rows) {
     doc.fontSize(7.5);
     const cells = rowValues(row).map((value, i) =>

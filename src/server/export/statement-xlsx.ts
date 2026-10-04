@@ -1,6 +1,11 @@
 import Decimal from 'decimal.js';
 import ExcelJS from 'exceljs';
-import { exportHeaders, rowValues, type StatementExportModel } from './statement-model';
+import {
+  exportHeaders,
+  rowValues,
+  statementPartyHeaders,
+  type StatementExportModel,
+} from './statement-model';
 export async function renderStatementXlsx(model: StatementExportModel) {
   const book = new ExcelJS.Workbook();
   book.creator = String(model.issuer.name ?? '');
@@ -29,15 +34,15 @@ export async function renderStatementXlsx(model: StatementExportModel) {
   sheet.getCell('A1').font = { name: '맑은 고딕', size: 20, bold: true, color: { argb: 'FF15394B' } };
   sheet.getRow(1).height = 40;
   mergeRow(2, `문서번호: ${model.document_no}`);
-  mergeRow(
-    3,
-    `거래 상대방: ${model.counterparty.name ?? ''}   사업자번호: ${model.counterparty.biz_no ?? ''}`,
-  );
-  mergeRow(
-    4,
-    `발행 회사: ${model.issuer.name ?? ''}   사업자번호: ${model.issuer.biz_no ?? ''}   대표자: ${model.issuer.representative ?? ''}`,
-  );
-  mergeRow(5, `회사 주소: ${model.issuer.address ?? ''}`);
+  const parties = statementPartyHeaders(model);
+  for (const [index, lines] of parties.entries()) {
+    const row = index + 3;
+    mergeRow(row, lines.join('\n'));
+    sheet.getRow(row).height =
+      17 * lines.reduce((count, line) => count + Math.max(1, Math.ceil(line.length / 120)), 0) + 8;
+    sheet.getCell(row, 1).alignment = { vertical: 'middle', wrapText: true };
+    sheet.getCell(row, 1).font = { name: '맑은 고딕', size: 10 };
+  }
   mergeRow(6, `정산 기간: ${model.period}   예정일: ${model.due_date}`);
   mergeRow(7, `발행일: ${model.issued_on}   확정 시각: ${model.confirmed_at}`);
   mergeRow(8, `담당자: ${model.contact}   연락처: ${model.issuer.settlement_contact ?? ''}`);

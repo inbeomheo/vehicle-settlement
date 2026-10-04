@@ -311,3 +311,7 @@ PW 작업 지시에 따라 `0600_pw_password_resets.sql`에 `password_resets(id,
 ## 19. G-PERIOD 회사 마감일
 
 사용자 지시에 따라 `0761_company_closing_period.sql`에서 `company_settings.closing_start_day`(정수, 기본 19, 1~28 CHECK)를 추가한다. 새 명세·집계·기사 내 정산의 기본은 서울 기준 오늘이 포함된 회사 마감 기간이다. 확정 명세와 스냅샷은 변경하지 않는다. 권한·기본 기간 예외는 [API](API.md)의 G-PERIOD 절을 따른다.
+
+## 20. G-BIZ 사업자 상세 정보
+
+고객 거래명세표의 공급자/공급받는자 머리를 위해 `0760_business_details.sql`로 거래처 대표자·주소·업태·종목과 회사 업태·종목을 선택 입력으로 추가한다. 대표자는 담당자와 구분한다. 길이·기사 본인 소유 판정·공유 사업자 보호·개인정보 제외·확정 스냅샷 보존 규칙은 [API](API.md)의 G-BIZ 절을 따른다.

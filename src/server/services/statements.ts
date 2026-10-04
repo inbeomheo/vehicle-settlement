@@ -236,6 +236,10 @@ async function headerSnapshots(ctx: Context, statement: Pick<Statement, 'counter
   return {
     counterparty_snapshot: {
       name: party.name,
+      representative_name: party.representative_name,
+      address: party.address,
+      business_type: party.business_type,
+      business_item: party.business_item,
       biz_no: party.biz_no,
       contact_name: party.contact_name,
       phone: party.phone,
@@ -246,6 +250,8 @@ async function headerSnapshots(ctx: Context, statement: Pick<Statement, 'counter
       biz_no: company?.biz_no ?? '',
       address: company?.address ?? '',
       representative: company?.representative ?? '',
+      business_type: company?.business_type ?? '',
+      business_item: company?.business_item ?? '',
       settlement_contact: company?.settlement_contact ?? '',
       prepared_by: ctx.user.name,
       issued_on: todaySeoul(),

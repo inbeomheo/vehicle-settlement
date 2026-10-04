@@ -109,3 +109,26 @@ export function rowValues(row: StatementExportModel['rows'][number]): (string | 
       .join(' / '),
   ];
 }
+
+// The company receives transport on PAYABLE and supplies it on RECEIVABLE.
+export function statementPartyHeaders(model: StatementExportModel) {
+  const payable = model.title === '운송사 지급명세';
+  const identity = (label: string, party: Record<string, unknown>) =>
+    [
+      `${label}: ${party.name ?? ''}   사업자번호: ${party.biz_no ?? ''}`,
+      party.representative_name || party.representative
+        ? `대표자: ${party.representative_name || party.representative}`
+        : '',
+      party.address ? `사업장 주소: ${party.address}` : '',
+      [
+        party.business_type ? `업태: ${party.business_type}` : '',
+        party.business_item ? `종목: ${party.business_item}` : '',
+      ]
+        .filter(Boolean)
+        .join('   '),
+    ].filter(Boolean);
+  return [
+    identity(`거래 상대방 · ${payable ? '공급자' : '공급받는자'}`, model.counterparty),
+    identity(`발행 회사 · ${payable ? '공급받는자' : '공급자'}`, model.issuer),
+  ];
+}
