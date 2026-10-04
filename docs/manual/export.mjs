@@ -20,6 +20,8 @@ try {
     .manual-step > div:last-child:not(:first-child) { width: 190px; flex-shrink: 0; }
     .manual-step h4 { font-size: 17px; }
     .manual-step p { font-size: 14px; }
+    main { padding-bottom: 0; }
+    main > section:last-of-type { margin-bottom: 0; }
     main > section { break-before: page; }
     main > section:first-child { break-before: auto; }
     figure img { max-height: 410px; width: auto; max-width: 100%; margin-inline: auto; }

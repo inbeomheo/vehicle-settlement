@@ -643,6 +643,10 @@ export default function ManualPage() {
             <Shot src="47-join" alt="기사 가입 화면" phone />
             <Shot src="47b-join-vehicle" alt="기사 가입 — 사업자·차량 정보" phone />
           </div>
+          <p className="text-[1.0625rem] leading-relaxed">
+            사용자 관리·기사관리에서 기록 없는 계정은 <B>삭제</B>할 수 있고, 꺼진 계정은 기본으로 숨겨지므로
+            <B> 꺼진 계정 몇 명 보기</B>를 켜서 확인합니다.
+          </p>
           <Shot src="41-users" alt="사용자 관리" />
           <h3 className="pt-4 text-xl font-bold">3. 기사가 적을 칸 줄이기</h3>
           <p className="text-[1.0625rem] leading-relaxed">
@@ -728,6 +732,10 @@ export default function ManualPage() {
                 '부분 지급은 기록할 수 없습니다. 전액 지급을 마친 뒤 한 번만 기록하세요. 이미 전액으로 잘못 기록했다면 지급 기록의 오입력 취소에 사유를 적어 취소하세요.',
               ],
               [
+                '기사·관리자 계정은 어떻게 삭제하나요?',
+                '관리자가 사용자 관리·기사관리에서 ‘삭제’를 누르고 이름을 확인합니다. 운행 초안·증빙·검수·정산 등 업무 기록이 없는 계정만 삭제할 수 있고, 연결된 전용 기사·사업자·차량 정보도 다른 참조가 없으면 함께 지워집니다. 삭제하면 되돌릴 수 없습니다. 기록이 있으면 ‘계정 끄기’를 쓰세요. 계정 끄기는 로그인을 막고 기록은 남기며 나중에 다시 켤 수 있습니다. 내 계정과 마지막 활성 관리자는 삭제할 수 없습니다. 꺼진 계정은 기본으로 숨겨지니 ‘꺼진 계정 몇 명 보기’를 켜서 확인하세요.',
+              ],
+              [
                 '비밀번호를 잊었어요',
                 '관리자에게 말하면 사용자 관리에서 비밀번호 재설정 링크를 보내 드립니다. 로그인한 상태라면 메뉴의 ‘비밀번호 변경’에서 직접 바꿀 수 있습니다. 기사는 홈 맨 아래에 있습니다.',
               ],
@@ -740,7 +748,7 @@ export default function ManualPage() {
           </dl>
         </section>
 
-        <p className="text-center">
+        <p className="text-center print:hidden">
           <Link
             href="/login"
             className="inline-flex min-h-14 items-center rounded-lg bg-signal px-8 text-lg font-bold text-ink shadow-[0_2px_0_var(--color-signal-strong)]"
