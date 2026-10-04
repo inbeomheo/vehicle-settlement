@@ -20,6 +20,7 @@ export async function exportApprovals(ctx: Context, raw: unknown) {
     '입력·검토 금액(공급가)',
     '승인 금액(공급가)',
     '진행상태',
+    '보류 금액(공급가)',
   ]);
   for (const row of data.rows as LedgerRow[])
     sheet.addRow([
@@ -33,6 +34,7 @@ export async function exportApprovals(ctx: Context, raw: unknown) {
       row.review_total_amount,
       row.total_amount,
       row.operation_status === 'CANCELED' ? '취소' : approvalLabels[row.review_status],
+      row.has_held_payable ? (row.held_payable_amount ?? '금액 미정') : null,
     ]);
   sheet.addRow([
     `합계 ${data.summary.count}건 · 취소 제외 · 미확정 비용 ${data.summary.unknown_count}개`,
@@ -43,6 +45,9 @@ export async function exportApprovals(ctx: Context, raw: unknown) {
     '',
     '',
     data.summary.amount,
+    '',
+    `보류 미확정 비용 ${data.summary.held_unknown_count}개`,
+    data.summary.held_amount,
   ]);
   sheet.getRow(1).font = { bold: true };
   sheet.columns.forEach((column, index) => {
@@ -50,7 +55,8 @@ export async function exportApprovals(ctx: Context, raw: unknown) {
   });
   sheet.getColumn(8).numFmt = '#,##0';
   sheet.getColumn(9).numFmt = '#,##0';
+  sheet.getColumn(11).numFmt = '#,##0';
   sheet.views = [{ state: 'frozen', ySplit: 1 }];
-  sheet.autoFilter = 'A1:J1';
+  sheet.autoFilter = 'A1:K1';
   return new Uint8Array(await book.xlsx.writeBuffer());
 }

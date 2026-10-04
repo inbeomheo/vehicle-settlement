@@ -43,12 +43,14 @@ export function DriverInformationFields({
   joining = false,
   business,
   businessDetailsReadOnly = false,
+  businessNumberRequired = true,
 }: {
   value: DriverInformationValues;
   onChange: (value: DriverInformationValues) => void;
   manager?: boolean;
   joining?: boolean;
   businessDetailsReadOnly?: boolean;
+  businessNumberRequired?: boolean;
   business?: { name: string; masked_biz_no: string } | null;
 }) {
   const className = manager ? inputClass : control;
@@ -92,9 +94,13 @@ export function DriverInformationFields({
         ) : (
           <>
             <div className="grid gap-4 sm:grid-cols-2">
-              {field('business_name', '상호명', { autoComplete: 'organization' })}
+              {field('business_name', '상호명', {
+                autoComplete: 'organization',
+                readOnly: businessDetailsReadOnly,
+              })}
               {field('biz_no', '사업자번호', {
                 inputMode: 'numeric',
+                required: businessNumberRequired,
                 maxLength: 12,
                 placeholder: '000-00-00000',
                 pattern: '[0-9]{3}-[0-9]{2}-[0-9]{5}',
@@ -124,7 +130,7 @@ export function DriverInformationFields({
             </div>
             {businessDetailsReadOnly && (
               <p className="mt-3 text-sm text-slate-600">
-                공유 운송사 사업자 정보는 관리자에게 수정을 요청해 주세요.
+                등록된 사업자 정보를 사용합니다. 변경하려면 관리자에게 기준정보의 거래처 수정을 요청해 주세요.
               </p>
             )}
             <p className="mt-3 text-sm text-slate-600">

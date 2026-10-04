@@ -161,7 +161,10 @@ it.each([false, true])('새 사업자 가입과 본인/관리자 수정·공유 
     address: '관리자 수정주소',
     version: unchanged.version,
   });
-  expect(adminEdit.address).toBe('관리자 수정주소');
+  // 기사 정보 저장은 관리자도 공유 원장을 수정하지 않는다 (H-FIX).
+  expect(adminEdit.address).toBe('새 시연주소');
+  await saveMaster(s.adminCtx, 'counterparties', { address: '관리자 수정주소' }, String(party.id));
+  expect((await getDriverProfile(ctx, user.id)).address).toBe('관리자 수정주소');
 });
 
 it('단독 CARRIER도 기사에게 사업자 상세 수정 권한이 없고 지정 가입은 필드 변조를 거부한다', async () => {

@@ -53,7 +53,8 @@ for (const width of [1280, 1440])
       true,
     );
     const buttons = table.locator('tbody tr').first().locator('td').last().getByRole('button');
-    await expect(buttons).toHaveCount(5);
+    await expect(buttons).toHaveCount(6);
+    await expect(buttons.filter({ hasText: '삭제' })).toHaveCount(1);
     for (const button of await buttons.all()) {
       const rect = (await button.boundingBox())!;
       expect(rect.x + rect.width).toBeLessThanOrEqual(width);

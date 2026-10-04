@@ -31,6 +31,8 @@ export const driverInformationSchema = z
   .strict();
 export type DriverInformation = z.output<typeof driverInformationSchema>;
 export const driverProfilePatchSchema = driverInformationSchema.extend({
+  // Only the service may accept an empty number for an unchanged existing affiliation.
+  biz_no: z.union([driverInformationSchema.shape.biz_no, z.literal('')]),
   version: z.number().int().positive(),
 });
 export const joinBusinessFields = {

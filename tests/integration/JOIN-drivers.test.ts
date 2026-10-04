@@ -409,19 +409,18 @@ it('사업자·전화·톤수·비밀번호 입력 검증과 공유 사업자 �
     counterparty_id: affiliation.counterparty_id,
     valid_from: todaySeoul(),
   });
-  await expect(
-    updateDriverProfile(s.ctx, first.user.id, {
-      ...input.profile,
-      business_name: '공유 상호 변경',
-      version: 1,
-    }),
-  ).rejects.toThrow('여러 기사');
+  const unchanged = await updateDriverProfile(s.ctx, first.user.id, {
+    ...input.profile,
+    business_name: '공유 상호 변경',
+    version: 1,
+  });
+  expect(unchanged.business_name).toBe(input.profile.business_name);
   expect((await getDriverProfile(s.ctx, first.user.id)).business_name).toBe(input.profile.business_name);
   await updateDriverProfile(s.ctx, first.user.id, {
     ...input.profile,
     biz_no: '999-99-99999',
     business_name: '별도 사업자',
-    version: 1,
+    version: unchanged.version,
   });
   expect((await getDriverProfile(s.ctx, first.user.id)).business_name).toBe('별도 사업자');
 });
