@@ -127,6 +127,13 @@ export const masterConfigs: Record<string, MasterConfig> = {
       { key: 'representative', title: '대표자' },
       { key: 'settlement_contact', title: '정산 담당 연락처' },
       {
+        key: 'closing_start_day',
+        title: '마감 시작일 (1~28일, 1일은 달력 월)',
+        type: 'select',
+        options: ['19', ...Array.from({ length: 28 }, (_, i) => String(i + 1)).filter((day) => day !== '19')],
+        required: true,
+      },
+      {
         key: 'default_tax_mode',
         title: '기본 세금',
         type: 'select',

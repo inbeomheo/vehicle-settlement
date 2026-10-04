@@ -1,5 +1,7 @@
 'use client';
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
+import { ClosingPeriodLoader, ClosingPeriodButtons } from '@/components/closing-period';
+import { closingPeriod, type ClosingPeriodSettings } from '@/shared/closing-period';
 import { useBusy } from '@/components/ui/use-busy';
 import { chargeTypeLabel, chargeUnitLabel } from '@/components/manager/charge-display';
 import { formatQuantity } from '@/shared/quantity';
@@ -11,7 +13,6 @@ import {
   focusField,
   inputClass,
   money,
-  monthPeriod,
   panelClass,
   secondaryClass,
   Totals,
@@ -22,19 +23,28 @@ import {
 } from './ui';
 type Choice = { inclusion: 'INCLUDED' | 'HELD' | 'EXCLUDED'; hold_reason: string };
 type Lookup = { counterparties: { id: string; name: string; kind: string }[] };
-export function NewStatement({
-  direction,
-  replaces,
-  onCreated,
-}: {
+type NewStatementProps = {
   direction: 'PAYABLE' | 'RECEIVABLE';
   replaces?: StatementDetail;
   onCreated: (id: string) => void;
-}) {
-  const initial = monthPeriod(-1);
+};
+export function NewStatement(props: NewStatementProps) {
+  return (
+    <ClosingPeriodLoader>
+      {(settings) => <NewStatementForm {...props} settings={settings} />}
+    </ClosingPeriodLoader>
+  );
+}
+function NewStatementForm({
+  direction,
+  replaces,
+  onCreated,
+  settings,
+}: NewStatementProps & { settings: ClosingPeriodSettings }) {
+  const initial = closingPeriod(settings.today, settings.closing_start_day);
   const [party, setParty] = useState(replaces?.counterparty_id ?? '');
-  const [start, setStart] = useState(replaces?.period_start ?? initial.start);
-  const [end, setEnd] = useState(replaces?.period_end ?? initial.end);
+  const [start, setStart] = useState(replaces?.period_start ?? initial.from);
+  const [end, setEnd] = useState(replaces?.period_end ?? initial.to);
   // 자동완성·날짜 선택기에 따라 onChange가 빠질 수 있어 저장 시점의 입력칸 값을 읽는다.
   const dueRef = useRef<HTMLInputElement>(null);
   const [unsubmittedCount, setUnsubmittedCount] = useState(0);
@@ -165,24 +175,15 @@ export function NewStatement({
         }}
         className="space-y-4"
       >
-        <div className="flex flex-wrap gap-2">
-          {[-1, 0].map((offset) => (
-            <button
-              type="button"
-              key={offset}
-              disabled={saving}
-              className={secondaryClass}
-              onClick={() => {
-                const p = monthPeriod(offset);
-                setStart(p.start);
-                setEnd(p.end);
-                reset();
-              }}
-            >
-              {offset === -1 ? '전월' : '당월'}
-            </button>
-          ))}
-        </div>
+        <ClosingPeriodButtons
+          settings={settings}
+          disabled={saving}
+          onChange={(period) => {
+            setStart(period.from);
+            setEnd(period.to);
+            reset();
+          }}
+        />
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Field label="거래처">
             <select

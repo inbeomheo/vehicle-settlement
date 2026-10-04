@@ -158,11 +158,11 @@ test('360px 큰 글자에서도 세 보기 가로 넘침 없음, 빈 결과·오
   await expect(page.getByRole('button', { name: '엑셀로 받기' })).toBeDisabled();
   await page.getByRole('button', { name: '다시 시도' }).click();
   await expect(page.locator('main').getByRole('alert')).toContainText('최대 1년');
-  await page.getByRole('button', { name: '지난달', exact: true }).click();
+  await page.getByRole('button', { name: /^지난 마감 \(/ }).click();
   await expect(page.locator('main').getByRole('alert')).toHaveCount(0);
-  await expect(page.getByLabel('시작일', { exact: true })).toHaveValue(/-01$/);
-  await page.getByRole('button', { name: '이번 달', exact: true }).click();
-  await expect(page.getByLabel('시작일', { exact: true })).toHaveValue(/-01$/);
+  await expect(page.getByLabel('시작일', { exact: true })).toHaveValue(/-19$/);
+  await page.getByRole('button', { name: /^이번 마감 \(/ }).click();
+  await expect(page.getByLabel('시작일', { exact: true })).toHaveValue(/-19$/);
   await fits(page);
 });
 

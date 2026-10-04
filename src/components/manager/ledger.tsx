@@ -1,4 +1,5 @@
 'use client';
+import { ClosingPeriodLoader, ClosingPeriodButtons } from '@/components/closing-period';
 import { quickApprovable, quickApprovalIssues, approveUse } from './quick-approval';
 import { formatQuantity } from '@/shared/quantity';
 import { useEffect, useState } from 'react';
@@ -223,6 +224,20 @@ export function Ledger({ initial = {} }: { initial?: Search }) {
           setFiltersOpen(false);
         }}
       >
+        <div className="mb-4">
+          <ClosingPeriodLoader>
+            {(settings) => (
+              <ClosingPeriodButtons
+                settings={settings}
+                onChange={(period) => {
+                  const next = { ...draft, ...period, page: '1' };
+                  setDraft(next);
+                  change(next);
+                }}
+              />
+            )}
+          </ClosingPeriodLoader>
+        </div>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Field title="검색어">
             <input

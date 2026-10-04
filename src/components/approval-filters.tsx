@@ -1,4 +1,5 @@
 'use client';
+import { ClosingPeriodLoader, ClosingPeriodButtons } from './closing-period';
 import { useSyncExternalStore } from 'react';
 import { todaySeoul } from '@/client/types';
 import { approvalLabels, approvalStatuses, shiftDay } from '@/shared/approvals';
@@ -110,6 +111,11 @@ export function ApprovalDates({
         >
           ›
         </button>
+      </div>
+      <div className="sm:col-span-2">
+        <ClosingPeriodLoader>
+          {(settings) => <ClosingPeriodButtons settings={settings} driver={driver} onChange={onChange} />}
+        </ClosingPeriodLoader>
       </div>
       <label className="grid min-w-0 gap-1 text-sm font-normal">
         시작일
