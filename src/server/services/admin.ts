@@ -16,6 +16,7 @@ import {
   validateDates,
 } from './admin-schemas';
 import { uuid } from './schemas';
+import { userDeletionFlags } from './user-deletion';
 
 const tableNames: Record<MasterResource, string> = {
   projects: 'projects',
@@ -169,8 +170,13 @@ export async function listUsers(ctx: Context) {
   assertAdmin(ctx);
   const rows = await ctx.db.select().from(users).orderBy(users.name, users.id);
   const assignments = await ctx.db.select().from(projectAssignments);
+  const deletion = await userDeletionFlags(
+    ctx,
+    rows.map((user) => user.id),
+  );
   return rows.map((user) => ({
     ...publicUser(user),
+    ...deletion.get(user.id),
     assignments: assignments.filter((a) => a.user_id === user.id),
   }));
 }
